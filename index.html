@@ -1,0 +1,1050 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Studio stylów prezentacji</title>
+<script src="https://cdn.jsdelivr.net/npm/marked@18.0.5/lib/marked.umd.js"
+        integrity="sha384-ZD0fTOwPMHi7zM6WTVIWJR21I07lq0ccnqz3J6WMvQKG9thh4y7TA1QE6PJu0Af8" crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/dompurify@3.0.11/dist/purify.min.js"
+        integrity="sha384-Ic7KEGROu37YaruU6NyiYeib7UhjFyDZQ5fzBAji965L75T/4LGk5nzwMEjNGexs" crossorigin="anonymous"></script>
+<style>
+/* ============================================================
+   styler — edulab-branded presentation style playground
+   App chrome uses fixed edulab tokens; the DECK is driven by
+   --deck-* variables the user plays with.
+   ============================================================ */
+
+@import url('https://fonts.googleapis.com/css2?family=Raleway:wght@400;500;600;700;800&family=DM+Mono:wght@400;500&display=swap');
+
+:root {
+  --font-display: 'Raleway', system-ui, sans-serif;
+  --font-sans:    'Raleway', system-ui, -apple-system, sans-serif;
+  --font-mono:    'DM Mono', ui-monospace, 'SF Mono', Menlo, monospace;
+
+  --paper:    #FBF7F0;
+  --paper-2:  #F4EDDF;
+  --paper-3:  #ECE1CF;
+  --surface:  #FFFFFF;
+  --ink:      #211E1A;
+  --ink-2:    #5B554D;
+  --ink-3:    #938A7C;
+  --line:     #E7DCCB;
+  --line-2:   #D6C8B2;
+  --marigold:      #E8920C;
+  --marigold-600:  #CE800A;
+  --marigold-soft: #FBE7C2;
+  --marigold-ink:  #8A4F00;
+  --teal:      #0E8C7F;
+  --teal-soft: #D2EBE6;
+  --teal-ink:  #0A5A52;
+  --danger:    #D8412A;
+
+  --focus-ring: 0 0 0 3px rgba(232,146,12,.38);
+  --sp-1: 4px; --sp-2: 8px; --sp-3: 12px; --sp-4: 16px;
+  --sp-5: 20px; --sp-6: 24px; --sp-8: 32px; --sp-10: 40px;
+  --r-xs: 6px; --r-sm: 10px; --r-md: 14px; --r-lg: 20px; --r-pill: 999px;
+  --shadow-sm: 0 1px 2px rgba(33,30,26,.06), 0 1px 1px rgba(33,30,26,.04);
+  --shadow-md: 0 4px 16px rgba(33,30,26,.08), 0 1px 3px rgba(33,30,26,.05);
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+body {
+  margin: 0; height: 100vh; overflow: hidden;
+  background: var(--paper); color: var(--ink);
+  font-family: var(--font-sans); font-size: 15px; line-height: 1.55;
+  display: flex; flex-direction: column;
+}
+button { font: inherit; cursor: pointer; }
+:focus-visible { outline: none; box-shadow: var(--focus-ring); border-radius: var(--r-xs); }
+.hidden { display: none !important; }
+kbd {
+  font-family: var(--font-mono); font-size: 12px;
+  background: var(--paper-3); color: var(--ink-2);
+  border: 1px solid var(--line-2); border-bottom-width: 2px;
+  border-radius: var(--r-xs); padding: 0 5px;
+}
+
+/* ─── Chrome bar ─── */
+.chrome {
+  display: flex; align-items: center; gap: var(--sp-3); flex: none;
+  padding: var(--sp-2) var(--sp-5);
+  background: rgba(251,247,240,.85); border-bottom: 1px solid var(--line);
+}
+.chrome img { height: 26px; }
+.chrome .wordmark { font-family: var(--font-display); font-weight: 800; font-size: 17px; }
+.chrome .tag {
+  font-family: var(--font-mono); font-size: 11px; letter-spacing: .14em;
+  text-transform: uppercase; color: var(--teal-ink); background: var(--teal-soft);
+  padding: 2px 10px; border-radius: var(--r-pill);
+}
+.chrome .spacer { flex: 1; }
+.lang-toggle { display: flex; border: 1px solid var(--line-2); border-radius: var(--r-pill); overflow: hidden; }
+.lang-toggle button {
+  border: 0; background: transparent; color: var(--ink-2);
+  font-family: var(--font-mono); font-size: 12px; padding: 3px 10px;
+}
+.lang-toggle button[aria-pressed="true"] { background: var(--ink); color: var(--paper); }
+
+/* ─── Layout: panel + stage ─── */
+.workbench { flex: 1; display: flex; min-height: 0; }
+
+.panel {
+  width: 280px; flex: none; overflow-y: auto;
+  padding: var(--sp-5); border-right: 1px solid var(--line);
+  display: flex; flex-direction: column; gap: var(--sp-6);
+  background: var(--paper);
+}
+.panel h2 {
+  font-family: var(--font-mono); font-weight: 500; font-size: 11px;
+  letter-spacing: .14em; text-transform: uppercase; color: var(--marigold-ink);
+  margin: 0 0 var(--sp-3);
+}
+.panel section { margin: 0; }
+
+.preset-grid { display: grid; grid-template-columns: 1fr 1fr; gap: var(--sp-2); }
+.preset {
+  border: 2px solid var(--line); border-radius: var(--r-md); padding: var(--sp-3);
+  background: var(--surface); text-align: left;
+  transition: border-color .2s, transform .1s;
+}
+.preset:hover { transform: translateY(-2px); }
+.preset:active { transform: translateY(2px); }
+.preset[aria-pressed="true"] { border-color: var(--marigold); }
+.preset .dots { display: flex; gap: 4px; margin-bottom: 6px; }
+.preset .dots span { width: 14px; height: 14px; border-radius: 50%; border: 1px solid rgba(0,0,0,.12); }
+.preset .name { font-weight: 700; font-size: 13px; }
+
+.field { display: flex; flex-direction: column; gap: var(--sp-1); margin-bottom: var(--sp-3); }
+.field-inline { flex-direction: row; align-items: center; justify-content: space-between; }
+.field label {
+  font-family: var(--font-mono); font-size: 11px; letter-spacing: .1em;
+  text-transform: uppercase; color: var(--ink-2);
+}
+.field input[type="text"], .field input[type="password"] {
+  font-family: var(--font-mono); font-size: 13px; color: var(--ink);
+  background: var(--surface); border: 1px solid var(--line-2);
+  border-radius: var(--r-sm); padding: 7px 10px; width: 100%;
+}
+.note.error { color: var(--danger); }
+.note a { color: var(--teal-ink); }
+.picker-row { display: flex; justify-content: space-between; gap: var(--sp-2); }
+.picker-item {
+  display: flex; flex-direction: column; align-items: center; gap: var(--sp-1);
+  font-size: 12px; color: var(--ink-2); text-align: center; cursor: pointer;
+}
+
+/* Round color pickers — hide the native square-in-frame look */
+input[type="color"] {
+  -webkit-appearance: none; appearance: none;
+  width: 34px; height: 34px; padding: 0; border: 2px solid var(--line-2);
+  border-radius: 50%; background: none; cursor: pointer; overflow: hidden; flex: none;
+}
+input[type="color"]::-webkit-color-swatch-wrapper { padding: 0; }
+input[type="color"]::-webkit-color-swatch { border: none; border-radius: 50%; }
+input[type="color"]::-moz-color-swatch { border: none; border-radius: 50%; }
+input[type="color"]:hover { border-color: var(--marigold); }
+
+/* Font chooser with live previews */
+.font-chooser { position: relative; }
+.font-current {
+  width: 100%; display: flex; justify-content: space-between; align-items: center;
+  background: var(--surface); border: 1px solid var(--line-2); border-radius: var(--r-sm);
+  padding: 8px 10px; font-size: 15px; color: var(--ink);
+}
+.font-current .caret { color: var(--ink-3); font-size: 11px; }
+.font-menu {
+  position: absolute; z-index: 30; top: calc(100% + 4px); left: 0; right: 0;
+  max-height: 300px; overflow-y: auto;
+  background: var(--surface); border: 1px solid var(--line-2);
+  border-radius: var(--r-md); box-shadow: var(--shadow-md); padding: 4px;
+}
+.font-option {
+  display: block; width: 100%; text-align: left; border: 0; background: none;
+  padding: 7px 10px; font-size: 16px; color: var(--ink); border-radius: var(--r-xs);
+}
+.font-option:hover { background: var(--paper-2); }
+.font-custom { border-top: 1px solid var(--line); margin-top: 4px; padding: 6px; }
+.font-custom input {
+  width: 100%; font-family: var(--font-mono); font-size: 12px; color: var(--ink);
+  padding: 6px 8px; border: 1px solid var(--line-2); border-radius: var(--r-xs);
+  background: var(--paper);
+}
+
+.btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: var(--sp-2);
+  border: 0; border-radius: var(--r-pill); padding: 8px 16px; font-weight: 600; font-size: 13px;
+  transition: background .2s, transform .1s;
+}
+.btn:active { transform: scale(.97); }
+.btn-primary { background: var(--marigold); color: #FFFFFF; }
+.btn-primary:hover { background: var(--marigold-600); }
+.btn-primary:disabled { background: var(--line-2); color: var(--ink-3); cursor: not-allowed; }
+.btn-ghost { background: transparent; color: var(--ink-2); border: 1px solid var(--line-2); }
+.btn-ghost:hover { background: var(--paper-2); color: var(--ink); }
+.btn-block { width: 100%; }
+.btn-row { display: flex; gap: var(--sp-2); }
+.btn-row .btn { flex: 1; }
+.visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+.note { font-size: 12px; color: var(--ink-3); margin: var(--sp-2) 0 0; }
+
+/* ─── Stage (deck preview, driven by --deck-* vars) ─── */
+.stage-wrap { flex: 1; display: flex; flex-direction: column; min-width: 0; position: relative; }
+.deck {
+  /* slides anchor to a fixed top offset so headings sit at the same height;
+     only the title slide stays vertically centered */
+  flex: 1; display: grid; place-items: start center; padding: 14vh 3vw 3vh; overflow: hidden;
+  position: relative;
+  background: var(--deck-bg);
+  --deck-fg-soft:   color-mix(in srgb, var(--deck-fg) 74%, var(--deck-bg));
+  --deck-fg-faint:  color-mix(in srgb, var(--deck-fg) 45%, var(--deck-bg));
+  --deck-line:      color-mix(in srgb, var(--deck-fg) 16%, var(--deck-bg));
+  --deck-wash:      color-mix(in srgb, var(--deck-fg) 7%, var(--deck-bg));
+  --deck-accent-soft: color-mix(in srgb, var(--deck-accent) 18%, var(--deck-bg));
+}
+.deck-bar {
+  position: absolute; top: 0; left: 0; height: 4px; width: 0%;
+  background: var(--deck-accent); transition: width 450ms cubic-bezier(.2,.6,.2,1); z-index: 5;
+}
+.deck-logo {
+  position: absolute; top: calc(4px + 2.2vh); right: 2.5vw; z-index: 4;
+  height: clamp(30px, 3.4vh + 1.5vw, 76px); width: auto; opacity: .92;
+}
+.slide {
+  width: min(1500px, 92%); max-height: 100%; overflow: auto;
+  font-size: clamp(14px, 1.35vw + 0.8vh, 40px);
+  font-family: var(--deck-body-font); color: var(--deck-fg);
+}
+.slide .slide-eyebrow {
+  font-family: var(--font-mono); font-weight: 500; font-size: .55em;
+  letter-spacing: .14em; text-transform: uppercase; color: var(--deck-accent);
+  margin-bottom: .9em;
+}
+.slide h1 {
+  font-family: var(--deck-heading-font); font-weight: 800;
+  font-size: 3em; line-height: 1.06; letter-spacing: -0.015em; margin: 0 0 .35em;
+  color: var(--deck-fg);
+}
+.slide h2 {
+  font-family: var(--deck-heading-font); font-weight: 700; font-size: 2.1em;
+  line-height: 1.12; letter-spacing: -0.01em; margin: 0 0 .6em; color: var(--deck-fg);
+}
+.slide h3 { font-family: var(--deck-heading-font); font-weight: 700; font-size: 1.35em; margin: 1em 0 .5em; color: var(--deck-fg); }
+.slide p, .slide li { font-size: 1em; line-height: 1.55; color: var(--deck-fg-soft); }
+.slide p { margin: 0 0 .6em; }
+.slide li { margin-bottom: .45em; }
+.slide li::marker { color: var(--deck-accent); }
+.slide strong { color: var(--deck-fg); font-weight: 700; }
+.slide em { color: var(--deck-fg); }
+.slide a { color: var(--deck-accent); }
+/* Mono rules for presenting code — required by the style contract */
+.slide code {
+  font-family: var(--font-mono); font-size: .9em; color: var(--deck-fg);
+  background: var(--deck-wash); padding: .1em .4em; border-radius: var(--r-xs);
+}
+.slide pre {
+  font-family: var(--font-mono);
+  background: var(--deck-wash); border: 1px solid var(--deck-line);
+  border-radius: var(--r-md); padding: .8em; overflow-x: auto; font-size: .8em; line-height: 1.5;
+}
+.slide pre code { background: none; padding: 0; font-size: 1em; }
+.slide blockquote {
+  margin: .9em 0; padding: .6em 1em;
+  border-left: .18em solid var(--deck-accent); background: var(--deck-accent-soft);
+  border-radius: 0 var(--r-md) var(--r-md) 0; color: var(--deck-fg);
+}
+.slide blockquote p { color: inherit; margin: 0; }
+.slide table { border-collapse: collapse; width: 100%; font-size: .92em; }
+.slide th {
+  font-family: var(--font-mono); font-size: .6em; letter-spacing: .08em;
+  text-transform: uppercase; text-align: left; color: var(--deck-fg-faint);
+  border-bottom: 2px solid var(--deck-line); padding: .5em .7em;
+}
+.slide td { border-bottom: 1px solid var(--deck-line); padding: .55em .7em; color: var(--deck-fg-soft); }
+.slide--title { text-align: center; align-self: center; }
+.slide--title h1 { font-size: 3.5em; }
+.slide--title p { font-size: 1.3em; }
+
+.editor-drawer {
+  flex: none; height: 36vh; border-top: 1px solid var(--line);
+  background: var(--paper-2); padding: var(--sp-3);
+}
+.editor-drawer textarea {
+  width: 100%; height: 100%; resize: none;
+  font-family: var(--font-mono); font-size: 13px; line-height: 1.55; color: var(--ink);
+  background: var(--surface); border: 1px solid var(--line-2);
+  border-radius: var(--r-sm); padding: var(--sp-3);
+}
+
+.deck-footer {
+  flex: none; display: flex; align-items: center; gap: var(--sp-4);
+  padding: var(--sp-2) var(--sp-5); border-top: 1px solid var(--line);
+  color: var(--ink-3); font-size: 12px; background: var(--paper);
+}
+.deck-footer .nav-btns { display: flex; gap: var(--sp-2); }
+.deck-footer .spacer { flex: 1; }
+.deck-counter { font-family: var(--font-mono); }
+.deck-footer .hints { display: flex; gap: var(--sp-4); }
+.deck-footer .hints span { display: inline-flex; align-items: center; gap: var(--sp-1); }
+
+/* ─── Fullscreen presentation mode ─── */
+body.presenting .chrome, body.presenting .panel, body.presenting .editor-drawer { display: none; }
+body.presenting .deck-footer { border-top: 0; position: absolute; bottom: 0; left: 0; right: 0; background: transparent; }
+
+@media (max-width: 768px) {
+  body { overflow: auto; }
+  .workbench { flex-direction: column; }
+  .panel { width: 100%; border-right: 0; border-bottom: 1px solid var(--line); }
+  .deck { min-height: 55vh; }
+  .deck-footer .hints { display: none; }
+}
+</style>
+</head>
+<body>
+
+<header class="chrome">
+  <img id="chromeLogo" alt="" aria-hidden="true">
+  <div class="wordmark">edulab</div>
+  <div class="spacer"></div>
+  <div class="lang-toggle" role="group" aria-label="Język interfejsu / UI language">
+    <button id="langPl" aria-pressed="true">PL</button>
+    <button id="langEn" aria-pressed="false">EN</button>
+  </div>
+</header>
+
+<div class="workbench">
+  <aside class="panel">
+    <section>
+      <h2 data-i18n="templates"></h2>
+      <div class="preset-grid" id="presetGrid" role="group"></div>
+    </section>
+
+    <section>
+      <h2 data-i18n="fonts"></h2>
+      <div class="field">
+        <label data-i18n="headingFont"></label>
+        <div class="font-chooser" id="headingChooser"></div>
+      </div>
+      <div class="field">
+        <label data-i18n="bodyFont"></label>
+        <div class="font-chooser" id="bodyChooser"></div>
+      </div>
+    </section>
+
+    <section>
+      <h2 data-i18n="colors"></h2>
+      <div class="picker-row">
+        <label class="picker-item">
+          <input type="color" id="accentColor" />
+          <span data-i18n="accentColor"></span>
+        </label>
+        <label class="picker-item">
+          <input type="color" id="fgColor" />
+          <span data-i18n="fontColor"></span>
+        </label>
+        <label class="picker-item">
+          <input type="color" id="bgColor" />
+          <span data-i18n="bgColor"></span>
+        </label>
+      </div>
+    </section>
+
+    <section>
+      <h2 data-i18n="logo"></h2>
+      <input type="file" id="logoInput" class="visually-hidden" accept="image/png,image/jpeg,image/svg+xml,image/webp" />
+      <div class="btn-row">
+        <button class="btn btn-ghost" id="logoBtn" data-i18n="uploadLogo"></button>
+        <button class="btn btn-ghost" id="logoClear" data-i18n="removeLogo"></button>
+      </div>
+    </section>
+
+    <section>
+      <h2 data-i18n="deck"></h2>
+      <input type="file" id="mdInput" class="visually-hidden" accept=".txt,.md,.markdown,.pdf" />
+      <div class="btn-row">
+        <button class="btn btn-ghost" id="mdBtn" data-i18n="loadDoc"></button>
+        <button class="btn btn-ghost" id="resetBtn" data-i18n="reset"></button>
+      </div>
+      <p class="note hidden" id="fileNote"></p>
+    </section>
+
+    <section>
+      <h2>Gemini</h2>
+      <div class="field">
+        <label for="apiKey" data-i18n="apiKeyLabel"></label>
+        <input type="password" id="apiKey" placeholder="AIza…" autocomplete="off" spellcheck="false" />
+        <p class="note"><span data-i18n="apiKeyHelp"></span>
+          <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">aistudio.google.com/apikey</a></p>
+      </div>
+      <div class="field field-inline">
+        <label id="slideLangLabel" data-i18n="slideLangLabel"></label>
+        <div class="lang-toggle" role="group" aria-labelledby="slideLangLabel">
+          <button id="slideLangPl" aria-pressed="true">PL</button>
+          <button id="slideLangEn" aria-pressed="false">EN</button>
+        </div>
+      </div>
+      <button class="btn btn-primary btn-block" id="generateBtn" disabled data-i18n="generate"></button>
+      <p class="note hidden" id="genNote" role="status"></p>
+    </section>
+
+    <button class="btn btn-primary btn-block" id="presentBtn" data-i18n="present"></button>
+    <button class="btn btn-ghost btn-block" id="pptxBtn" data-i18n="downloadPptx"></button>
+  </aside>
+
+  <main class="stage-wrap">
+    <div class="deck" id="deck">
+      <div class="deck-bar" id="deckBar" aria-hidden="true"></div>
+      <img class="deck-logo" id="deckLogo" alt="" aria-hidden="true">
+      <div class="slide" id="stage" aria-live="polite"></div>
+    </div>
+    <div class="editor-drawer hidden" id="editorDrawer">
+      <textarea id="mdEditor" spellcheck="false"></textarea>
+    </div>
+    <div class="deck-footer">
+      <div class="nav-btns">
+        <button class="btn btn-ghost" id="prevBtn" aria-label="previous">←</button>
+        <button class="btn btn-ghost" id="nextBtn" aria-label="next">→</button>
+      </div>
+      <div class="deck-counter" id="deckCounter"></div>
+      <button class="btn btn-ghost" id="editToggle" data-i18n="editMd"></button>
+      <div class="spacer"></div>
+      <div class="hints">
+        <span><kbd>←</kbd><kbd>→</kbd> <span data-i18n="hintNav"></span></span>
+        <span><kbd>Esc</kbd> <span data-i18n="hintEsc"></span></span>
+      </div>
+    </div>
+  </main>
+</div>
+
+<script>
+// ─── Constants ──────────────────────────────────
+const LS_LANG = "eduapp_lang", LS_CONFIG = "styler_config",
+      LS_KEY = "eduapp_gemini_key", LS_MODEL = "eduapp_model";
+const DEFAULT_MODEL = "gemini-3.5-flash";
+
+// Default edulab rocking-horse mark is injected at init (base64 below).
+const DEFAULT_LOGO = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAIcAAABsCAYAAABAZKFLAAARuUlEQVR4nO2dz3LaypfHv6cBZxb32tQsI8duY7sqVXfx02L2UZ7AZD2LkCeI8wQhT2BnNzvjJwh5gKngJ4iyu1WJjfAN2V7wnak7MdBnFkgY9A8JSYB99alKVdxI3QK+dJ8+ffo0IWetOZBPjpRSBhN0ADqYyyBqAQARNTdRPDctq5dF25RFpTnJ2ZfaS8VcB0POu5ZAjavr7qu0nyEXx5qhS1m+4dszZlTj3EeC3lxZ3dM0n6WYZmU5ydClLPd58AkMPf7dVE77eXJxrBF9HnwAs+77ItEFGBYJspj5NZjL0y8LoJX284i0K8xZjIrcroPZ8Hnp4yOxsdfudI32dbcmgJZbGCC6+GZ9b6X9THnPsQbYw8lrd7mfHTFifuu+rkBUz+K5cnGsgAO5/Wz67xs1qAKzvQGB3ruFcSC3jZFSxkxlGfUaQC6OzDmUmj5SfMREVceeGCkVeg8R9TepVHeXL7PXAHJxZIbjpxgqlgAA5ug3MxpmZ9axtexeA8jFkTr78klV8ehEOaJYACGo6S5bdq8B5LOVVKnsaCdKjT5E8WrG4VBqumcmQ9Qromil2Y6bvOdIAcd5xUE+CgAgdIipCQFLgEynWIF1VnwSVj+DyoBrWGIu/8Tgc0Vu16+s7++TPH/wI+ck4s6rGSQMOn8kSvXfLctyvxK0flIQ4rnbltjb1Uww/8u/CWo9otIrvzaSkA8rCQkRxth5dd2tub+0fam93Nt93FaKG35DEIF77rItKhkE8u8hmI2fPPhckdseX0kS8p4jARW5XWelPIYigd5fXXeP3eWOsRpqkxB9aXe6etDLB3LbGLFqgLHre7sQ766s7/UIjz+XXBwLcig1faj4s7tcCHp1aXUb02X20PMhwD0+BZ1vidLxvPgMXcryjRrUGezbUwhReHFp/dEMb2s+uTgWZG9X++wdTui8fd2tTZfMt0nG9wXZJWEE9iJEvSLh+Vera8apz/NUSW7+p7Ivn1SVGn2YKSS6aHe6xnRREmM1KnYbLY+xSmRuUel5kiix3CBdAKVGNXeZn0Pqhm/PfIVBdBFkrMbFtKzeFpUMIurPvMCs3/DtWZK6854jJk+llD/VbdtV/LF9/aM6XWC7uz+5788iYgsItoGSGKh5zxGTWwyq7jIhCg13mZ+7Wwh6lYUwAOCr1TWFIE8cKSv1dl8+qS5SZy6OuKjZaSgR9d0zg6dSSh9394V7FpM24/rp3F2uWJ0dSk2PW18ujpjYWwTu/gZM9zUDDAx3mSBxmtUzTdO+7tZA9GWmkLk8ZJzpUpbj1JWLIy7MM4E6ZO8hmUYpGO6yNPwOUUnLQM0X3hLjdXWDIGfWyYgu0mjpt99+++X//rf3nzOFBfrvy8vv36aLTMvqHUrNGDJmDFRmVO2FunqU9vKeIwYHcttwl02vsN7Bs04phpVG+3///fe/K8X/Nf0PI/UfftemYaDm4sgC19oJCbJW8RhJDdRcHDFgeKO7fkHRnP77qZSeawhsZfVM80hioObiiAGDpLvM7Z4eYui5hrCansNhUQM1sUGqS1n+Hwz/pZQyQNDtqCU56VoJFkAWgXtgmEKI1jfreyoG2qrxfODw713SCue7urq6rlQq5emyy6srzzO4WdRAXch9rktZ/guDI2auxt3wO2mY0CSi5qXV9YyJ68rertaamcr6LLb5xXi0r3+sxTLFvtRqSrGntwha4o81rOhSlis7j9/2edBWihuLCgMYq1Ypbuztan9Wdh6/jeugWVfYHXVO6KzmSbzENVAji2Nfai/7PGgzUPfs1UwCc5mBep8H7X2pvUyt3kyYnaISe72jIHeU12rtDTdxDNS5NocTxaTUvCgmwG60N/7v2HPId2sM5cAAWfsBFaNR2X1c3aSNV1llq0mEO7xPUM/nokx8HGmyRSWjz7d/zhQy6ze4PQPwwikKFceh1HQ7WKUcctlHIahZQqk1LzbhqZTyFoMqj4V25HcNM6p9DIxDqSWOZMoeH+/omvg43Njpo6pM0PvqVve7xm2gBhpK+1KrKcZJsDCixTsGMY6LGNQB9h9KiHoFohdZbveLg198hnsLgV+sh19M6bI4kNuGUvySwbU49zkGqq/NMbFq/YUxCblP0vX/bllW+7pbeyQ29gB89FzAXB4p9WlfarVF21g26+LjOJDbxt6u9nmk1Ke4wgDGBupTKaVnWAma7gDZ/Arsoaga1K5SfLYvNazq1+cQxTuapY8jCk+llD95cObZcB0X5vItD45nhpWgL4iI+gWCkbUNcCC3DcXcZOatLNtZJsvycVTk9mtW6nTuhUQXxDBJiBaBe0UUrX8Dejc8sGY+d6KLSc+xamEAwDfre+tQasYI1HoQAlmCj8OZTXJYb0F0IQiNX1FqBpkCe7uaCWAmVqUIpCuM8YxkeATFOttzfmJYEGRuoPhx3ozmq9U1H45A4tkb9malEybIAtG7ecb43K0PRBcFovqiRj3Z49Rnt/EZVxhPpZS3avB2rgFE1Iryxg+lpo8Y91sgPu71MNwbpcJsvEOp6UOGv5uB0CmQqMURhd/SQHGIofRrgAjHUYWxL7XaTx6cuPNa+cJsjJiNys7j+tX1j3dBl321uqYupfyLBlX3aigzG55wPSEC61oWzKoWtIc1YgX69J9BxrjdYwTMJul8ixZ3MUxTLKJoKRr03b9QxTg5lJo5TyBhs5swGKhXdjQZlpbZfoMNd3lFbtfZJY60Ng8nYW9XMzwe0oS4BRI2lKQ9mxS/W5ZFhGPPK2N/+6ewiKG5wiC6ANGF39I2ADC4VtnREu3K+idgC6QGADdqcLIMYQD2wtul1W34xRuGCSTMiBWCXrWvf1C70zXana5x1emWC0I89yz4IBdIVJTis8qOduZn02XlhZ14SOMIJLDHIPqySSXp96DfrO+tLSoZfkvGuUCi4ScMEuJdVg7CGfd5FIGECWOLSkaYIWRaVm+coiAXSCoQXWRpa3nWVuYJZFFhTBMmkEW27T1UCPTebygGxsP3FpWqWbbvu/AWJhBPWUxhOAQJZASqxqnnQSOot0Ulw9dWY976y2dT9yLYP0iPPykwEixQINMsKAwHdxacHC9O/g0/gUzPYuJwKDW9IrdfV3Yff9jb1f4cKvbJUjQn2OfS6jb2pYY0hpKcxTEtq6dLafThzeATZdX6UGr6CPQMrAwGGUPF5bu8pgFpt5l7c8MEfQWyhsLQpSyv/HkibLJelDgCWUgMLoQoNCLtW7m0uo1DqZlje4B7myg1VvlFEMh0v8UbDGoATpf/NGPsPGGuUp8wwgTME8jervYSgL6IGICxkcvMLSEKjUvrj2bkTU22G92M3FKG/IpCq4/ZL4IZbw+l1lpF3Ol4EUx5ht4NlJpptxUmkPmpLGdxxECCWgXA89ndyxQMpmX19na085n40/FU+3NlRzv1O3UgK5Ti6pBR887k6DztdNMOoQIJYZ4Y3NxLcQDAligd3/Cg6l4wZPDxSPHxUh/G1XMTUX/D5zCdNIkikLhicHNvxeHs/1zHoCAikTiFZBSmBNIE87OkYnBzb8UB3EWNDYFmojiKlLgLkPrDXFab9sTAyKLue5+C4avVNbdoQych3q1sXyqhQ0K826SSXP+NWNG51z2Hg/3rqQOoH0rNTgOxHAjce0iCmOZBiGOah/pFrYJ7P6zkZEcujpxAcnHkBJKLIyeQXBw5geTiyAnkwU1lo3Igt58xWDoJ3pjIcF4jhgWwBSF6AjCLKHaW4Q5fN/4x4jiUmj5SeMkEA8z6SKnZC/hu9WzyP6UwAjDCLfZ2H1vE1BJCNL9Zf3iTzTxAHrQ4xrvWb18zoTZ0UkBGj32ZhSEZXBupUW1vV+sRo7khSu8eco/yIG2Ocb5U7eQuNWbIIb+LwFxmcO2num3v7Wqf/E5TeAg8uJ6jIrdf93lQB7gcuZeYSpE5wRUPGsgka4DW2BSlNyuPY02RByMOO8/IB1ZKD72Q6AsxWiREq4SCGTYs2HnddQUYfmkfpmFwrc+D6r588mqZpzJlSebieCqlHGFQznJBbJIfJCAtJhH1wWgUBBpxnsPuBVr2Pyfne1Uxjn2jr5jLikcfKjva6aYovcuqF1nGZwpkbHPsS632U922h4o/7+1qn7LIb17Zefw2KC2ms+N/k0ry6robORlNEKZl9S6tbqPd6ep21gDf0x8YfNznQUbvVzvJ+jN1yEwcng3XzEbaH9g4JQHqfq8R6L2z4z+LX/A363ur3ekaQtAr3/wjzHo273cqPjaDz3SaTMQRuBOfWe/z7ec0NksH5aogon5BiOdX191UUh/N49LqNjapJH17kRQFEvR+sxChQ+rimJvthyGHjETTv8APys4PsuyU2KZl9dqdrkGg954XE355upTlvV3tc2givowEkqo4IucHS5C6OlAY40RpK92ieXXdPQ7ITrDQl8dK6X2+9d3knFYbYaQmjrCkLiTojd+4HDfRXJgwkuZiT4uQ9BWLfHlH/g48OvdLX5G2QFIRx7xsP1dW97RA8B5CF4N5wli03ixIWSAzkKA37etuLSi/SZoCSSyO8Qbi+Skavlpd0zbcfDPVhHGfhOGQtkDG0/LCiyure+qUhQkk7tHkfiQWh1KjmqeQxhlp3N38JBGJ3xEaNsx8ND2buY/CcIgqEGctKLAiQqdAMPw8r/Zn4Pk8k5y/d9dsQvxOQxxXTKFrDRWpHbPiwA+EQKcAyvdVGNOEDLumIJwqxmnIaVgft8RGoD0VXDc67c4PufhTpyAOO6Ou/2ZeInOLSs+D3pidv7sRZ6f4fROGQ9xMz0TUJxK1sHWayo52MuMUm7o3jZMuUjsLZG9Ha/geyUWwikQvwh40qPfxcj+F4RBZIEQXj6gUuBl7crqCr68HnSJRNY11l1QPigkWyPzz2g7ktjFiPg3tRYh6NF5AO79PO9t0Kcs3GL5kVsdhsSVE1AehPm10+tUVeIxGyum4Uj9FKKwXINDp1XX3Tdj944MHuT5317w9Xv+K0sd18G/4EecAPhLi3SaKp2HvZV8+qSpW/qclZJCnLZMjpkK7TyKzSHgV9su3f2nHYD6em3tj3Js0SaC1DkI5kNvPlOIqE1ejRaDR+SNRqs+LKwkcRuw6shhuMzt/bN55bSTE8ZX13bsWMUUskUwqJpOYm0KI1jfru++SeppMTqZiZcSbPtJ5QVBj3jrQeLhVZ0FCIyHeZZXiOtPD6ezxsRkYQUXUekSlV/OCdO+CbCIMN942TAJbYJhCFEyC6ixirzyVUg4x3FVKGQBJJshFErSB0dgQpdMo7/lmfPLVcVBdgqia5SLjsk4uDJ2NEChy5JSd0rGGgBOtY0Nkwh0/6hDzyw9p4wsRGlFTdO5L7WUS30daLEUcgOPT4OD0TEQ9Yj4NO9prmklvoriKtISSJrYgNlBqRt2+MG8IAcZrK2GzmTRZmjgAe5hRg9PAI8oBgGAJovql1fWuGYTUOxYKDBAbq8gPNp2sLY4ggIkz8CS0pyL6UiTUljmFX6o4HKL5NGARidNNFM/jdp9jsYwMVspggk6AnnrGQaILMCwh0BLA3LPw/DiQT45GrI7DRBHF95EVKxGHw77Uasw4Df3ibMfXhii9T7q7zMkXpqay77FiCQqYCUzlLieQSeDeLyiaScZ6u5c7so1r33an2ny/KUr1VU3PVyoOYGKV1xn8et61RGgSUXMd/BlxOZBPjpRSVSZUQwzNMUQXxRhHt2bFysXh8FRK+VMN6qH2yBT3QSixBAEg6QnSabM24nCwnUq1mI6vFjG3luX4CmJylMX4qPZoggAQ1SG2bNZOHA6Od3ShU56JWsQwhRAtgHtZCMa2X7aUUgYIOoOM6GKYPOhc1/kqWVtxTDN2fKkqETyJ8CND1ANgThKz2AhRMIPORRl7QycVlJmgAywT7donuhCExq8oNdd1OHS4F+KYxl7Uq2IdHV9BLOAQWwfunTgcZh1f0ONFk2VLEofYOnFvxeHG5fgylioWQgdMLRIw0zjKYl14MOLwY8bppXjaZojtXieiPgMmGBYJshyn2LrNMNLkQYsjKn4nLST1hD4E/h8VMgMkGLJxMwAAAABJRU5ErkJggg==";
+
+const PRESETS = [
+  { name: { pl: "Papier", en: "Paper" },
+    bg: "#FBF7F0", fg: "#211E1A", accent: "#E8920C",
+    heading: "Raleway", body: "Raleway" },
+  { name: { pl: "Atrament", en: "Ink" },
+    bg: "#211E1A", fg: "#FBF7F0", accent: "#E8920C",
+    heading: "Space Grotesk", body: "Work Sans" },
+  { name: { pl: "Żurnal", en: "Journal" },
+    bg: "#FFFFFF", fg: "#161412", accent: "#EF5B3F",
+    heading: "Playfair Display", body: "Lora" },
+  { name: { pl: "Pastel", en: "Pastel" },
+    bg: "#EAF4F2", fg: "#0A3B35", accent: "#0E8C7F",
+    heading: "Poppins", body: "Nunito" },
+];
+
+const SAMPLE_MD = `# Studio stylów prezentacji
+Jak działa ta aplikacja - krótki przewodnik.
+---
+## Co robi ta aplikacja?
+- Pozwala projektować wygląd prezentacji **na żywo**
+- Cztery szablony startowe: Papier, Atrament, Żurnal, Pastel
+- Wszystko zmieniasz w panelu po lewej stronie
+- Ustawienia zapisują się w przeglądarce
+---
+## Szablony i kolory
+- Kliknięcie szablonu zmienia cały wygląd pokładu
+- Trzy okrągłe przyciski: akcent, kolor tekstu, kolor tła
+- Odcienie pochodne liczą się same - jak w tym cytacie:
+
+> Zmień kolor tła, a paleta cytatów, linii i kodu dopasuje się automatycznie.
+---
+## Fonty Google
+- Osobny font dla nagłówków i tekstu
+- Lista pokazuje podgląd każdego fontu
+- Na dole listy wpiszesz dowolny font z fonts.google.com
+- Font doładowuje się automatycznie
+---
+## Logo
+- **Wgraj logo** umieszcza je w prawym górnym rogu slajdów
+- Domyślnie: konik edulab (na ciemnym tle odwraca kolor)
+- **Usuń** chowa logo całkowicie
+---
+## Własna prezentacja
+- **Wczytaj dokument**: plik .md ze slajdami pokazuje się od razu
+- .txt lub .pdf? Wklej klucz Gemini i kliknij **Generuj slajdy**
+- **Edytuj markdown** otwiera edytor pod podglądem
+
+\`\`\`markdown
+## Nagłówek slajdu
+- punkty, **pogrubienia**, \`kod\`, tabele
+\`\`\`
+---
+## Sterowanie i eksport
+| Element | Jak |
+|---------|-----|
+| Następny / poprzedni slajd | → / ← |
+| Pełny ekran | Prezentuj, wyjście: Esc |
+| PowerPoint w tym stylu | Pobierz .pptx |
+---
+## Podsumowanie
+- Wybierz szablon, dopasuj fonty i kolory
+- Wgraj logo i własny dokument
+- Prezentuj z pełnego ekranu albo pobierz .pptx
+- Ten pokaz też możesz ostylować - spróbuj teraz`;
+
+// ─── Translations (T + t) ───────────────────────
+const T = {
+  pl: {
+    appTitle: "Studio stylów prezentacji",
+    templates: "Szablony",
+    fonts: "Fonty (Google Fonts)",
+    headingFont: "Nagłówki",
+    bodyFont: "Tekst",
+    customFontPh: "dowolny font Google…",
+    colors: "Kolory",
+    accentColor: "akcent",
+    fontColor: "kolor tekstu",
+    bgColor: "kolor tła",
+    logo: "Logo",
+    uploadLogo: "Wgraj logo",
+    removeLogo: "Usuń",
+    deck: "Prezentacja",
+    loadDoc: "Wczytaj dokument",
+    reset: "Przywróć demo",
+    present: "Prezentuj (pełny ekran)",
+    downloadPptx: "Pobierz .pptx",
+    errPptx: "Eksport PPTX nie powiódł się",
+    hintNav: "slajdy",
+    hintEsc: "wyjście",
+    editMd: "Edytuj markdown",
+    apiKeyLabel: "Klucz API Gemini",
+    apiKeyHelp: "Klucz zostaje w Twojej przeglądarce (localStorage) i jest wysyłany bezpośrednio do Google. Wygenerujesz go na",
+    slideLangLabel: "Język slajdów",
+    generate: "Generuj slajdy",
+    fileLoaded: "wczytano",
+    genSending: "Wysyłam dokument…",
+    genWaiting: "Generuję slajdy…",
+    genDone: "Gotowe - slajdy wygenerowane.",
+    errNoKey: "Brak klucza API - wklej klucz Gemini powyżej.",
+    errFileType: "Obsługiwane formaty: .txt, .md, .pdf",
+    errTooBig: "Plik jest za duży (limit 19 MB).",
+    errEmpty: "Model zwrócił pustą odpowiedź. Spróbuj ponownie.",
+  },
+  en: {
+    appTitle: "Presentation style studio",
+    templates: "Templates",
+    fonts: "Fonts (Google Fonts)",
+    headingFont: "Headings",
+    bodyFont: "Body",
+    customFontPh: "any Google Font…",
+    colors: "Colors",
+    accentColor: "accent",
+    fontColor: "font color",
+    bgColor: "background color",
+    logo: "Logo",
+    uploadLogo: "Upload logo",
+    removeLogo: "Remove",
+    deck: "Deck",
+    loadDoc: "Load document",
+    reset: "Reset demo",
+    present: "Present (fullscreen)",
+    downloadPptx: "Download .pptx",
+    errPptx: "PPTX export failed",
+    hintNav: "slides",
+    hintEsc: "exit",
+    editMd: "Edit markdown",
+    apiKeyLabel: "Gemini API key",
+    apiKeyHelp: "The key stays in your browser (localStorage) and is sent directly to Google. Generate one at",
+    slideLangLabel: "Slide language",
+    generate: "Generate slides",
+    fileLoaded: "loaded",
+    genSending: "Sending the document…",
+    genWaiting: "Generating slides…",
+    genDone: "Done - slides generated.",
+    errNoKey: "Missing API key - paste your Gemini key above.",
+    errFileType: "Supported formats: .txt, .md, .pdf",
+    errTooBig: "File too large (19 MB limit).",
+    errEmpty: "The model returned an empty response. Try again.",
+  },
+};
+let uiLang = localStorage.getItem(LS_LANG) ?? "pl";
+function t(key) { return T[uiLang][key] ?? key; }
+
+// ─── State ──────────────────────────────────────
+const state = {
+  md: SAMPLE_MD,
+  slides: [],
+  current: 0,
+  presenting: false,
+  source: null,       // {name, kind:"text"|"pdf", text?, base64?} — for Gemini
+  slideLang: "pl",
+  generating: false,
+  config: {           // the user's style playground settings
+    preset: 0,
+    heading: null,    // Google Font name overrides (null = preset's font)
+    body: null,
+    fg: null,         // color overrides (null = preset's color)
+    bg: null,
+    accent: null,     // accent override (null = preset's accent)
+    logo: null,       // data URI override (null = edulab horse, "" = removed)
+  },
+};
+
+const FONT_CHOICES = [
+  "Raleway", "Inter", "Lato", "Montserrat", "Poppins", "Roboto",
+  "Work Sans", "Nunito", "Space Grotesk", "Fira Sans", "Source Sans 3",
+  "Playfair Display", "Lora", "Merriweather", "DM Serif Display", "Caveat",
+];
+
+// ─── DOM refs ───────────────────────────────────
+const $ = id => document.getElementById(id);
+const deckEl = $("deck"), stageEl = $("stage"), deckBarEl = $("deckBar"),
+  deckLogoEl = $("deckLogo"), deckCounterEl = $("deckCounter"),
+  presetGridEl = $("presetGrid"), fgColorEl = $("fgColor"), bgColorEl = $("bgColor"),
+  logoInputEl = $("logoInput"), mdInputEl = $("mdInput");
+
+// ─── Helpers ────────────────────────────────────
+// Split markdown into slides on --- lines outside code fences (same rule as app.js).
+function splitSlides(md) {
+  const lines = md.split("\n");
+  const segments = [];
+  let buf = [], inFence = false;
+  for (const line of lines) {
+    if (/^\s*```/.test(line)) inFence = !inFence;
+    if (!inFence && /^\s*---\s*$/.test(line)) { segments.push(buf.join("\n")); buf = []; }
+    else buf.push(line);
+  }
+  segments.push(buf.join("\n"));
+  const slides = segments.map(s => s.trim()).filter(Boolean);
+  return slides.length ? slides : [md];
+}
+
+// Ported from ../app.js (same logic as the edu and Quantica apps).
+function stripOuterFence(md) {
+  const m = md.trim().match(/^```[a-zA-Z]*\n([\s\S]*?)\n?```$/);
+  if (!m) return md;
+  const inner = m[1];
+  const fenceCount = (inner.match(/^```/gm) ?? []).length;
+  return fenceCount % 2 === 0 ? inner.trim() : md;
+}
+
+function detectLang(text) {
+  if (!text || !text.trim()) return "pl";
+  const letters = (text.match(/\p{L}/gu) ?? []).length;
+  const plChars = (text.match(/[ąćęłńóśźżĄĆĘŁŃÓŚŹŻ]/g) ?? []).length;
+  if (letters && plChars / letters >= 0.005) return "pl";
+  if (/\s(się|jest|oraz|które|który|żeby|dla)\s/i.test(text)) return "pl";
+  return "en";
+}
+
+function buildPrompt({ lang }) {
+  const language = lang === "pl" ? "po polsku (in Polish, „polskim” języku)" : "in English";
+  return (
+    "You are preparing teaching slides from the attached document for a training workshop.\n" +
+    "Requirements:\n" +
+    "- Cover ALL key concepts and topics of the document — nothing important may be missing.\n" +
+    "- One idea per slide; at most ~6 bullet points per slide.\n" +
+    "- First slide: `# <deck title>` plus one short intro line.\n" +
+    "- Every other slide starts with `## <heading>`.\n" +
+    "- Separate slides with a line containing only `---`.\n" +
+    "- You may end with a short summary slide.\n" +
+    `- Write the slides ${language}.\n` +
+    "- Output raw markdown only — no surrounding code fence, no commentary."
+  );
+}
+
+const loadedFonts = new Set();
+function loadGoogleFont(name) {
+  if (!name || loadedFonts.has(name)) return;
+  loadedFonts.add(name);
+  const link = document.createElement("link");
+  link.rel = "stylesheet";
+  link.href = `https://fonts.googleapis.com/css2?family=${name.trim().replace(/\s+/g, "+")}:wght@400;500;600;700;800&display=swap`;
+  document.head.appendChild(link);
+}
+
+function saveConfig() { localStorage.setItem(LS_CONFIG, JSON.stringify(state.config)); }
+
+// ─── Render functions ───────────────────────────
+function effective() {
+  const p = PRESETS[state.config.preset] ?? PRESETS[0];
+  return {
+    bg: state.config.bg ?? p.bg,
+    fg: state.config.fg ?? p.fg,
+    accent: state.config.accent ?? p.accent,
+    heading: state.config.heading ?? p.heading,
+    body: state.config.body ?? p.body,
+    logo: state.config.logo === null ? DEFAULT_LOGO : state.config.logo,
+  };
+}
+
+function applyStyle() {
+  const e = effective();
+  loadGoogleFont(e.heading);
+  loadGoogleFont(e.body);
+  deckEl.style.setProperty("--deck-bg", e.bg);
+  deckEl.style.setProperty("--deck-fg", e.fg);
+  deckEl.style.setProperty("--deck-accent", e.accent);
+  deckEl.style.setProperty("--deck-heading-font", `'${e.heading}', sans-serif`);
+  deckEl.style.setProperty("--deck-body-font", `'${e.body}', sans-serif`);
+  deckLogoEl.classList.toggle("hidden", !e.logo);
+  if (e.logo) deckLogoEl.src = e.logo;
+  // the default ink-colored horse vanishes on dark decks — invert it there;
+  // never filter a user-uploaded logo
+  const [r, g, b] = [1, 3, 5].map(i => parseInt(e.bg.slice(i, i + 2), 16));
+  const dark = (0.2126 * r + 0.7152 * g + 0.0722 * b) < 128;
+  deckLogoEl.style.filter = (dark && e.logo === DEFAULT_LOGO) ? "invert(1)" : "";
+  // reflect state into controls
+  fgColorEl.value = e.fg;
+  bgColorEl.value = e.bg;
+  document.querySelectorAll(".preset").forEach((b, i) =>
+    b.setAttribute("aria-pressed", String(i === state.config.preset)));
+  accentPickerEl.value = e.accent;
+  updateChooserLabels();
+}
+
+function renderSlides() {
+  state.slides = splitSlides(state.md).map(seg => DOMPurify.sanitize(marked.parse(seg)));
+  state.current = Math.min(state.current, state.slides.length - 1);
+  showSlide(state.current);
+}
+
+function showSlide(i) {
+  const n = state.slides.length;
+  state.current = Math.max(0, Math.min(i, n - 1));
+  stageEl.className = "slide" + (state.current === 0 ? " slide--title" : "");
+  stageEl.innerHTML = state.slides[state.current];
+  deckBarEl.style.width = `${((state.current + 1) / n) * 100}%`;
+  deckCounterEl.textContent = `${state.current + 1} / ${n}`;
+}
+
+function renderChromeText() {
+  document.documentElement.lang = uiLang;
+  document.title = t("appTitle");
+  $("langPl").setAttribute("aria-pressed", String(uiLang === "pl"));
+  $("langEn").setAttribute("aria-pressed", String(uiLang === "en"));
+  document.querySelectorAll("[data-i18n]").forEach(el => { el.textContent = t(el.dataset.i18n); });
+  document.querySelectorAll("[data-i18n-placeholder]").forEach(el => { el.placeholder = t(el.dataset.i18nPlaceholder); });
+  document.querySelectorAll(".preset .name").forEach((el, i) => { el.textContent = PRESETS[i].name[uiLang]; });
+}
+
+// ─── Event listeners ────────────────────────────
+$("langPl").addEventListener("click", () => { uiLang = "pl"; localStorage.setItem(LS_LANG, "pl"); renderChromeText(); });
+$("langEn").addEventListener("click", () => { uiLang = "en"; localStorage.setItem(LS_LANG, "en"); renderChromeText(); });
+
+PRESETS.forEach((p, i) => {
+  const btn = document.createElement("button");
+  btn.className = "preset";
+  btn.innerHTML = `<div class="dots">
+      <span style="background:${p.bg}"></span>
+      <span style="background:${p.fg}"></span>
+      <span style="background:${p.accent}"></span>
+    </div><div class="name"></div>`;
+  btn.addEventListener("click", () => {
+    // picking a template resets the per-property overrides
+    state.config = { preset: i, heading: null, body: null, fg: null, bg: null, accent: null, logo: state.config.logo };
+    saveConfig(); applyStyle();
+  });
+  presetGridEl.appendChild(btn);
+});
+
+// ─── Font choosers (options preview their own typeface) ───
+let previewFontsLoaded = false;
+function ensurePreviewFonts() {
+  if (previewFontsLoaded) return;
+  previewFontsLoaded = true;
+  FONT_CHOICES.forEach(loadGoogleFont);
+}
+
+const chooserRegistry = [];
+function buildFontChooser(el, getName, setName) {
+  const btn = document.createElement("button");
+  btn.className = "font-current";
+  btn.innerHTML = `<span class="label"></span><span class="caret">▾</span>`;
+  const menu = document.createElement("div");
+  menu.className = "font-menu hidden";
+  FONT_CHOICES.forEach(name => {
+    const opt = document.createElement("button");
+    opt.className = "font-option";
+    opt.textContent = name;
+    opt.style.fontFamily = `'${name}', sans-serif`;
+    opt.addEventListener("click", () => { setName(name); closeAllChoosers(); });
+    menu.appendChild(opt);
+  });
+  const custom = document.createElement("div");
+  custom.className = "font-custom";
+  const customInput = document.createElement("input");
+  customInput.type = "text";
+  customInput.spellcheck = false;
+  customInput.dataset.i18nPlaceholder = "customFontPh";
+  customInput.addEventListener("keydown", e => {
+    if (e.key === "Enter" && customInput.value.trim()) {
+      setName(customInput.value.trim());
+      customInput.value = "";
+      closeAllChoosers();
+    }
+  });
+  custom.appendChild(customInput);
+  menu.appendChild(custom);
+  btn.addEventListener("click", e => {
+    e.stopPropagation();
+    const wasOpen = !menu.classList.contains("hidden");
+    closeAllChoosers();
+    if (!wasOpen) { ensurePreviewFonts(); menu.classList.remove("hidden"); }
+  });
+  el.append(btn, menu);
+  chooserRegistry.push({ btn, menu, getName });
+}
+function closeAllChoosers() {
+  chooserRegistry.forEach(c => c.menu.classList.add("hidden"));
+}
+function updateChooserLabels() {
+  chooserRegistry.forEach(c => {
+    const name = c.getName();
+    const label = c.btn.querySelector(".label");
+    label.textContent = name;
+    label.style.fontFamily = `'${name}', sans-serif`;
+  });
+}
+document.addEventListener("click", closeAllChoosers);
+
+buildFontChooser($("headingChooser"),
+  () => effective().heading,
+  name => { loadGoogleFont(name); state.config.heading = name; saveConfig(); applyStyle(); });
+buildFontChooser($("bodyChooser"),
+  () => effective().body,
+  name => { loadGoogleFont(name); state.config.body = name; saveConfig(); applyStyle(); });
+
+const accentPickerEl = $("accentColor");
+accentPickerEl.addEventListener("input", () => { state.config.accent = accentPickerEl.value; saveConfig(); applyStyle(); });
+
+fgColorEl.addEventListener("input", () => { state.config.fg = fgColorEl.value; saveConfig(); applyStyle(); });
+bgColorEl.addEventListener("input", () => { state.config.bg = bgColorEl.value; saveConfig(); applyStyle(); });
+
+$("logoBtn").addEventListener("click", () => logoInputEl.click());
+logoInputEl.addEventListener("change", () => {
+  const file = logoInputEl.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = () => { state.config.logo = reader.result; saveConfig(); applyStyle(); };
+  reader.readAsDataURL(file);
+});
+$("logoClear").addEventListener("click", () => { state.config.logo = ""; saveConfig(); applyStyle(); });
+
+// ─── Markdown editor drawer ─────────────────────
+const editorDrawerEl = $("editorDrawer"), mdEditorEl = $("mdEditor");
+
+// Single entry point for markdown changes — keeps the drawer in sync.
+function setMd(md, slideIndex = 0) {
+  state.md = md;
+  state.current = slideIndex;
+  if (!editorDrawerEl.classList.contains("hidden")) mdEditorEl.value = md;
+  renderSlides();
+}
+
+$("editToggle").addEventListener("click", () => {
+  editorDrawerEl.classList.toggle("hidden");
+  if (!editorDrawerEl.classList.contains("hidden")) {
+    mdEditorEl.value = state.md;
+    mdEditorEl.focus();
+  }
+});
+let editTimer;
+mdEditorEl.addEventListener("input", () => {
+  clearTimeout(editTimer);
+  editTimer = setTimeout(() => {
+    state.md = mdEditorEl.value;
+    renderSlides();
+  }, 300);
+});
+
+// ─── Document loading + Gemini generation (same logic as the main apps) ───
+const fileNoteEl = $("fileNote"), genNoteEl = $("genNote"),
+  generateBtnEl = $("generateBtn"), apiKeyEl = $("apiKey"),
+  slideLangPlBtn = $("slideLangPl"), slideLangEnBtn = $("slideLangEn");
+
+function note(el, msg, isError) {
+  el.textContent = msg;
+  el.classList.toggle("hidden", !msg);
+  el.classList.toggle("error", Boolean(isError));
+}
+function reflectSource() {
+  generateBtnEl.disabled = !state.source || state.generating;
+  note(fileNoteEl, state.source ? `✓ ${t("fileLoaded")}: ${state.source.name}` : "");
+  slideLangPlBtn.setAttribute("aria-pressed", String(state.slideLang === "pl"));
+  slideLangEnBtn.setAttribute("aria-pressed", String(state.slideLang === "en"));
+}
+
+$("mdBtn").addEventListener("click", () => mdInputEl.click());
+mdInputEl.addEventListener("change", () => {
+  const file = mdInputEl.files[0];
+  if (!file) return;
+  const name = file.name;
+  const isPdf = /\.pdf$/i.test(name) || file.type === "application/pdf";
+  const isText = /\.(txt|md|markdown)$/i.test(name) || file.type.startsWith("text/");
+  if (!isPdf && !isText) return note(genNoteEl, t("errFileType"), true);
+  if (isPdf && file.size > 19 * 1024 * 1024) return note(genNoteEl, t("errTooBig"), true);
+  note(genNoteEl, "");
+  const reader = new FileReader();
+  if (isPdf) {
+    reader.onload = () => {
+      state.source = { name, kind: "pdf", base64: reader.result.split(",")[1] };
+      reflectSource();
+    };
+    reader.readAsDataURL(file);
+  } else {
+    reader.onload = () => {
+      state.source = { name, kind: "text", text: reader.result };
+      state.slideLang = detectLang(reader.result);
+      // markdown that already contains slide delimiters previews immediately
+      if (splitSlides(reader.result).length > 1) setMd(reader.result);
+      reflectSource();
+    };
+    reader.readAsText(file);
+  }
+});
+$("resetBtn").addEventListener("click", () => {
+  state.source = null;
+  note(genNoteEl, ""); reflectSource(); setMd(SAMPLE_MD);
+});
+
+apiKeyEl.addEventListener("input", () => localStorage.setItem(LS_KEY, apiKeyEl.value.trim()));
+slideLangPlBtn.addEventListener("click", () => { state.slideLang = "pl"; reflectSource(); });
+slideLangEnBtn.addEventListener("click", () => { state.slideLang = "en"; reflectSource(); });
+
+async function generateSlidesFromSource() {
+  const key = localStorage.getItem(LS_KEY)?.trim();
+  if (!key) return note(genNoteEl, t("errNoKey"), true);
+  if (!state.source || state.generating) return;
+  const model = localStorage.getItem(LS_MODEL) || DEFAULT_MODEL;
+  const parts = [{ text: buildPrompt({ lang: state.slideLang }) }];
+  if (state.source.kind === "pdf")
+    parts.push({ inline_data: { mime_type: "application/pdf", data: state.source.base64 } });
+  else
+    parts.push({ text: "\n\n--- DOCUMENT ---\n\n" + state.source.text });
+
+  state.generating = true;
+  reflectSource();
+  note(genNoteEl, t("genSending"));
+  try {
+    // Streaming: slides appear in the styled deck as Gemini writes them.
+    const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:streamGenerateContent?alt=sse`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "x-goog-api-key": key },
+      body: JSON.stringify({ contents: [{ parts }], generationConfig: { temperature: 0.4 } }),
+    });
+    if (!res.ok) {
+      let msg;
+      try { msg = JSON.parse(await res.text())?.error?.message; } catch { /* non-JSON error body */ }
+      throw new Error(`${res.status}: ${msg ?? res.statusText}`);
+    }
+    note(genNoteEl, t("genWaiting"));
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let buf = "", acc = "", lastRender = 0;
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buf += decoder.decode(value, { stream: true });
+      const lines = buf.split("\n");
+      buf = lines.pop();
+      for (const line of lines) {
+        if (!line.startsWith("data:")) continue;
+        let data;
+        try { data = JSON.parse(line.slice(5).trim()); } catch { continue; }
+        const chunk = (data.candidates?.[0]?.content?.parts ?? []).map(p => p.text ?? "").join("");
+        if (!chunk) continue;
+        acc += chunk;
+        const now = Date.now();
+        if (now - lastRender > 400) {
+          lastRender = now;
+          // follow the newest slide while the deck grows
+          setMd(acc, splitSlides(acc).length - 1);
+          note(genNoteEl, `${t("genWaiting")} (${state.slides.length})`);
+        }
+      }
+    }
+    if (!acc.trim()) throw new Error(t("errEmpty"));
+    setMd(stripOuterFence(acc.trim()));
+    note(genNoteEl, t("genDone"));
+  } catch (err) {
+    note(genNoteEl, String(err.message ?? err), true);
+  } finally {
+    state.generating = false;
+    reflectSource();
+  }
+}
+generateBtnEl.addEventListener("click", generateSlidesFromSource);
+
+// ─── PPTX export (deps lazy-loaded on first use) ───
+const PPTX_CDN = "https://cdn.jsdelivr.net/npm/pptxgenjs@4.0.1/dist/pptxgen.bundle.js";
+const PPTX_SRI = "sha384-qb0Xhi7LLYpvW1HCK6oMrmDLSY9sy7vwm6ZlV6KjtrlL9yg30+YN4neTwnmX+Kp8";
+function loadScript(src, integrity) {
+  return new Promise((resolve, reject) => {
+    const s = document.createElement("script");
+    s.src = src;
+    if (integrity) { s.integrity = integrity; s.crossOrigin = "anonymous"; }
+    s.onload = resolve;
+    s.onerror = () => reject(new Error("script load failed: " + src));
+    document.head.appendChild(s);
+  });
+}
+$("pptxBtn").addEventListener("click", async () => {
+  const btn = $("pptxBtn");
+  try {
+    btn.disabled = true;
+    if (typeof PptxGenJS === "undefined") await loadScript(PPTX_CDN, PPTX_SRI);
+    if (typeof exportDeckToPptx === "undefined") await loadScript("pptx-export.js");
+    const e = effective();
+    await exportDeckToPptx({
+      slidesMd: splitSlides(state.md),
+      theme: { bg: e.bg, fg: e.fg, accent: e.accent,
+               headingFont: e.heading, bodyFont: e.body, monoFont: "DM Mono" },
+      logo: e.logo || null,
+      fileName: (state.md.match(/^#\s+(.+)$/m)?.[1]?.trim() || "slides") + ".pptx",
+    });
+    note(genNoteEl, "");
+  } catch (err) {
+    note(genNoteEl, `${t("errPptx")}: ${err.message ?? err}`, true);
+  } finally {
+    btn.disabled = false;
+  }
+});
+
+$("prevBtn").addEventListener("click", () => showSlide(state.current - 1));
+$("nextBtn").addEventListener("click", () => showSlide(state.current + 1));
+$("presentBtn").addEventListener("click", () => {
+  document.body.classList.add("presenting");
+  document.documentElement.requestFullscreen?.().catch(() => {});
+});
+
+document.addEventListener("keydown", e => {
+  if (/^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName)) return;
+  if (["ArrowRight", " ", "PageDown"].includes(e.key)) { e.preventDefault(); showSlide(state.current + 1); }
+  else if (["ArrowLeft", "PageUp"].includes(e.key)) { e.preventDefault(); showSlide(state.current - 1); }
+  else if (e.key === "Home") { e.preventDefault(); showSlide(0); }
+  else if (e.key === "End") { e.preventDefault(); showSlide(state.slides.length - 1); }
+  else if (e.key === "Escape") { document.body.classList.remove("presenting"); document.exitFullscreen?.().catch(() => {}); }
+});
+document.addEventListener("fullscreenchange", () => {
+  if (!document.fullscreenElement) document.body.classList.remove("presenting");
+});
+
+// ─── Init ───────────────────────────────────────
+$("chromeLogo").src = DEFAULT_LOGO;
+apiKeyEl.value = localStorage.getItem(LS_KEY) ?? "";
+reflectSource();
+try {
+  const saved = JSON.parse(localStorage.getItem(LS_CONFIG));
+  if (saved && typeof saved === "object") Object.assign(state.config, saved);
+} catch { /* corrupt config — keep defaults */ }
+{
+  const params = new URLSearchParams(location.search);
+  if (["pl", "en"].includes(params.get("lang"))) { uiLang = params.get("lang"); localStorage.setItem(LS_LANG, uiLang); }
+  const preset = Number(params.get("preset"));
+  if (preset >= 1 && preset <= PRESETS.length) state.config.preset = preset - 1;
+}
+renderChromeText();
+applyStyle();
+renderSlides();
+</script>
+</body>
+</html>
