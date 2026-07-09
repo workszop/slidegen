@@ -1,0 +1,407 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Dokument → slajdy</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Raleway:wght@400;500;600;700;800&family=DM+Mono:wght@400;500&display=swap">
+<script defer src="https://cdn.jsdelivr.net/npm/marked@18.0.5/lib/marked.umd.js"
+        integrity="sha384-ZD0fTOwPMHi7zM6WTVIWJR21I07lq0ccnqz3J6WMvQKG9thh4y7TA1QE6PJu0Af8" crossorigin="anonymous"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/dompurify@3.0.11/dist/purify.min.js"
+        integrity="sha384-Ic7KEGROu37YaruU6NyiYeib7UhjFyDZQ5fzBAji965L75T/4LGk5nzwMEjNGexs" crossorigin="anonymous"></script>
+<script defer src="shared.js"></script>
+<script src="edulab-logo.js"></script>
+<style>
+/* ============================================================
+   edulab style layer — Editorial Color tokens, Raleway type
+   Logic lives in app.js; this file is design only.
+   Style contract classes: see README "Style contract".
+   ============================================================ */
+
+:root {
+  /* ---- Brand fonts (Raleway; bold display for titles) ---- */
+  --font-display: 'Raleway', system-ui, sans-serif;
+  --font-sans:    'Raleway', system-ui, -apple-system, sans-serif;
+  --font-mono:    'DM Mono', ui-monospace, 'SF Mono', Menlo, monospace;
+
+  /* Paper — warm cream backgrounds (the brand never sits on pure white) */
+  --paper:    #FBF7F0;
+  --paper-2:  #F4EDDF;
+  --paper-3:  #ECE1CF;
+  --surface:  #FFFFFF;
+
+  /* Ink — warm near-black text & lines */
+  --ink:      #211E1A;
+  --ink-2:    #5B554D;
+  --ink-3:    #938A7C;
+  --line:     #E7DCCB;
+  --line-2:   #D6C8B2;
+
+  /* Marigold — primary brand */
+  --marigold:      #E8920C;
+  --marigold-600:  #CE800A;
+  --marigold-soft: #FBE7C2;
+  --marigold-ink:  #8A4F00;
+
+  /* Teal — secondary brand */
+  --teal:      #0E8C7F;
+  --teal-600:  #0B7468;
+  --teal-soft: #D2EBE6;
+  --teal-ink:  #0A5A52;
+
+  /* Coral — accent (use sparingly) */
+  --coral:      #EF5B3F;
+  --coral-600:  #D44A30;
+  --coral-soft: #FBDDD4;
+  --coral-ink:  #9A2E1B;
+
+  /* Sky — supportive */
+  --sky:      #2E78C9;
+  --sky-soft: #D9E7F6;
+  --sky-ink:  #1B4E88;
+
+  /* ---- Semantic ---- */
+  --success:      #2F8F5B;  --success-soft: #D7EEDD;  --success-ink: #1C6A3E;
+  --warning:      #C9810A;  --warning-soft: #FBEAC6;  --warning-ink: #855207;
+  --danger:       #D8412A;  --danger-soft:  #FAD9D2;  --danger-ink:  #97271A;
+  --info:         #2E78C9;  --info-soft:    #D9E7F6;  --info-ink:    #1B4E88;
+
+  /* ---- Functional aliases ---- */
+  --bg:        var(--paper);
+  --fg:        var(--ink);
+  --fg-muted:  var(--ink-2);
+  --primary:   var(--marigold);
+  --on-primary:#FFFFFF;
+  --focus-ring: 0 0 0 3px rgba(232,146,12,.38);
+
+  /* ---- Spacing (4pt base) ---- */
+  --sp-1: 4px;  --sp-2: 8px;  --sp-3: 12px; --sp-4: 16px;
+  --sp-5: 20px; --sp-6: 24px; --sp-8: 32px; --sp-10: 40px;
+  --sp-12: 48px; --sp-16: 64px; --sp-20: 80px; --sp-24: 96px;
+
+  /* ---- Radii ---- */
+  --r-xs: 6px; --r-sm: 10px; --r-md: 14px; --r-lg: 20px; --r-xl: 28px; --r-pill: 999px;
+
+  /* ---- Elevation ---- */
+  --shadow-sm: 0 1px 2px rgba(33,30,26,.06), 0 1px 1px rgba(33,30,26,.04);
+  --shadow-md: 0 4px 16px rgba(33,30,26,.08), 0 1px 3px rgba(33,30,26,.05);
+  --shadow-lg: 0 16px 40px rgba(33,30,26,.12), 0 3px 8px rgba(33,30,26,.06);
+  --shadow-marigold: 0 8px 22px rgba(232,146,12,.28);
+
+  /* ---- Type scale ---- */
+  --display-font:  clamp(48px, 6vw, 72px);
+  --h1: 44px; --h2: 33px; --h3: 25px; --h4: 19px;
+  --body-lg: 18px; --body: 16px; --body-sm: 14px;
+  --caption: 13px; --overline: 12px;
+}
+
+/* ============================================================
+   Base
+   ============================================================ */
+*, *::before, *::after { box-sizing: border-box; }
+body {
+  margin: 0; min-height: 100vh;
+  background: var(--paper); color: var(--ink);
+  font-family: var(--font-sans); font-size: var(--body); line-height: 1.6;
+}
+button { font: inherit; cursor: pointer; }
+:focus-visible { outline: none; box-shadow: var(--focus-ring); border-radius: var(--r-xs); }
+.hidden { display: none !important; }
+kbd {
+  font-family: var(--font-mono); font-size: var(--caption);
+  background: var(--paper-3); color: var(--ink-2);
+  border: 1px solid var(--line-2); border-bottom-width: 2px;
+  border-radius: var(--r-xs); padding: 1px 6px;
+}
+
+/* ============================================================
+   Layout — chrome bar + shell
+   ============================================================ */
+.chrome {
+  position: sticky; top: 0; z-index: 20;
+  display: flex; align-items: center; gap: var(--sp-3);
+  padding: var(--sp-3) var(--sp-6);
+  background: rgba(251,247,240,.85); backdrop-filter: blur(10px);
+  border-bottom: 1px solid var(--line);
+}
+.chrome-mark { height: 30px; width: auto; }
+.chrome .wordmark { font-family: var(--font-display); font-weight: 800; font-size: var(--h4); }
+.chrome .tag {
+  font-family: var(--font-mono); font-size: var(--overline);
+  letter-spacing: .14em; text-transform: uppercase;
+  color: var(--teal-ink); background: var(--teal-soft);
+  padding: 2px 10px; border-radius: var(--r-pill);
+}
+.chrome .spacer { flex: 1; }
+
+.lang-toggle { display: flex; border: 1px solid var(--line-2); border-radius: var(--r-pill); overflow: hidden; }
+.lang-toggle button {
+  border: 0; background: transparent; color: var(--ink-2);
+  font-family: var(--font-mono); font-size: var(--caption);
+  padding: 4px 12px; transition: background .2s, color .2s;
+}
+.lang-toggle button[aria-pressed="true"] { background: var(--ink); color: var(--paper); }
+
+.shell { max-width: 1100px; margin: 0 auto; padding: var(--sp-10) var(--sp-6) var(--sp-16); }
+
+/* ============================================================
+   Components — shared
+   ============================================================ */
+.page-head { text-align: center; margin-bottom: var(--sp-10); }
+.eyebrow {
+  font-family: var(--font-mono); font-weight: 500; font-size: var(--overline);
+  letter-spacing: .14em; text-transform: uppercase; color: var(--marigold-ink);
+}
+.page-head h1 {
+  font-family: var(--font-display); font-weight: 800; font-size: var(--h1);
+  line-height: 1.06; letter-spacing: -0.02em; margin: var(--sp-2) 0 var(--sp-3);
+}
+.page-head .lead { max-width: 36rem; margin: 0 auto; color: var(--ink-2); font-size: var(--body-lg); }
+
+.card {
+  background: var(--surface); border: 1px solid var(--line);
+  border-radius: var(--r-lg); box-shadow: var(--shadow-sm); padding: var(--sp-6);
+}
+
+.btn {
+  display: inline-flex; align-items: center; gap: var(--sp-2);
+  border: 0; border-radius: var(--r-pill); padding: 10px 22px;
+  font-weight: 600; transition: background .2s, transform .1s, box-shadow .2s;
+}
+.btn:active { transform: scale(.96); }
+.btn-primary { background: var(--marigold); color: var(--on-primary); box-shadow: var(--shadow-marigold); }
+.btn-primary:hover { background: var(--marigold-600); }
+.btn-primary:disabled { background: var(--line-2); color: var(--ink-3); box-shadow: none; cursor: not-allowed; }
+.btn-ghost { background: transparent; color: var(--ink-2); border: 1px solid var(--line-2); }
+.btn-ghost:hover { background: var(--paper-2); color: var(--ink); }
+
+.hints { display: flex; gap: var(--sp-5); justify-content: center; margin-top: var(--sp-8); color: var(--ink-3); font-size: var(--caption); }
+.hints span { display: inline-flex; align-items: center; gap: var(--sp-2); }
+
+/* ============================================================
+   Input view
+   ============================================================ */
+.visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+
+.input-grid { display: grid; grid-template-columns: 1fr 1fr; gap: var(--sp-5); margin-bottom: var(--sp-5); }
+
+.dropzone {
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  text-align: center; gap: var(--sp-2); min-height: 220px;
+  border: 2px dashed var(--line-2); box-shadow: none;
+  transition: border-color .2s, background .2s, transform .1s;
+}
+.dropzone:hover { transform: translateY(-2px); border-color: var(--marigold); }
+.dropzone:active { transform: translateY(2px); }
+.dropzone.dragover { border-color: var(--marigold); background: var(--marigold-soft); }
+.dz-icon { font-size: 28px; color: var(--marigold); }
+.dz-label { font-family: var(--font-display); font-weight: 700; font-size: var(--h4); margin: 0; }
+.dz-sub { color: var(--ink-3); font-size: var(--body-sm); margin: 0; }
+.dz-actions { margin-top: var(--sp-2); }
+.file-chip {
+  font-family: var(--font-mono); font-size: var(--caption);
+  background: var(--teal-soft); color: var(--teal-ink);
+  padding: 4px 14px; border-radius: var(--r-pill); margin-top: var(--sp-2);
+}
+
+.field { display: flex; flex-direction: column; gap: var(--sp-2); }
+.field-label {
+  font-family: var(--font-mono); font-size: var(--overline);
+  letter-spacing: .1em; text-transform: uppercase; color: var(--ink-2);
+}
+.field-help { margin: 0; font-size: var(--caption); color: var(--ink-3); }
+.field-help a { color: var(--teal-ink); }
+
+textarea, .mono-input {
+  font-family: var(--font-mono); font-size: var(--body-sm); color: var(--ink);
+  background: var(--paper); border: 1px solid var(--line-2);
+  border-radius: var(--r-sm); padding: var(--sp-3); width: 100%;
+}
+textarea { resize: vertical; }
+
+.settings { display: flex; flex-direction: column; gap: var(--sp-5); margin-bottom: var(--sp-6); }
+.settings-row { display: grid; grid-template-columns: 1fr auto auto; gap: var(--sp-6); align-items: start; }
+
+.input-actions { display: flex; gap: var(--sp-3); justify-content: center; }
+
+.help { max-width: 640px; margin: var(--sp-10) auto 0; color: var(--ink-2); font-size: var(--body-sm); }
+.help summary {
+  cursor: pointer; font-family: var(--font-mono); font-size: var(--overline);
+  letter-spacing: .1em; text-transform: uppercase; color: var(--ink-3);
+}
+.help summary:hover { color: var(--marigold-ink); }
+.help pre {
+  background: var(--paper-2); border: 1px solid var(--line);
+  border-radius: var(--r-md); padding: var(--sp-4); overflow-x: auto;
+  font-family: var(--font-mono); font-size: var(--caption); line-height: 1.6;
+}
+
+.gen-status { max-width: 480px; margin: 0 auto var(--sp-6); text-align: center; color: var(--ink-2); font-size: var(--body-sm); }
+.gen-bar { height: 4px; border-radius: var(--r-pill); background: var(--marigold-soft); overflow: hidden; margin-bottom: var(--sp-3); }
+.gen-bar div {
+  height: 100%; width: 35%; border-radius: var(--r-pill); background: var(--marigold);
+  animation: genSlide 1.2s cubic-bezier(.2,.6,.2,1) infinite;
+}
+@keyframes genSlide { 0% { margin-left: -35%; } 100% { margin-left: 100%; } }
+
+.error-panel {
+  display: flex; align-items: center; gap: var(--sp-3); flex-wrap: wrap;
+  max-width: 640px; margin: 0 auto var(--sp-6);
+  background: var(--danger-soft); color: var(--danger-ink);
+  border: 1px solid var(--danger); border-radius: var(--r-md); padding: var(--sp-4) var(--sp-5);
+}
+.error-panel strong { font-family: var(--font-display); font-weight: 700; }
+.error-panel .btn { margin-left: auto; padding: 4px 14px; }
+
+/* ============================================================
+   Edit view
+   ============================================================ */
+.edit-toolbar { display: flex; gap: var(--sp-3); align-items: center; margin-bottom: var(--sp-5); }
+.edit-toolbar .spacer { flex: 1; }
+
+.edit-grid { display: grid; grid-template-columns: 1fr 1fr; gap: var(--sp-5); align-items: start; }
+#editor {
+  min-height: 65vh; background: var(--paper-2);
+  font-size: var(--body-sm); line-height: 1.55;
+}
+#preview {
+  display: flex; flex-direction: column; gap: var(--sp-4);
+  max-height: 72vh; overflow-y: auto; padding-right: var(--sp-2);
+}
+.mini {
+  background: var(--surface); border: 1px solid var(--line);
+  border-radius: var(--r-md); box-shadow: var(--shadow-sm);
+  padding: var(--sp-6); cursor: pointer;
+  transition: transform .1s, box-shadow .2s, border-color .2s;
+}
+.mini:hover { transform: translateY(-2px); box-shadow: var(--shadow-md); border-color: var(--marigold); }
+.mini:active { transform: translateY(2px); box-shadow: var(--shadow-sm); }
+.mini .mini-eyebrow {
+  font-family: var(--font-mono); font-size: var(--overline);
+  letter-spacing: .12em; text-transform: uppercase; color: var(--ink-3);
+  margin-bottom: var(--sp-2);
+}
+.mini h1, .mini h2, .mini h3 { font-family: var(--font-display); font-weight: 700; margin: 0 0 var(--sp-3); line-height: 1.15; }
+.mini h1 { font-size: var(--h3); }
+.mini h2 { font-size: var(--h4); }
+.mini p, .mini li { font-size: var(--body-sm); color: var(--ink-2); margin: 0 0 var(--sp-1); }
+.mini li::marker { color: var(--marigold); }
+.mini table { border-collapse: collapse; font-size: var(--caption); }
+.mini td, .mini th { border-bottom: 1px solid var(--line); padding: var(--sp-1) var(--sp-2); text-align: left; }
+.mini code { font-family: var(--font-mono); font-size: .9em; background: var(--paper-3); padding: 0 .3em; border-radius: var(--r-xs); }
+.mini pre { font-family: var(--font-mono); background: var(--paper-2); border: 1px solid var(--line); border-radius: var(--r-xs); padding: var(--sp-2); overflow-x: auto; font-size: var(--caption); }
+.mini pre code { background: none; padding: 0; }
+.mini blockquote { margin: var(--sp-2) 0; padding: var(--sp-2) var(--sp-3); border-left: 3px solid var(--marigold); background: var(--marigold-soft); border-radius: 0 var(--r-xs) var(--r-xs) 0; }
+
+/* ============================================================
+   Present view
+   ============================================================ */
+body.presenting .chrome { display: none; }
+body.presenting .shell { max-width: none; padding: 0; }
+
+#view-present { position: fixed; inset: 0; background: var(--paper); display: flex; flex-direction: column; }
+.present-bar {
+  position: absolute; top: 0; left: 0; height: 4px; width: 0%;
+  background: var(--marigold); transition: width 450ms cubic-bezier(.2,.6,.2,1); z-index: 5;
+}
+.slide-logo {
+  position: absolute; top: calc(4px + 2.5vh); right: 3vw; z-index: 4;
+  height: clamp(36px, 4vh + 1.8vw, 88px); width: auto; opacity: .9;
+}
+/* Slides anchor to a fixed top offset so headings sit at the same height
+   on every slide; only the title slide stays vertically centered. */
+.stage { flex: 1; display: grid; place-items: start center; padding: 14vh 4vw 3vh; overflow: hidden; }
+/* Fluid deck scaling: one viewport-driven base size on the slide,
+   everything inside in em — the whole slide grows/shrinks with the window. */
+.slide {
+  width: min(1600px, 90vw); max-height: 88vh; overflow: auto;
+  font-size: clamp(15px, 1.55vw + 0.9vh, 46px);
+}
+
+.slide .slide-eyebrow {
+  font-family: var(--font-mono); font-weight: 500; font-size: .55em;
+  letter-spacing: .14em; text-transform: uppercase; color: var(--marigold-ink);
+  margin-bottom: .9em;
+}
+.slide h1 {
+  font-family: var(--font-display); font-weight: 800;
+  font-size: 3em; line-height: 1.05; letter-spacing: -0.02em;
+  margin: 0 0 .35em;
+}
+.slide h2 {
+  font-family: var(--font-display); font-weight: 700; font-size: 2.1em;
+  line-height: 1.1; letter-spacing: -0.015em; margin: 0 0 .6em;
+}
+.slide h3 { font-family: var(--font-display); font-weight: 700; font-size: 1.35em; margin: 1em 0 .5em; }
+.slide p, .slide li { font-size: 1em; line-height: 1.55; color: var(--ink-2); }
+.slide p { margin: 0 0 .6em; }
+.slide li { margin-bottom: .45em; }
+.slide li::marker { color: var(--marigold); }
+.slide strong { color: var(--ink); font-weight: 700; }
+.slide em { color: var(--ink); }
+.slide a { color: var(--teal-ink); }
+/* Mono rules for presenting code — REQUIRED in every style */
+.slide code {
+  font-family: var(--font-mono); font-size: .9em; color: var(--ink);
+  background: var(--paper-3); padding: .1em .4em; border-radius: var(--r-xs);
+}
+.slide pre {
+  font-family: var(--font-mono);
+  background: var(--paper-2); border: 1px solid var(--line);
+  border-radius: var(--r-md); padding: .8em; overflow-x: auto; font-size: .8em;
+  line-height: 1.5;
+}
+.slide pre code { background: none; padding: 0; font-size: 1em; }
+.slide blockquote {
+  margin: .9em 0; padding: .6em 1em;
+  border-left: .18em solid var(--marigold); background: var(--marigold-soft);
+  border-radius: 0 var(--r-md) var(--r-md) 0; color: var(--marigold-ink);
+}
+.slide blockquote p { color: inherit; margin: 0; }
+.slide table { border-collapse: collapse; width: 100%; font-size: .92em; }
+.slide th {
+  font-family: var(--font-mono); font-size: .6em; letter-spacing: .08em;
+  text-transform: uppercase; text-align: left; color: var(--ink-3);
+  border-bottom: 2px solid var(--line-2); padding: .5em .7em;
+}
+.slide td { border-bottom: 1px solid var(--line); padding: .55em .7em; color: var(--ink-2); }
+
+.slide--title { text-align: center; align-self: center; }
+.slide--title .slide-eyebrow { color: var(--teal-ink); }
+.slide--title h1 { color: var(--ink); font-size: 3.6em; }
+.slide--title p { font-size: 1.3em; color: var(--ink-2); }
+
+.present-footer {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: var(--sp-3) var(--sp-6); color: var(--ink-3); font-size: var(--caption);
+}
+.present-counter { font-family: var(--font-mono); }
+
+/* ============================================================
+   @media
+   ============================================================ */
+@media (max-width: 768px) {
+  .shell { padding: var(--sp-6) var(--sp-4) var(--sp-12); }
+  .hints { display: none; }
+  .input-grid, .edit-grid { grid-template-columns: 1fr; }
+  .settings-row { grid-template-columns: 1fr; }
+  .stage { padding: var(--sp-6) var(--sp-4); }
+  .present-footer .hints { display: none; }
+}
+</style>
+</head>
+<body>
+<script>
+window.APP_BRAND = {
+  logo: window.EDULAB_LOGO,
+  wordmark: "edulab",
+  tag: "doc→slides",
+  eyebrow: { pl: "edulab · narzędzie warsztatowe", en: "edulab · workshop tool" },
+  presentBrand: "edulab",
+};
+</script>
+<script defer src="app.js"></script>
+</body>
+</html>

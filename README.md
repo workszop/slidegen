@@ -6,7 +6,11 @@ studio in the **edulab** look. Design how a slide deck looks in real time:
 color pickers, and logo upload — then load your own document and let Gemini
 turn it into slides.
 
-**Live app:** https://workszop.github.io/slidegen/
+**Live apps:**
+
+- Style studio: https://workszop.github.io/slidegen/
+- Document → slides (edulab): https://workszop.github.io/slidegen/edu.html
+- Document → slides (Quantica Lab): https://workszop.github.io/slidegen/quantica.html
 
 ## Features
 
