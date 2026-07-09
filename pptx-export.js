@@ -57,8 +57,8 @@
           o.fontFace = th.monoFont;
           runs.push({ text: tok.text, options: o }); return;
         case "link":
-          o.hyperlink = { url: tok.href };
-          runs.push(...inlineRuns(tok.tokens, o, th).map(r => ({ text: r.text, options: Object.assign({}, r.options, { hyperlink: { url: tok.href } }) })));
+          o.hyperlink = { url: tok.href }; // inherited by child runs via the base copy
+          runs.push(...inlineRuns(tok.tokens, o, th));
           return;
         case "br": runs.push({ text: "", options: Object.assign({}, base, { breakLine: true }) }); return;
         default:
@@ -106,8 +106,8 @@
       const tokens = marked.lexer(md);
 
       // Title slide: first `#` heading + intro paragraph, centered.
-      if (idx === 0 && tokens.some(tok => tok.type === "heading" && tok.depth === 1)) {
-        const head = tokens.find(tok => tok.type === "heading" && tok.depth === 1);
+      const head = idx === 0 ? tokens.find(tok => tok.type === "heading" && tok.depth === 1) : null;
+      if (head) {
         const para = tokens.find(tok => tok.type === "paragraph");
         if (opts.brandName) {
           slide.addText(opts.brandName.toUpperCase(), {
@@ -128,19 +128,17 @@
 
       let y = BODY_Y;
       const room = () => Math.max(H - 0.45 - y, 0.4);
+      const headingRuns = (tok, size) =>
+        inlineRuns(tok.tokens, { fontFace: th.headingFont, fontSize: size, bold: true, color: th.fg }, th);
 
       tokens.forEach(tok => {
         if (y >= H - 0.7 && tok.type !== "space") return; // overflow guard
         switch (tok.type) {
           case "heading": {
             if (tok.depth <= 2) {
-              slide.addText(inlineRuns(tok.tokens, { fontFace: th.headingFont, fontSize: 27, bold: true, color: th.fg }, th), {
-                x: LEFT, y: TITLE_Y, w: BODY_W, h: 0.62, fit: "shrink",
-              });
+              slide.addText(headingRuns(tok, 27), { x: LEFT, y: TITLE_Y, w: BODY_W, h: 0.62, fit: "shrink" });
             } else {
-              slide.addText(inlineRuns(tok.tokens, { fontFace: th.headingFont, fontSize: 17, bold: true, color: th.fg }, th), {
-                x: LEFT, y, w: BODY_W, h: 0.38, fit: "shrink",
-              });
+              slide.addText(headingRuns(tok, 17), { x: LEFT, y, w: BODY_W, h: 0.38, fit: "shrink" });
               y += 0.46;
             }
             break;
