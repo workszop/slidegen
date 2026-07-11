@@ -55,6 +55,13 @@ test("normalizeAiSettings rejects unknown provider", () => {
   assert.equal(s.provider, "gemini");
 });
 
+// ── buildPrompt language modes ──
+test("buildPrompt language modes", () => {
+  assert.match(H.buildPrompt({ lang: "pl" }), /po polsku/);
+  assert.match(H.buildPrompt({ lang: "en" }), /in English/);
+  assert.match(H.buildPrompt({ lang: "auto" }), /same language as the source document/);
+});
+
 // ── request builders ──
 const TEXT_SRC = { name: "notes.md", kind: "text", text: "hello world" };
 const PDF_SRC = { name: "doc.pdf", kind: "pdf", base64: "QUJD" };

@@ -119,9 +119,9 @@
   </div>
 </header>
 
-<main id="app" class="shell" aria-live="polite">
-  <div class="workspace" id="view-workspace">
-    <aside class="sidebar">
+<main id="app" aria-live="polite">
+  <div class="workbench" id="view-workspace">
+    <aside class="panel">
       <section class="side-section">
         <h2 class="side-title" data-i18n="sideDoc"></h2>
         <div class="dropzone dropzone--compact" id="dropzone" role="button" tabindex="0">
@@ -137,9 +137,10 @@
         <h2 class="side-title" data-i18n="sideGen"></h2>
         <button id="aiChip"></button>
         <div class="side-row">
-          <div class="lang-toggle" role="group" aria-label="PL/EN">
-            <button id="slideLangPl" aria-pressed="true">PL</button>
+          <div class="lang-toggle" role="group" aria-label="PL/EN/Auto">
+            <button id="slideLangPl" aria-pressed="false">PL</button>
             <button id="slideLangEn" aria-pressed="false">EN</button>
+            <button id="slideLangAuto" aria-pressed="true">Auto</button>
           </div>
           <select id="countHint" class="mono-input">
             <option value="auto" data-i18n="countAuto"></option>
@@ -168,21 +169,33 @@
       </section>
     </aside>
 
-    <section class="stage-col">
+    <section class="stage-wrap">
       <div class="error-panel hidden" id="errorPanel" role="status">
         <strong id="errorTitle"></strong>
         <span id="errorDetail"></span>
         <button class="btn btn-ghost" id="errorDismiss">OK</button>
       </div>
-      <div class="ws-stage-wrap"><div class="slide" id="wsStage"></div></div>
-      <div class="ws-nav">
-        <button class="btn btn-ghost" id="wsPrev" aria-label="prev">←</button>
-        <span class="ws-counter" id="wsCounter"></span>
-        <button class="btn btn-ghost" id="wsNext" aria-label="next">→</button>
+      <div class="deck">
+        <div class="deck-bar" id="deckBar" aria-hidden="true"></div>
+        <img class="deck-logo brand-logo" alt="" aria-hidden="true">
+        <div class="slide" id="wsStage"></div>
       </div>
+      <footer class="deck-footer">
+        <div class="nav-btns">
+          <button class="btn btn-ghost" id="wsPrev" aria-label="prev">←</button>
+          <button class="btn btn-ghost" id="wsNext" aria-label="next">→</button>
+        </div>
+        <span class="deck-counter" id="wsCounter"></span>
+        <div class="spacer"></div>
+        <div class="hints">
+          <span><kbd>→</kbd> <span data-i18n="hintNext"></span></span>
+          <span><kbd>←</kbd> <span data-i18n="hintPrev"></span></span>
+        </div>
+      </footer>
     </section>
 
     <aside class="editor-panel hidden" id="editorPanel">
+      <div class="editor-head"><button class="btn btn-ghost" id="editorCloseBtn" aria-label="close">✕</button></div>
       <textarea id="editor" spellcheck="false"></textarea>
     </aside>
   </div>
@@ -212,7 +225,7 @@
     slides: [],
     current: 0,
     generating: false,
-    slideLang: "pl",
+    slideLang: "auto",
   };
   function setView(v) { state.view = v; render(); }
   function setDeck(md, { example = false } = {}) {
@@ -232,7 +245,6 @@
   function setEditorOpen(open) {
     state.editorOpen = open;
     editorPanelEl.classList.toggle("hidden", !open);
-    workspaceEl.classList.toggle("editing", open);
     editToggleBtn.setAttribute("aria-pressed", String(open));
     if (open) editorEl.value = state.md;
   }
@@ -256,6 +268,7 @@
   const aiChipEl = document.getElementById("aiChip");
   const slideLangPlBtn = document.getElementById("slideLangPl");
   const slideLangEnBtn = document.getElementById("slideLangEn");
+  const slideLangAutoBtn = document.getElementById("slideLangAuto");
   const countHintEl = document.getElementById("countHint");
   const generateBtn = document.getElementById("generateBtn");
   const genStatusEl = document.getElementById("genStatus");
@@ -272,8 +285,10 @@
   const wsPrevBtn = document.getElementById("wsPrev");
   const wsNextBtn = document.getElementById("wsNext");
   const wsCounterEl = document.getElementById("wsCounter");
+  const deckBarEl = document.getElementById("deckBar");
   const editorPanelEl = document.getElementById("editorPanel");
   const editToggleBtn = document.getElementById("editToggleBtn");
+  const editorCloseBtn = document.getElementById("editorCloseBtn");
   const presetGridEl = document.getElementById("presetGrid");
 
   // ─── Style presets ──────────────────────────────
@@ -352,6 +367,7 @@
     wsCounterEl.textContent = n ? `${state.current + 1} / ${n}` : "";
     wsPrevBtn.disabled = state.current <= 0;
     wsNextBtn.disabled = state.current >= n - 1;
+    deckBarEl.style.width = n ? `${((state.current + 1) / n) * 100}%` : "0%";
     if (!n) { wsStageEl.innerHTML = ""; return; }
     const isTitle = state.current === 0 && isTitleSlide(state.md);
     wsStageEl.className = "slide" + (isTitle ? " slide--title" : "");
@@ -432,12 +448,13 @@
     const src = state.source;
     fileChipEl.classList.toggle("hidden", !src);
     if (src) {
-      const langInfo = src.kind === "text" ? ` · ${t("detected")}: ${state.slideLang.toUpperCase()}` : "";
+      const langInfo = src.kind === "text" ? ` · ${t("detected")}: ${detectLang(src.text).toUpperCase()}` : "";
       fileChipEl.textContent = `✓ ${t("fileLoaded")}: ${src.name}${langInfo}`;
     }
     generateBtn.disabled = !src;
     slideLangPlBtn.setAttribute("aria-pressed", String(state.slideLang === "pl"));
     slideLangEnBtn.setAttribute("aria-pressed", String(state.slideLang === "en"));
+    slideLangAutoBtn.setAttribute("aria-pressed", String(state.slideLang === "auto"));
   }
 
   function showError(title, detail) {
@@ -450,7 +467,6 @@
   function setSource(source) {
     state.source = source;
     if (source?.kind === "text") {
-      state.slideLang = detectLang(source.text);
       source.multi = splitSlides(source.text).length > 1; // computed once, read by renderSidebar
     }
     errorPanelEl.classList.add("hidden");
@@ -545,6 +561,7 @@
 
   slideLangPlBtn.addEventListener("click", () => { state.slideLang = "pl"; renderSidebar(); });
   slideLangEnBtn.addEventListener("click", () => { state.slideLang = "en"; renderSidebar(); });
+  slideLangAutoBtn.addEventListener("click", () => { state.slideLang = "auto"; renderSidebar(); });
   errorDismissBtn.addEventListener("click", () => errorPanelEl.classList.add("hidden"));
 
   generateBtn.addEventListener("click", () => generateSlides());
@@ -569,6 +586,7 @@
   pptxBtn.addEventListener("click", downloadPptx);
   presentBtn.addEventListener("click", () => setView("present"));
   editToggleBtn.addEventListener("click", () => setEditorOpen(!state.editorOpen));
+  editorCloseBtn.addEventListener("click", () => setEditorOpen(false));
 
   // workspace stage nav
   wsPrevBtn.addEventListener("click", () => {
@@ -582,6 +600,7 @@
 
   document.addEventListener("keydown", e => {
     if (state.view === "present" && e.key === "Escape") { setView("workspace"); return; }
+    if (e.key === "Escape" && state.view === "workspace" && state.editorOpen && !document.querySelector("dialog[open]")) { e.preventDefault(); setEditorOpen(false); return; }
     if (/^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName)) return;
     if (state.view === "present") {
       if (["ArrowRight", " ", "PageDown"].includes(e.key)) { e.preventDefault(); showSlide(state.current + 1); }

@@ -56,7 +56,10 @@ function detectLang(text) {
 
 // Full instruction prompt for Gemini. countHint is optional ("auto"/undefined = model's choice).
 function buildPrompt({ lang, countHint }) {
-  const language = lang === "pl" ? "po polsku (in Polish, „polskim” języku)" : "in English";
+  const language =
+    lang === "pl" ? "po polsku (in Polish, „polskim” języku)"
+    : lang === "en" ? "in English"
+    : "in the same language as the source document";
   let p =
     "You are preparing teaching slides from the attached document for a training workshop.\n" +
     "Requirements:\n" +

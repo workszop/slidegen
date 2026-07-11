@@ -259,15 +259,16 @@ input[type="color"]:hover { border-color: var(--marigold); }
 .slide--title h1 { font-size: 3.5em; }
 .slide--title p { font-size: 1.3em; }
 
-.editor-drawer {
-  flex: none; height: 36vh; border-top: 1px solid var(--line);
-  background: var(--paper-2); padding: var(--sp-3);
+.editor-panel {
+  flex: none; width: min(440px, 34vw); border-left: 1px solid var(--line);
+  background: var(--paper-2); padding: var(--sp-3); display: flex; flex-direction: column; min-height: 0;
 }
-.editor-drawer textarea {
-  width: 100%; height: 100%; resize: none;
+.editor-head { display: flex; justify-content: flex-end; margin-bottom: var(--sp-2); }
+.editor-panel textarea {
+  flex: 1; width: auto; height: auto; resize: none;
   font-family: var(--font-mono); font-size: 13px; line-height: 1.55; color: var(--ink);
   background: var(--surface); border: 1px solid var(--line-2);
-  border-radius: var(--r-sm); padding: var(--sp-3);
+  border-radius: var(--r-sm); padding: var(--sp-3); min-width: 0;
 }
 
 .deck-footer {
@@ -282,7 +283,7 @@ input[type="color"]:hover { border-color: var(--marigold); }
 .deck-footer .hints span { display: inline-flex; align-items: center; gap: var(--sp-1); }
 
 /* ─── Fullscreen presentation mode ─── */
-body.presenting .chrome, body.presenting .panel, body.presenting .editor-drawer { display: none; }
+body.presenting .chrome, body.presenting .panel, body.presenting .editor-panel { display: none; }
 body.presenting .deck-footer { border-top: 0; position: absolute; bottom: 0; left: 0; right: 0; background: transparent; }
 
 @media (max-width: 768px) {
@@ -291,6 +292,7 @@ body.presenting .deck-footer { border-top: 0; position: absolute; bottom: 0; lef
   .panel { width: 100%; border-right: 0; border-bottom: 1px solid var(--line); }
   .deck { min-height: 55vh; }
   .deck-footer .hints { display: none; }
+  .editor-panel { position: fixed; right: 0; top: 0; bottom: 0; width: min(440px, 92vw); z-index: 30; box-shadow: -8px 0 24px rgba(33,30,26,.2); }
 }
 </style>
 </head>
@@ -370,8 +372,9 @@ body.presenting .deck-footer { border-top: 0; position: absolute; bottom: 0; lef
       <div class="field field-inline">
         <label id="slideLangLabel" data-i18n="slideLangLabel"></label>
         <div class="lang-toggle" role="group" aria-labelledby="slideLangLabel">
-          <button id="slideLangPl" aria-pressed="true">PL</button>
+          <button id="slideLangPl" aria-pressed="false">PL</button>
           <button id="slideLangEn" aria-pressed="false">EN</button>
+          <button id="slideLangAuto" aria-pressed="true">Auto</button>
         </div>
       </div>
       <button class="btn btn-primary btn-block" id="generateBtn" disabled data-i18n="generate"></button>
@@ -388,9 +391,6 @@ body.presenting .deck-footer { border-top: 0; position: absolute; bottom: 0; lef
       <img class="deck-logo" id="deckLogo" alt="" aria-hidden="true">
       <div class="slide" id="stage" aria-live="polite"></div>
     </div>
-    <div class="editor-drawer hidden" id="editorDrawer">
-      <textarea id="mdEditor" spellcheck="false"></textarea>
-    </div>
     <div class="deck-footer">
       <div class="nav-btns">
         <button class="btn btn-ghost" id="prevBtn" aria-label="previous">←</button>
@@ -405,6 +405,10 @@ body.presenting .deck-footer { border-top: 0; position: absolute; bottom: 0; lef
       </div>
     </div>
   </main>
+  <div class="editor-panel hidden" id="editorDrawer">
+    <div class="editor-head"><button class="btn btn-ghost" id="editorCloseBtn" aria-label="close">✕</button></div>
+    <textarea id="mdEditor" spellcheck="false"></textarea>
+  </div>
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/marked@18.0.5/lib/marked.umd.js"
@@ -566,7 +570,7 @@ const state = {
   slides: [],
   current: 0,
   source: null,       // {name, kind:"text"|"pdf", text?, base64?} — for the AI request
-  slideLang: "pl",
+  slideLang: "auto",
   generating: false,
   config: {           // the user's style playground settings
     preset: 0,
@@ -806,13 +810,15 @@ function setMd(md, slideIndex = 0, { fromEditor = false } = {}) {
   renderSlides();
 }
 
-$("editToggle").addEventListener("click", () => {
-  editorDrawerEl.classList.toggle("hidden");
-  if (!editorDrawerEl.classList.contains("hidden")) {
+function setEditorDrawerOpen(open) {
+  editorDrawerEl.classList.toggle("hidden", !open);
+  if (open) {
     mdEditorEl.value = state.md;
     mdEditorEl.focus();
   }
-});
+}
+$("editToggle").addEventListener("click", () => setEditorDrawerOpen(editorDrawerEl.classList.contains("hidden")));
+$("editorCloseBtn").addEventListener("click", () => setEditorDrawerOpen(false));
 let editTimer;
 mdEditorEl.addEventListener("input", () => {
   clearTimeout(editTimer);
@@ -822,7 +828,7 @@ mdEditorEl.addEventListener("input", () => {
 // ─── Document loading + AI generation (same logic as the main apps) ───
 const fileNoteEl = $("fileNote"), genNoteEl = $("genNote"),
   generateBtnEl = $("generateBtn"),
-  slideLangPlBtn = $("slideLangPl"), slideLangEnBtn = $("slideLangEn");
+  slideLangPlBtn = $("slideLangPl"), slideLangEnBtn = $("slideLangEn"), slideLangAutoBtn = $("slideLangAuto");
 
 function note(el, msg, isError) {
   el.textContent = msg;
@@ -834,6 +840,7 @@ function reflectSource() {
   note(fileNoteEl, state.source ? `✓ ${t("fileLoaded")}: ${state.source.name}` : "");
   slideLangPlBtn.setAttribute("aria-pressed", String(state.slideLang === "pl"));
   slideLangEnBtn.setAttribute("aria-pressed", String(state.slideLang === "en"));
+  slideLangAutoBtn.setAttribute("aria-pressed", String(state.slideLang === "auto"));
 }
 
 $("mdBtn").addEventListener("click", () => mdInputEl.click());
@@ -844,7 +851,6 @@ mdInputEl.addEventListener("change", () => {
   readSourceFile(file).then(source => {
     state.source = source;
     if (source.kind === "text") {
-      state.slideLang = detectLang(source.text);
       // markdown that already contains slide delimiters previews immediately
       if (splitSlides(source.text).length > 1) setMd(source.text);
     }
@@ -860,6 +866,7 @@ $("resetBtn").addEventListener("click", () => {
 
 slideLangPlBtn.addEventListener("click", () => { state.slideLang = "pl"; reflectSource(); });
 slideLangEnBtn.addEventListener("click", () => { state.slideLang = "en"; reflectSource(); });
+slideLangAutoBtn.addEventListener("click", () => { state.slideLang = "auto"; reflectSource(); });
 
 // Streaming: slides appear in the styled deck as the AI writes them
 // (transport lives in ../shared.js; this function is only the UI reaction).
@@ -936,6 +943,9 @@ $("presentBtn").addEventListener("click", () => {
 });
 
 document.addEventListener("keydown", e => {
+  if (e.key === "Escape" && !editorDrawerEl.classList.contains("hidden") && !document.body.classList.contains("presenting") && !document.querySelector("dialog[open]")) {
+    e.preventDefault(); setEditorDrawerOpen(false); return;
+  }
   if (/^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName)) return;
   if (["ArrowRight", " ", "PageDown"].includes(e.key)) { e.preventDefault(); showSlide(state.current + 1); }
   else if (["ArrowLeft", "PageUp"].includes(e.key)) { e.preventDefault(); showSlide(state.current - 1); }
