@@ -1,7 +1,7 @@
 /* ============================================================
    eduapp — shared logic (brand-agnostic)
 
-   Requires shared.js (helpers, constants, Gemini + PPTX services)
+   Requires shared.js (helpers, constants, AI provider + PPTX services)
    to be loaded first. A brand HTML file provides ONLY the style layer:
      1. <style> with the brand's :root tokens + component CSS
         (see README "Style contract" for the required class list;
@@ -35,21 +35,21 @@ Jak działa ta aplikacja - przewodnik w ośmiu slajdach.
 ---
 ## Co robi ta aplikacja?
 - Zamienia dokument (.txt, .md, .pdf) w prezentację HTML
-- Treść slajdów pisze **Gemini**, w formacie markdown
+- Treść slajdów pisze **AI**, w formacie markdown
 - Slajdy renderuje przeglądarka - bez serwera i instalacji
 - Ten pokaz to tryb demo: wszystko działa bez klucza API
 ---
 ## Krok 1: klucz API
-- Wygeneruj darmowy klucz na aistudio.google.com/apikey
+- Wygeneruj darmowy klucz API u wybranego dostawcy (Gemini, OpenAI lub Claude)
 - Wklej go w ustawieniach na ekranie startowym
 
-> Klucz zostaje w Twojej przeglądarce (localStorage) i jest wysyłany wyłącznie do Google - na żaden inny serwer.
+> Klucz zostaje w Twojej przeglądarce (localStorage) i jest wysyłany wyłącznie do wybranego dostawcy AI - na żaden inny serwer.
 ---
 ## Krok 2: dokument
 - Upuść plik \`.txt\`, \`.md\` lub \`.pdf\` (do 19 MB) albo wklej tekst
-- PDF trafia do Gemini w całości - z tabelami i układem stron
+- PDF trafia do AI w całości - z tabelami i układem stron
 - Wybierz język slajdów (PL/EN) i orientacyjną liczbę slajdów
-- Plik .md z gotowymi slajdami? Przycisk **Prezentuj bez Gemini**
+- Plik .md z gotowymi slajdami? Przycisk **Prezentuj bez AI**
 ---
 ## Krok 3: generowanie i edycja
 - Slajdy pojawiają się na żywo, w trakcie generowania
@@ -86,7 +86,7 @@ Jedno zdanie wstępu.
     pl: {
       appTitle: "Dokument → slajdy",
       eyebrow: BRAND.eyebrow.pl,
-      lead: "Wrzuć tekst, markdown lub PDF - Gemini ułoży z niego slajdy, a przeglądarka wyrenderuje prezentację. Bez instalacji, bez serwera.",
+      lead: "Wrzuć tekst, markdown lub PDF - AI ułoży z niego slajdy, a przeglądarka wyrenderuje prezentację. Bez instalacji, bez serwera.",
       hintNext: "dalej", hintPrev: "wstecz", hintEsc: "edycja",
       dropHere: "Upuść plik tutaj",
       dropTypes: ".txt · .md · .pdf (do 19 MB)",
@@ -97,7 +97,7 @@ Jedno zdanie wstępu.
       countLabel: "Liczba slajdów",
       countAuto: "auto",
       generate: "Generuj slajdy",
-      presentDirect: "Prezentuj bez Gemini",
+      presentDirect: "Prezentuj bez AI",
       hintGenerate: "generuj (gdy plik wczytany)",
       fileLoaded: "wczytano",
       detected: "wykryto",
@@ -105,7 +105,7 @@ Jedno zdanie wstępu.
       errTooBig: "Plik jest za duży (limit 19 MB). Skróć dokument lub podziel go na części.",
       errNoKeyTitle: "Brak klucza API",
       errNoKeyBody: "Wklej klucz API dostawcy {provider} w ustawieniach modelu (kliknij wskaźnik modelu). Wygenerujesz go na {url}.",
-      errApiTitle: "Błąd API Gemini",
+      errApiTitle: "Błąd API",
       errEmpty: "Model zwrócił pustą odpowiedź. Spróbuj ponownie lub zmień model.",
       genSending: "Wysyłam dokument…",
       genWaiting: "Generuję slajdy…",
@@ -119,14 +119,14 @@ Jedno zdanie wstępu.
       previewLabel: "Podgląd slajdów",
       hintPresent: "prezentuj",
       helpTitle: "Format slajdów (markdown)",
-      helpIntro: "Gemini generuje slajdy w tym formacie - możesz też napisać własny plik .md i wrzucić go bez klucza API:",
+      helpIntro: "AI generuje slajdy w tym formacie - możesz też napisać własny plik .md i wrzucić go bez klucza API:",
       helpOutro: "Pierwszy slajd (z #) staje się slajdem tytułowym. Kolejne slajdy oddzielaj linią zawierającą wyłącznie trzy myślniki.",
       presentEyebrowWord: "prezentacja",
     },
     en: {
       appTitle: "Document → slides",
       eyebrow: BRAND.eyebrow.en,
-      lead: "Drop in text, markdown, or a PDF — Gemini turns it into slides and your browser renders the deck. No install, no server.",
+      lead: "Drop in text, markdown, or a PDF — AI turns it into slides and your browser renders the deck. No install, no server.",
       hintNext: "next", hintPrev: "back", hintEsc: "edit",
       dropHere: "Drop a file here",
       dropTypes: ".txt · .md · .pdf (up to 19 MB)",
@@ -137,7 +137,7 @@ Jedno zdanie wstępu.
       countLabel: "Slide count",
       countAuto: "auto",
       generate: "Generate slides",
-      presentDirect: "Present without Gemini",
+      presentDirect: "Present without AI",
       hintGenerate: "generate (when a file is loaded)",
       fileLoaded: "loaded",
       detected: "detected",
@@ -145,7 +145,7 @@ Jedno zdanie wstępu.
       errTooBig: "File too large (19 MB limit). Trim the document or split it.",
       errNoKeyTitle: "Missing API key",
       errNoKeyBody: "Paste your {provider} API key in the model settings (click the model chip). Generate one at {url}.",
-      errApiTitle: "Gemini API error",
+      errApiTitle: "API error",
       errEmpty: "The model returned an empty response. Try again or switch models.",
       genSending: "Sending the document…",
       genWaiting: "Generating slides…",
@@ -159,7 +159,7 @@ Jedno zdanie wstępu.
       previewLabel: "Slide preview",
       hintPresent: "present",
       helpTitle: "Slide format (markdown)",
-      helpIntro: "Gemini generates slides in this format — you can also write your own .md file and load it with no API key:",
+      helpIntro: "AI generates slides in this format — you can also write your own .md file and load it with no API key:",
       helpOutro: "The first slide (with #) becomes the title slide. Separate further slides with a line containing only three dashes.",
       presentEyebrowWord: "presentation",
     },

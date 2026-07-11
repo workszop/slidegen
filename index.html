@@ -463,7 +463,7 @@ Jak działa ta aplikacja - krótki przewodnik.
 ---
 ## Własna prezentacja
 - **Wczytaj dokument**: plik .md ze slajdami pokazuje się od razu
-- .txt lub .pdf? Wklej klucz Gemini i kliknij **Generuj slajdy**
+- .txt lub .pdf? Wklej klucz API i kliknij **Generuj slajdy**
 - **Edytuj markdown** otwiera edytor pod podglądem
 
 \`\`\`markdown
@@ -565,7 +565,7 @@ const state = {
   md: SAMPLE_MD,
   slides: [],
   current: 0,
-  source: null,       // {name, kind:"text"|"pdf", text?, base64?} — for Gemini
+  source: null,       // {name, kind:"text"|"pdf", text?, base64?} — for the AI request
   slideLang: "pl",
   generating: false,
   config: {           // the user's style playground settings
@@ -819,7 +819,7 @@ mdEditorEl.addEventListener("input", () => {
   editTimer = setTimeout(() => setMd(mdEditorEl.value, state.current, { fromEditor: true }), 300);
 });
 
-// ─── Document loading + Gemini generation (same logic as the main apps) ───
+// ─── Document loading + AI generation (same logic as the main apps) ───
 const fileNoteEl = $("fileNote"), genNoteEl = $("genNote"),
   generateBtnEl = $("generateBtn"),
   slideLangPlBtn = $("slideLangPl"), slideLangEnBtn = $("slideLangEn");
@@ -861,7 +861,7 @@ $("resetBtn").addEventListener("click", () => {
 slideLangPlBtn.addEventListener("click", () => { state.slideLang = "pl"; reflectSource(); });
 slideLangEnBtn.addEventListener("click", () => { state.slideLang = "en"; reflectSource(); });
 
-// Streaming: slides appear in the styled deck as Gemini writes them
+// Streaming: slides appear in the styled deck as the AI writes them
 // (transport lives in ../shared.js; this function is only the UI reaction).
 async function generateSlidesFromSource() {
   const ai = loadAiSettings();

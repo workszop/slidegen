@@ -268,8 +268,8 @@ async function streamSseRequest({ url, headers, body }, extractChunk, onChunk) {
       let data;
       try { data = JSON.parse(payload); } catch { continue; }
       // Mid-stream provider errors (e.g. Claude overloaded) arrive as data events.
-      if (data.type === "error" || (data.error && !data.candidates)) {
-        throw new Error(data.error?.message ?? "stream error");
+      if (data.type === "error" || data.type === "response.failed" || (data.error && !data.candidates)) {
+        throw new Error(data.error?.message ?? data.response?.error?.message ?? data.message ?? "stream error");
       }
       const chunk = extractChunk(data);
       if (!chunk) continue;
