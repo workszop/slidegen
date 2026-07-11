@@ -92,6 +92,13 @@ function firstFont(ff) {
   return ff.split(",")[0].trim().replace(/^["']|["']$/g, "");
 }
 
+// Clamp a candidate editor-panel width to [min, maxFraction × viewport].
+// null for non-finite input (absent/corrupt storage) — caller keeps the default.
+function clampPanelWidth(x, min, maxFraction, viewportW) {
+  if (!Number.isFinite(x)) return null;
+  return Math.min(Math.max(x, min), Math.max(min, maxFraction * viewportW));
+}
+
 // ─── AI provider registry (pure data) ───────────
 const GEMINI_BASE = "https://generativelanguage.googleapis.com/v1beta/models";
 const PROVIDER_INFO = {

@@ -7,6 +7,7 @@ const src = readFileSync(new URL("../shared.js", import.meta.url), "utf8");
 const section = src.split("/* pure-helpers:start */")[1].split("/* pure-helpers:end */")[0];
 const H = new Function(`${section}; return {
   stripOuterFence, splitSlides, detectLang, buildPrompt, deckTitle, isTitleSlide, firstFont,
+  clampPanelWidth,
   PROVIDER_INFO, normalizeAiSettings,
   buildGeminiRequest, buildOpenAIRequest, buildClaudeRequest,
   geminiChunk, openaiChunk, claudeChunk,
@@ -111,4 +112,21 @@ test("chunk extractors pull text deltas and ignore other events", () => {
   assert.equal(H.openaiChunk({ type: "response.created" }), "");
   assert.equal(H.claudeChunk({ type: "content_block_delta", delta: { type: "text_delta", text: "y" } }), "y");
   assert.equal(H.claudeChunk({ type: "message_start" }), "");
+});
+
+// ── clampPanelWidth ──
+test("clampPanelWidth clamps to [min, maxFraction × viewport]", () => {
+  assert.equal(H.clampPanelWidth(400, 280, 0.6, 1200), 400);  // in range
+  assert.equal(H.clampPanelWidth(100, 280, 0.6, 1200), 280);  // below min
+  assert.equal(H.clampPanelWidth(900, 280, 0.6, 1200), 720);  // above max (0.6 × 1200)
+});
+
+test("clampPanelWidth returns null for garbage input", () => {
+  assert.equal(H.clampPanelWidth(NaN, 280, 0.6, 1200), null);       // parseFloat(null)
+  assert.equal(H.clampPanelWidth(Infinity, 280, 0.6, 1200), null);
+  assert.equal(H.clampPanelWidth(undefined, 280, 0.6, 1200), null);
+});
+
+test("clampPanelWidth keeps min when viewport shrinks below it", () => {
+  assert.equal(H.clampPanelWidth(500, 280, 0.6, 400), 280);   // max(280, 240) = 280
 });
