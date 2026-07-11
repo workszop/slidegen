@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>Dokument → slajdy</title>
+<title>doc2slide</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Raleway:wght@400;500;600;700;800&family=DM+Mono:wght@400;500&display=swap">
@@ -11,8 +11,10 @@
         integrity="sha384-ZD0fTOwPMHi7zM6WTVIWJR21I07lq0ccnqz3J6WMvQKG9thh4y7TA1QE6PJu0Af8" crossorigin="anonymous"></script>
 <script defer src="https://cdn.jsdelivr.net/npm/dompurify@3.0.11/dist/purify.min.js"
         integrity="sha384-Ic7KEGROu37YaruU6NyiYeib7UhjFyDZQ5fzBAji965L75T/4LGk5nzwMEjNGexs" crossorigin="anonymous"></script>
+<script defer src="ai-models.js"></script>
 <script defer src="shared.js"></script>
 <script src="edulab-logo.js"></script>
+<script src="favicon.js"></script>
 <style>
 /* ============================================================
    edulab style layer — Editorial Color tokens, Raleway type
@@ -403,7 +405,7 @@ body.presenting .workbench { display: none; }
 window.APP_BRAND = {
   logo: window.EDULAB_LOGO,
   wordmark: "edulab",
-  tag: "doc→slides",
+  tag: "doc2slide",
   presentBrand: "edulab",
   presetKey: "eduapp_preset_edu",
   editorWKey: "edu.editorW",
@@ -414,47 +416,59 @@ window.APP_BRAND = {
     { id: "kontrast", name: { pl: "Kontrast", en: "Contrast" }, bg: "#FFFFFF", fg: "#211E1A", accent: "#211E1A" },
   ],
   exampleMd: {
-    pl: `# Dokument → slajdy
-Warsztatowe narzędzie edulab: z dowolnego dokumentu robi prezentację.
+    pl: `# doc2slide
+Przewodnik po tworzeniu prezentacji w wariancie edulab.
 ---
-## Co tu się dzieje?
-- Wrzucasz dokument (.txt, .md, .pdf) - **AI** układa z niego slajdy
-- Wszystko dzieje się w przeglądarce - bez serwera i instalacji
-- Ta prezentacja to przykład: obejrzyj ją strzałkami ← →
+## Jak działa doc2slide?
+- Wgraj materiał źródłowy w panelu **Dokument**
+- Wybierz model, język i orientacyjną liczbę slajdów
+- Kliknij **Generuj slajdy**, a potem sprawdź i popraw wynik
+
+> Ten przewodnik możesz przeglądać przyciskami pod slajdem lub klawiszami ← i →.
 ---
-## Wczytaj materiał
-- Upuść plik w panelu **Dokument** (do 19 MB) albo wklej tekst
-- PDF trafia do AI w całości - z tabelami i układem stron
-- Gotowy plik .md ze slajdami? Wczyta się od razu, bez AI
+## 1. Dodaj materiał
+- Wgraj plik **.txt**, **.md** lub **.pdf** w panelu **Dokument**
+- Możesz też wkleić tekst bezpośrednio pod polem wyboru pliku
+- Plik .md z separatorami \`---\` otworzy się od razu jako gotowa prezentacja
+- Limit pliku PDF wynosi 19 MB
 ---
-## Wybierz model AI
-- Kliknij wskaźnik modelu w sekcji **Generowanie**
-- Do wyboru: Gemini, OpenAI lub Claude - z Twoim kluczem API
-> Klucz zostaje w przeglądarce i jest wysyłany wyłącznie do wybranego dostawcy.
+## 2. Skonfiguruj model AI
+- Kliknij nazwę modelu w sekcji **Generowanie**
+- Wybierz Gemini, OpenAI albo Claude i wklej własny klucz API
+- Klucz jest zapisany tylko w pamięci tej przeglądarki
+
+> Podczas generowania treść dokumentu jest wysyłana bezpośrednio do wybranego dostawcy AI.
 ---
-## Dobierz styl
-- Cztery style w sekcji **Styl** - jedno kliknięcie zmienia całą talię
-- Kolory pozostają w palecie edulab, także w eksporcie .pptx
+## 3. Ustaw język i długość
+- **Auto** zachowuje język dokumentu; możesz wymusić polski lub angielski
+- Wybierz około 10 albo 20 slajdów lub pozostaw ustawienie **auto**
+- Kliknij **Generuj slajdy** i poczekaj, aż pojawi się cała prezentacja
 ---
-## Edytuj treść
-- Przycisk **Edytuj** otwiera edytor markdown po prawej stronie slajdu
-- Zmiany widać na żywo; slajdy oddziela linia \`---\`
-- Podczas generowania edytor otwiera się sam i pokazuje strumień AI
+## 4. Sprawdź i popraw treść
+- Przejrzyj slajdy i upewnij się, że nie brakuje ważnych informacji
+- Kliknij **Edytuj**, aby otworzyć tekst prezentacji po prawej stronie
+- Zmiany widać na bieżąco; slajdy rozdziela osobna linia \`---\`
+- Skracaj długie akapity — jeden slajd powinien przekazywać jedną główną myśl
 ---
-## Prezentuj
+## 5. Wybierz styl i prezentuj
+- W sekcji **Styl** jednym kliknięciem zmienisz wygląd całej prezentacji
+- Wybrany styl zostanie użyty także w pliku PowerPoint
+- Kliknij **Prezentuj**, aby uruchomić tryb prezentacji
+
 | Klawisz | Działanie |
 |---------|-----------|
 | → / spacja | następny slajd |
 | ← | poprzedni slajd |
-| 1-9 | skok do slajdu |
 | Esc | powrót do edycji |
 ---
-## Eksportuj i działaj
-- **Pobierz .md** - wczytasz ponownie bez klucza API
-- **Pobierz .pptx** - edytowalny PowerPoint w wybranym stylu
-- Miłego prezentowania!`,
-    en: `# Document → slides
-An edulab workshop tool: turns any document into a presentation.
+## 6. Zapisz swoją pracę
+- **Pobierz .md** zapisuje treść i podział slajdów do dalszej edycji
+- **Pobierz .pptx** tworzy edytowalną prezentację PowerPoint
+- Przed udostępnieniem sprawdź układ, fakty i dane wygenerowane przez AI
+
+Gotowe — wgraj własny dokument w panelu po lewej stronie.`,
+    en: `# doc2slide
+A short guide to creating presentations in the edulab style.
 ---
 ## What is this?
 - Drop a document (.txt, .md, .pdf) - **AI** turns it into slides
@@ -485,7 +499,6 @@ An edulab workshop tool: turns any document into a presentation.
 |-----|--------|
 | → / space | next slide |
 | ← | previous slide |
-| 1-9 | jump to slide |
 | Esc | back to editing |
 ---
 ## Export and go

@@ -11,7 +11,7 @@
      3. window.APP_BRAND = {
           logo:         "data:image/png;base64,…",  // chrome + slide corner
           wordmark:     "edulab" | null,            // text next to logo (null = logo only)
-          tag:          "doc→slides",               // mono chip in the chrome bar
+          tag:          "doc2slide",                 // app name in the chrome bar
           presentBrand: "edulab",                   // brand name on the title-slide eyebrow
         }
    ============================================================ */
@@ -23,7 +23,7 @@
   const BRAND = Object.assign({
     logo: "",
     wordmark: null,
-    tag: "doc→slides",
+    tag: "doc2slide",
     presentBrand: "",
     presets: [],
     presetKey: "eduapp_preset",
@@ -36,14 +36,14 @@
   // ─── Translations (T + t) ───────────────────────
   const T = {
     pl: {
-      appTitle: "Dokument → slajdy",
+      appTitle: "doc2slide",
       hintNext: "dalej", hintPrev: "wstecz", hintEsc: "edycja",
-      dropHere: "Upuść plik tutaj",
+      dropHere: "Wgraj plik",
       browse: "Wybierz plik",
       pasteHere: "…albo wklej tekst tutaj",
       countAuto: "auto",
       generate: "Generuj slajdy",
-      fileLoaded: "wczytano",
+      fileLoaded: "wgrano",
       detected: "wykryto",
       errFileType: "Obsługiwane formaty: .txt, .md, .pdf",
       errTooBig: "Plik jest za duży (limit 19 MB). Skróć dokument lub podziel go na części.",
@@ -65,9 +65,9 @@
       edit: "Edytuj",
     },
     en: {
-      appTitle: "Document → slides",
+      appTitle: "doc2slide",
       hintNext: "next", hintPrev: "back", hintEsc: "edit",
-      dropHere: "Drop a file here",
+      dropHere: "Upload a file",
       browse: "Choose file",
       pasteHere: "…or paste text here",
       countAuto: "auto",

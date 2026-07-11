@@ -2,13 +2,15 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 
-// shared.js is a classic script; evaluate just the pure-helpers section.
+// ai-models.js + shared.js are classic scripts; evaluate the catalogue and
+// just the pure-helpers section together.
+const catalogSrc = readFileSync(new URL("../ai-models.js", import.meta.url), "utf8");
 const src = readFileSync(new URL("../shared.js", import.meta.url), "utf8");
 const section = src.split("/* pure-helpers:start */")[1].split("/* pure-helpers:end */")[0];
-const H = new Function(`${section}; return {
+const H = new Function(`${catalogSrc}\n${section}; return {
   stripOuterFence, splitSlides, detectLang, buildPrompt, deckTitle, isTitleSlide, firstFont,
   clampPanelWidth,
-  PROVIDER_INFO, normalizeAiSettings,
+  PROVIDER_INFO, DEFAULT_PROVIDER, validateModelCatalog, normalizeAiSettings,
   buildGeminiRequest, buildOpenAIRequest, buildClaudeRequest,
   geminiChunk, openaiChunk, claudeChunk,
 };`)();
@@ -24,6 +26,32 @@ test("PROVIDER_INFO lists three providers with models", () => {
   for (const p of Object.values(H.PROVIDER_INFO)) {
     assert.ok(p.label && p.models.length > 0 && p.keyUrl.startsWith("https://"));
   }
+});
+
+test("validateModelCatalog rejects unsafe or ambiguous entries", () => {
+  const valid = {
+    defaultProvider: "gemini",
+    providers: Object.fromEntries(Object.entries(H.PROVIDER_INFO).map(([id, p]) => [id, {
+      ...p, models: [...p.models],
+    }])),
+  };
+  assert.throws(() => H.validateModelCatalog({}), /missing providers/);
+  assert.throws(() => H.validateModelCatalog({
+    ...valid,
+    providers: { ...valid.providers, openai: { ...valid.providers.openai, models: ["same", "same"] } },
+  }), /duplicate model IDs/);
+  assert.throws(() => H.validateModelCatalog({
+    ...valid,
+    providers: { ...valid.providers, claude: { ...valid.providers.claude, keyUrl: "http://example.test" } },
+  }), /claude\.keyUrl/);
+});
+
+test("validateModelCatalog falls back to the first supported default", () => {
+  const providers = Object.fromEntries(Object.entries(H.PROVIDER_INFO).map(([id, p]) => [id, {
+    ...p, models: [...p.models],
+  }]));
+  const result = H.validateModelCatalog({ defaultProvider: "unknown", providers });
+  assert.equal(result.defaultProvider, "gemini");
 });
 
 // ── normalizeAiSettings ──

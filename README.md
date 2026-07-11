@@ -1,4 +1,4 @@
-# slidegen — Studio stylów prezentacji
+# doc2slide
 
 Slide generator from txt, markdown or pdf — a zero-build presentation style
 studio in the **edulab** look, plus two deck-first workspaces (edulab and
@@ -7,9 +7,9 @@ choice of AI provider.
 
 **Live apps:**
 
-- Style studio: https://workszop.github.io/slidegen/
-- Document → slides (edulab): https://workszop.github.io/slidegen/edu.html
-- Document → slides (Quantica Lab): https://workszop.github.io/slidegen/quantica.html
+- doc2slide — studio stylów: https://workszop.github.io/slidegen/
+- doc2slide — edulab: https://workszop.github.io/slidegen/edu.html
+- doc2slide — Quantica Lab: https://workszop.github.io/slidegen/quantica.html
 
 ## Features
 
@@ -49,6 +49,13 @@ choice of AI provider.
 - **Export** — download the deck as an editable `.pptx` in the current look
 - Bilingual UI (PL default / EN), keyboard navigation, fullscreen presenting,
   settings persisted in localStorage
+
+## Updating AI models
+
+The provider and model catalogue lives in `ai-models.js`. Update model IDs
+there; the selector in all three apps uses the same list. On startup,
+`shared.js` validates required providers, non-empty unique model IDs, and
+HTTPS key URLs. Custom model IDs entered by users remain supported.
 
 ## Slide markdown format
 

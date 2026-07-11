@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>Dokument → slajdy</title>
+<title>doc2slide</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Raleway:wght@400;500;600;700;800&family=DM+Mono:wght@400;500&family=Poppins:wght@400;500;600;700&family=Geist+Mono:wght@400;500;600&display=swap">
@@ -11,7 +11,10 @@
         integrity="sha384-ZD0fTOwPMHi7zM6WTVIWJR21I07lq0ccnqz3J6WMvQKG9thh4y7TA1QE6PJu0Af8" crossorigin="anonymous"></script>
 <script defer src="https://cdn.jsdelivr.net/npm/dompurify@3.0.11/dist/purify.min.js"
         integrity="sha384-Ic7KEGROu37YaruU6NyiYeib7UhjFyDZQ5fzBAji965L75T/4LGk5nzwMEjNGexs" crossorigin="anonymous"></script>
+<script defer src="ai-models.js"></script>
 <script defer src="shared.js"></script>
+<script src="edulab-logo.js"></script>
+<script src="favicon.js"></script>
 <style>
 /* ============================================================
    Quantica Lab app — edulab chrome (Editorial Color, Raleway),
@@ -411,7 +414,7 @@ body.presenting .workbench { display: none; }
 window.APP_BRAND = {
   logo: "data:image/png;base64,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",
   wordmark: null,
-  tag: "doc→slides",
+  tag: "doc2slide",
   presentBrand: "Quantica Lab",
   presetKey: "eduapp_preset_quantica",
   editorWKey: "quantica.editorW",
@@ -422,47 +425,59 @@ window.APP_BRAND = {
     { id: "mono",    name: { pl: "Mono",    en: "Mono" },    bg: "#F5F6F8", fg: "#111111", accent: "#3A3A42" },
   ],
   exampleMd: {
-    pl: `# Dokument → slajdy
-Narzędzie Quantica Lab: z dowolnego dokumentu robi prezentację.
+    pl: `# doc2slide
+Przewodnik po tworzeniu prezentacji w wariancie Quantica Lab.
 ---
-## Co tu się dzieje?
-- Wrzucasz dokument (.txt, .md, .pdf) - **AI** układa z niego slajdy
-- Wszystko dzieje się w przeglądarce - bez serwera i instalacji
-- Ta prezentacja to przykład: obejrzyj ją strzałkami ← →
+## Jak działa doc2slide?
+- Wgraj materiał źródłowy w panelu **Dokument**
+- Wybierz model, język i orientacyjną liczbę slajdów
+- Kliknij **Generuj slajdy**, a potem sprawdź i popraw wynik
+
+> Ten przewodnik możesz przeglądać przyciskami pod slajdem lub klawiszami ← i →.
 ---
-## Wczytaj materiał
-- Upuść plik w panelu **Dokument** (do 19 MB) albo wklej tekst
-- PDF trafia do AI w całości - z tabelami i układem stron
-- Gotowy plik .md ze slajdami? Wczyta się od razu, bez AI
+## 1. Dodaj materiał
+- Wgraj plik **.txt**, **.md** lub **.pdf** w panelu **Dokument**
+- Możesz też wkleić tekst bezpośrednio pod polem wyboru pliku
+- Plik .md z separatorami \`---\` otworzy się od razu jako gotowa prezentacja
+- Limit pliku PDF wynosi 19 MB
 ---
-## Wybierz model AI
-- Kliknij wskaźnik modelu w sekcji **Generowanie**
-- Do wyboru: Gemini, OpenAI lub Claude - z Twoim kluczem API
-> Klucz zostaje w przeglądarce i jest wysyłany wyłącznie do wybranego dostawcy.
+## 2. Skonfiguruj model AI
+- Kliknij nazwę modelu w sekcji **Generowanie**
+- Wybierz Gemini, OpenAI albo Claude i wklej własny klucz API
+- Klucz jest zapisany tylko w pamięci tej przeglądarki
+
+> Podczas generowania treść dokumentu jest wysyłana bezpośrednio do wybranego dostawcy AI.
 ---
-## Dobierz styl
-- Cztery style w sekcji **Styl** - jedno kliknięcie zmienia całą talię
-- Kolory pozostają w palecie Quantica Lab, także w eksporcie .pptx
+## 3. Ustaw język i długość
+- **Auto** zachowuje język dokumentu; możesz wymusić polski lub angielski
+- Wybierz około 10 albo 20 slajdów lub pozostaw ustawienie **auto**
+- Kliknij **Generuj slajdy** i poczekaj, aż pojawi się cała prezentacja
 ---
-## Edytuj treść
-- Przycisk **Edytuj** otwiera edytor markdown po prawej stronie slajdu
-- Zmiany widać na żywo; slajdy oddziela linia \`---\`
-- Podczas generowania edytor otwiera się sam i pokazuje strumień AI
+## 4. Sprawdź i popraw treść
+- Przejrzyj slajdy i upewnij się, że nie brakuje ważnych informacji
+- Kliknij **Edytuj**, aby otworzyć tekst prezentacji po prawej stronie
+- Zmiany widać na bieżąco; slajdy rozdziela osobna linia \`---\`
+- Skracaj długie akapity — jeden slajd powinien przekazywać jedną główną myśl
 ---
-## Prezentuj
+## 5. Wybierz styl i prezentuj
+- W sekcji **Styl** jednym kliknięciem zmienisz wygląd całej prezentacji
+- Wybrany styl zostanie użyty także w pliku PowerPoint
+- Kliknij **Prezentuj**, aby uruchomić tryb prezentacji
+
 | Klawisz | Działanie |
 |---------|-----------|
 | → / spacja | następny slajd |
 | ← | poprzedni slajd |
-| 1-9 | skok do slajdu |
 | Esc | powrót do edycji |
 ---
-## Eksportuj i działaj
-- **Pobierz .md** - wczytasz ponownie bez klucza API
-- **Pobierz .pptx** - edytowalny PowerPoint w wybranym stylu
-- Miłego prezentowania!`,
-    en: `# Document → slides
-A Quantica Lab tool: turns any document into a presentation.
+## 6. Zapisz swoją pracę
+- **Pobierz .md** zapisuje treść i podział slajdów do dalszej edycji
+- **Pobierz .pptx** tworzy edytowalną prezentację PowerPoint
+- Przed udostępnieniem sprawdź układ, fakty i dane wygenerowane przez AI
+
+Gotowe — wgraj własny dokument w panelu po lewej stronie.`,
+    en: `# doc2slide
+A short guide to creating presentations in the Quantica Lab style.
 ---
 ## What is this?
 - Drop a document (.txt, .md, .pdf) - **AI** turns it into slides
@@ -493,7 +508,6 @@ A Quantica Lab tool: turns any document into a presentation.
 |-----|--------|
 | → / space | next slide |
 | ← | previous slide |
-| 1-9 | jump to slide |
 | Esc | back to editing |
 ---
 ## Export and go

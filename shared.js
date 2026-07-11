@@ -2,9 +2,8 @@
    shared.js — helpers, constants, and services shared by
    app.js (edulab/Quantica brand apps) and styler/.
 
-   Load with <script defer src="shared.js"> BEFORE app.js, or as
-   <script src="../shared.js"> in styler. Top-level const/function
-   declarations here are visible to later classic scripts.
+   Load ai-models.js first, then shared.js before app.js. Top-level
+   const/function declarations here are visible to later classic scripts.
 
    The pure string helpers between the markers are unit-tested by
    tests/pure.test.mjs.
@@ -99,28 +98,39 @@ function clampPanelWidth(x, min, maxFraction, viewportW) {
   return Math.min(Math.max(x, min), Math.max(min, maxFraction * viewportW));
 }
 
-// ─── AI provider registry (pure data) ───────────
+// ─── AI provider registry ───────────────────────
 const GEMINI_BASE = "https://generativelanguage.googleapis.com/v1beta/models";
-const PROVIDER_INFO = {
-  gemini: {
-    label: "Gemini",
-    models: ["gemini-3.5-flash", "gemini-3.1-flash-lite-preview"],
-    keyPlaceholder: "AIza…",
-    keyUrl: "https://aistudio.google.com/apikey",
-  },
-  openai: {
-    label: "OpenAI",
-    models: ["gpt-5.6", "gpt-5-mini", "gpt-5-nano"],
-    keyPlaceholder: "sk-…",
-    keyUrl: "https://platform.openai.com/api-keys",
-  },
-  claude: {
-    label: "Claude",
-    models: ["claude-opus-4-8", "claude-sonnet-5", "claude-haiku-4-5"],
-    keyPlaceholder: "sk-ant-…",
-    keyUrl: "https://console.anthropic.com/settings/keys",
-  },
-};
+const SUPPORTED_PROVIDER_IDS = ["gemini", "openai", "claude"];
+
+function validateModelCatalog(catalog) {
+  if (!catalog || typeof catalog !== "object" || !catalog.providers || typeof catalog.providers !== "object") {
+    throw new Error("Invalid AI model catalogue: missing providers");
+  }
+  const providers = {};
+  for (const id of SUPPORTED_PROVIDER_IDS) {
+    const p = catalog.providers[id];
+    if (!p || typeof p !== "object") throw new Error(`Invalid AI model catalogue: missing provider ${id}`);
+    if (typeof p.label !== "string" || !p.label.trim()) throw new Error(`Invalid AI model catalogue: ${id}.label`);
+    if (!Array.isArray(p.models) || !p.models.length) throw new Error(`Invalid AI model catalogue: ${id}.models`);
+    const models = p.models.map(model => typeof model === "string" ? model.trim() : "");
+    if (models.some(model => !model || /\s/.test(model))) throw new Error(`Invalid AI model catalogue: ${id} has an invalid model ID`);
+    if (new Set(models).size !== models.length) throw new Error(`Invalid AI model catalogue: ${id} has duplicate model IDs`);
+    if (typeof p.keyPlaceholder !== "string") throw new Error(`Invalid AI model catalogue: ${id}.keyPlaceholder`);
+    if (typeof p.keyUrl !== "string" || !p.keyUrl.startsWith("https://")) throw new Error(`Invalid AI model catalogue: ${id}.keyUrl`);
+    providers[id] = Object.freeze({ ...p, models: Object.freeze(models) });
+  }
+  const extra = Object.keys(catalog.providers).filter(id => !SUPPORTED_PROVIDER_IDS.includes(id));
+  if (extra.length) throw new Error(`Invalid AI model catalogue: unsupported provider ${extra[0]}`);
+  const defaultProvider = SUPPORTED_PROVIDER_IDS.includes(catalog.defaultProvider)
+    ? catalog.defaultProvider : SUPPORTED_PROVIDER_IDS[0];
+  return Object.freeze({ defaultProvider, providers: Object.freeze(providers) });
+}
+
+const MODEL_CATALOG = validateModelCatalog(
+  typeof AI_MODEL_CATALOG === "undefined" ? null : AI_MODEL_CATALOG
+);
+const DEFAULT_PROVIDER = MODEL_CATALOG.defaultProvider;
+const PROVIDER_INFO = MODEL_CATALOG.providers;
 
 // Parse the eduapp_ai JSON (raw string or null) into valid settings,
 // folding in the legacy single-provider values ({key, model}) on first run.
@@ -128,7 +138,7 @@ function normalizeAiSettings(raw, legacy = {}) {
   let s = {};
   try { s = JSON.parse(raw) ?? {}; } catch { /* corrupt JSON — use defaults */ }
   if (typeof s !== "object" || Array.isArray(s)) s = {};
-  const provider = PROVIDER_INFO[s.provider] ? s.provider : "gemini";
+  const provider = PROVIDER_INFO[s.provider] ? s.provider : DEFAULT_PROVIDER;
   const keys = { gemini: "", openai: "", claude: "" };
   if (s.keys && typeof s.keys === "object") {
     for (const p of Object.keys(keys)) if (typeof s.keys[p] === "string") keys[p] = s.keys[p];
@@ -298,7 +308,7 @@ const PROVIDER_STREAMS = {
 
 // Streams slide markdown from whichever provider the settings select.
 function streamSlides({ provider, model, key, source, prompt, onChunk }) {
-  const [build, extract] = PROVIDER_STREAMS[provider] ?? PROVIDER_STREAMS.gemini;
+  const [build, extract] = PROVIDER_STREAMS[provider] ?? PROVIDER_STREAMS[DEFAULT_PROVIDER];
   return streamSseRequest(build({ key, model, source, prompt }), extract, onChunk);
 }
 

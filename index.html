@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>Studio stylów prezentacji</title>
+<title>doc2slide</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Raleway:wght@400;500;600;700;800&family=DM+Mono:wght@400;500&display=swap">
@@ -325,7 +325,7 @@ body.presenting .deck-footer { border-top: 0; position: absolute; bottom: 0; lef
 
 <header class="chrome">
   <img id="chromeLogo" alt="" aria-hidden="true">
-  <div class="wordmark">edulab</div>
+  <div class="wordmark">doc2slide</div>
   <div class="spacer"></div>
   <div class="lang-toggle" role="group" aria-label="Język interfejsu / UI language">
     <button id="langPl" aria-pressed="true">PL</button>
@@ -440,8 +440,10 @@ body.presenting .deck-footer { border-top: 0; position: absolute; bottom: 0; lef
         integrity="sha384-ZD0fTOwPMHi7zM6WTVIWJR21I07lq0ccnqz3J6WMvQKG9thh4y7TA1QE6PJu0Af8" crossorigin="anonymous"></script>
 <script src="https://cdn.jsdelivr.net/npm/dompurify@3.0.11/dist/purify.min.js"
         integrity="sha384-Ic7KEGROu37YaruU6NyiYeib7UhjFyDZQ5fzBAji965L75T/4LGk5nzwMEjNGexs" crossorigin="anonymous"></script>
+<script src="ai-models.js"></script>
 <script src="shared.js"></script>
 <script src="edulab-logo.js"></script>
+<script src="favicon.js"></script>
 <script>
 // ─── Constants (LS_* etc. come from ../shared.js) ───
 const LS_CONFIG = "styler_config";
@@ -463,60 +465,67 @@ const PRESETS = [
     heading: "Poppins", body: "Nunito" },
 ];
 
-const SAMPLE_MD = `# Studio stylów prezentacji
-Jak działa ta aplikacja - krótki przewodnik.
+const SAMPLE_MD = `# doc2slide
+Przewodnik po projektowaniu wyglądu i tworzeniu prezentacji.
 ---
-## Co robi ta aplikacja?
-- Pozwala projektować wygląd prezentacji **na żywo**
-- Cztery szablony startowe: Papier, Atrament, Żurnal, Pastel
-- Wszystko zmieniasz w panelu po lewej stronie
-- Ustawienia zapisują się w przeglądarce
+## Studio stylów doc2slide
+- Wybierz szablon, który jest najbliższy oczekiwanemu efektowi
+- Dopasuj kroje pisma, kolory i logo w panelu po lewej stronie
+- Obserwuj zmiany bezpośrednio na tej przykładowej prezentacji
+- Ustawienia są zapisywane w pamięci przeglądarki
 ---
-## Szablony i kolory
-- Kliknięcie szablonu zmienia cały wygląd pokładu
-- Trzy okrągłe przyciski: akcent, kolor tekstu, kolor tła
-- Odcienie pochodne liczą się same - jak w tym cytacie:
+## 1. Wybierz szablon i kolory
+- Szablony **Papier**, **Atrament**, **Żurnal** i **Pastel** stanowią dobry punkt wyjścia
+- Kliknięcie szablonu przywraca jego domyślne kroje pisma i kolory
+- Trzy próbki pozwalają ustawić akcent, kolor tekstu i kolor tła
+- Kolory cytatów, linii i bloków kodu dopasują się automatycznie
 
-> Zmień kolor tła, a paleta cytatów, linii i kodu dopasuje się automatycznie.
+> Wskazówka: zadbaj o wyraźny kontrast tekstu względem tła.
 ---
-## Fonty Google
-- Osobny font dla nagłówków i tekstu
-- Lista pokazuje podgląd każdego fontu
-- Na dole listy wpiszesz dowolny font z fonts.google.com
-- Font doładowuje się automatycznie
+## 2. Dobierz kroje pisma
+- Nagłówki i tekst główny mogą używać różnych krojów Google Fonts
+- Lista pokazuje podgląd każdego dostępnego kroju
+- Możesz też wpisać nazwę dowolnego kroju z fonts.google.com
+- Dla czytelności wybierz najwyżej dwa kroje i unikaj zbyt cienkich odmian
 ---
-## Logo
-- **Wgraj logo** umieszcza je w prawym górnym rogu slajdów
-- Domyślnie: konik edulab (na ciemnym tle odwraca kolor)
-- **Usuń** chowa logo całkowicie
+## 3. Dodaj logo
+- **Wgraj logo** umieszcza znak w prawym górnym rogu każdego slajdu
+- Najlepiej sprawdzi się plik PNG lub SVG z przezroczystym tłem
+- Przycisk **Usuń** ukrywa logo, a **Przywróć demo** przywraca ustawienia początkowe
 ---
-## Własna prezentacja
-- **Wczytaj dokument**: plik .md ze slajdami pokazuje się od razu
-- .txt lub .pdf? Wklej klucz API i kliknij **Generuj slajdy**
-- **Edytuj markdown** otwiera edytor pod podglądem
+## 4. Wgraj lub utwórz prezentację
+- **Wgraj dokument** otwiera pliki .md, .txt i .pdf
+- Gotowy plik .md z separatorami \`---\` pojawi się od razu jako prezentacja
+- Dla pliku .txt lub .pdf wybierz model AI, dodaj klucz API i kliknij **Generuj slajdy**
+- Podczas generowania dokument jest wysyłany bezpośrednio do wybranego dostawcy AI
+---
+## 5. Popraw treść
+- **Edytuj markdown** otwiera panel z tekstem prezentacji
+- Zmiany widać na slajdzie na bieżąco
+- Każdy slajd oddziel osobną linią \`---\`
 
 \`\`\`markdown
 ## Nagłówek slajdu
-- punkty, **pogrubienia**, \`kod\`, tabele
+- punkt listy i **ważne pojęcie**
 \`\`\`
 ---
-## Sterowanie i eksport
+## 6. Prezentuj i eksportuj
 | Element | Jak |
 |---------|-----|
-| Następny / poprzedni slajd | → / ← |
-| Pełny ekran | Prezentuj, wyjście: Esc |
-| PowerPoint w tym stylu | Pobierz .pptx |
+| Zmiana slajdu | przyciski → / ← |
+| Tryb pełnoekranowy | **Prezentuj**; wyjście: Esc |
+| Edytowalny PowerPoint | **Pobierz .pptx** |
 ---
-## Podsumowanie
-- Wybierz szablon, dopasuj fonty i kolory
-- Wgraj logo i własny dokument
-- Prezentuj z pełnego ekranu albo pobierz .pptx
-- Ten pokaz też możesz ostylować - spróbuj teraz`;
+## Dobra prezentacja przed eksportem
+- Sprawdź kontrast, wielkość tekstu i długość punktów
+- Upewnij się, że każdy slajd przekazuje jedną główną myśl
+- Zweryfikuj fakty i dane przygotowane przez AI
+- Przejrzyj całość w trybie prezentacji, a następnie pobierz plik .pptx`;
 
 // ─── Translations (T + t) ───────────────────────
 const T = {
   pl: {
-    appTitle: "Studio stylów prezentacji",
+    appTitle: "doc2slide",
     templates: "Szablony",
     fonts: "Fonty (Google Fonts)",
     headingFont: "Nagłówki",
@@ -530,7 +539,7 @@ const T = {
     uploadLogo: "Wgraj logo",
     removeLogo: "Usuń",
     deck: "Prezentacja",
-    loadDoc: "Wczytaj dokument",
+    loadDoc: "Wgraj dokument",
     reset: "Przywróć demo",
     present: "Prezentuj (pełny ekran)",
     downloadPptx: "Pobierz .pptx",
@@ -541,7 +550,7 @@ const T = {
     aiSectionTitle: "Model AI",
     slideLangLabel: "Język slajdów",
     generate: "Generuj slajdy",
-    fileLoaded: "wczytano",
+    fileLoaded: "wgrano",
     genSending: "Wysyłam dokument…",
     genWaiting: "Generuję slajdy…",
     genDone: "Gotowe - slajdy wygenerowane.",
@@ -551,7 +560,7 @@ const T = {
     errEmpty: "Model zwrócił pustą odpowiedź. Spróbuj ponownie.",
   },
   en: {
-    appTitle: "Presentation style studio",
+    appTitle: "doc2slide",
     templates: "Templates",
     fonts: "Fonts (Google Fonts)",
     headingFont: "Headings",
