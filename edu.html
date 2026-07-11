@@ -234,6 +234,13 @@ textarea { resize: vertical; }
 .ws-counter { font-family: var(--font-mono); font-size: var(--caption); color: var(--ink-3); min-width: 5em; text-align: center; }
 .editor-panel { display: flex; min-width: 0; }
 .editor-panel textarea { flex: 1; min-height: 60vh; resize: none; font-family: var(--font-mono); font-size: var(--caption); line-height: 1.6; border: 1px solid var(--line); border-radius: var(--r-md); padding: var(--sp-3); background: var(--surface); color: var(--ink); }
+.preset-grid { display: grid; grid-template-columns: 1fr 1fr; gap: var(--sp-2); }
+.preset { border: 2px solid var(--line); border-radius: var(--r-sm); background: var(--paper); padding: var(--sp-2); cursor: pointer; text-align: left; }
+.preset:hover { border-color: var(--line-2); }
+.preset[aria-pressed="true"] { border-color: var(--marigold); }
+.preset .dots { display: flex; gap: 4px; margin-bottom: 4px; }
+.preset .dots span { width: 12px; height: 12px; border-radius: 50%; border: 1px solid rgba(0,0,0,.15); display: inline-block; }
+.preset .name { font-family: var(--font-mono); font-size: var(--overline); font-weight: 500; }
 @media (max-width: 1100px) { .workspace.editing { grid-template-columns: 272px minmax(0, 1fr); } .workspace.editing .editor-panel { position: fixed; right: var(--sp-3); top: 70px; bottom: var(--sp-3); width: min(420px, 90vw); z-index: 30; box-shadow: -8px 0 24px rgba(33,30,26,.15); } }
 @media (max-width: 800px) { .workspace, .workspace.editing { grid-template-columns: 1fr; } .sidebar { flex-direction: row; flex-wrap: wrap; } .side-section { flex: 1 1 240px; } }
 
@@ -341,6 +348,13 @@ window.APP_BRAND = {
   tag: "doc→slides",
   eyebrow: { pl: "edulab · narzędzie warsztatowe", en: "edulab · workshop tool" },
   presentBrand: "edulab",
+  presetKey: "eduapp_preset_edu",
+  presets: [
+    { id: "papier",   name: { pl: "Papier",   en: "Paper" },    bg: "#FBF7F0", fg: "#211E1A", accent: "#E8920C" },
+    { id: "atrament", name: { pl: "Atrament", en: "Ink" },      bg: "#211E1A", fg: "#FBF7F0", accent: "#E8920C" },
+    { id: "morski",   name: { pl: "Morski",   en: "Teal" },     bg: "#FBF7F0", fg: "#211E1A", accent: "#0E8C7F" },
+    { id: "kontrast", name: { pl: "Kontrast", en: "Contrast" }, bg: "#FFFFFF", fg: "#211E1A", accent: "#211E1A" },
+  ],
 };
 </script>
 <script defer src="app.js"></script>

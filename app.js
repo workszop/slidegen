@@ -27,6 +27,8 @@
     tag: "doc→slides",
     eyebrow: { pl: "narzędzie edukacyjne", en: "learning tool" },
     presentBrand: "",
+    presets: [],
+    presetKey: "eduapp_preset",
   }, window.APP_BRAND);
 
   // ─── Constants (LS_* etc. come from shared.js) ───
@@ -334,6 +336,34 @@ Jedno zdanie wstępu.
   const wsCounterEl = document.getElementById("wsCounter");
   const editorPanelEl = document.getElementById("editorPanel");
   const editToggleBtn = document.getElementById("editToggleBtn");
+  const presetGridEl = document.getElementById("presetGrid");
+
+  // ─── Style presets ──────────────────────────────
+  let activePreset = 0;
+  function applyPreset(i) {
+    const p = BRAND.presets[i];
+    if (!p) return;
+    activePreset = i;
+    const rs = document.documentElement.style;
+    rs.setProperty("--slide-bg", p.bg);
+    rs.setProperty("--slide-fg", p.fg);
+    rs.setProperty("--slide-accent", p.accent);
+    localStorage.setItem(BRAND.presetKey, p.id);
+    document.querySelectorAll(".preset").forEach((b, j) =>
+      b.setAttribute("aria-pressed", String(j === activePreset)));
+  }
+  function renderPresets() {
+    presetGridEl.innerHTML = "";
+    BRAND.presets.forEach((p, i) => {
+      const b = document.createElement("button");
+      b.type = "button";
+      b.className = "preset";
+      b.innerHTML = `<span class="dots"><span style="background:${p.bg}"></span><span style="background:${p.fg}"></span><span style="background:${p.accent}"></span></span><span class="name"></span>`;
+      b.querySelector(".name").textContent = p.name[uiLang] ?? p.name.pl;
+      b.addEventListener("click", () => applyPreset(i));
+      presetGridEl.appendChild(b);
+    });
+  }
 
   // ─── Helpers (DOM-adjacent) ─────────────────────
   // Parsed slide HTML is memoized per segment string: during streaming and
@@ -362,6 +392,9 @@ Jedno zdanie wstępu.
     });
     document.querySelectorAll("[data-i18n-placeholder]").forEach(el => {
       el.placeholder = t(el.dataset.i18nPlaceholder);
+    });
+    document.querySelectorAll(".preset .name").forEach((el, i) => {
+      el.textContent = BRAND.presets[i].name[uiLang] ?? BRAND.presets[i].name.pl;
     });
     if (state.view === "workspace") renderSidebar();
   }
@@ -627,6 +660,11 @@ Jedno zdanie wstępu.
   if (BRAND.wordmark) document.querySelector(".wordmark").textContent = BRAND.wordmark;
   document.querySelector(".chrome .tag").textContent = BRAND.tag;
   const aiSelector = mountAiSelector({ chip: aiChipEl, getLang: () => uiLang });
+  renderPresets();
+  {
+    const savedPreset = BRAND.presets.findIndex(p => p.id === localStorage.getItem(BRAND.presetKey));
+    applyPreset(savedPreset >= 0 ? savedPreset : 0);
+  }
   setDeck(SAMPLE_MD, { example: true });
   {
     const params = new URLSearchParams(location.search);
