@@ -88,20 +88,133 @@ function isTitleSlide(md) {
 function firstFont(ff) {
   return ff.split(",")[0].trim().replace(/^["']|["']$/g, "");
 }
+
+// ─── AI provider registry (pure data) ───────────
+const GEMINI_BASE = "https://generativelanguage.googleapis.com/v1beta/models";
+const PROVIDER_INFO = {
+  gemini: {
+    label: "Gemini",
+    models: ["gemini-3.5-flash", "gemini-3.1-flash-lite-preview"],
+    keyPlaceholder: "AIza…",
+    keyUrl: "https://aistudio.google.com/apikey",
+  },
+  openai: {
+    label: "OpenAI",
+    models: ["gpt-5.6", "gpt-5-mini", "gpt-5-nano"],
+    keyPlaceholder: "sk-…",
+    keyUrl: "https://platform.openai.com/api-keys",
+  },
+  claude: {
+    label: "Claude",
+    models: ["claude-opus-4-8", "claude-sonnet-5", "claude-haiku-4-5"],
+    keyPlaceholder: "sk-ant-…",
+    keyUrl: "https://console.anthropic.com/settings/keys",
+  },
+};
+
+// Parse the eduapp_ai JSON (raw string or null) into valid settings,
+// folding in the legacy single-provider values ({key, model}) on first run.
+function normalizeAiSettings(raw, legacy = {}) {
+  let s = {};
+  try { s = JSON.parse(raw) ?? {}; } catch { /* corrupt JSON — use defaults */ }
+  if (typeof s !== "object" || Array.isArray(s)) s = {};
+  const provider = PROVIDER_INFO[s.provider] ? s.provider : "gemini";
+  const keys = { gemini: "", openai: "", claude: "" };
+  if (s.keys && typeof s.keys === "object") {
+    for (const p of Object.keys(keys)) if (typeof s.keys[p] === "string") keys[p] = s.keys[p];
+  }
+  if (!keys.gemini && typeof legacy.key === "string") keys.gemini = legacy.key;
+  let model = typeof s.model === "string" && s.model.trim() ? s.model.trim() : "";
+  if (!model) {
+    model = (provider === "gemini" && typeof legacy.model === "string" && legacy.model)
+      ? legacy.model : PROVIDER_INFO[provider].models[0];
+  }
+  return { provider, model, keys };
+}
+
+// ─── Per-provider request builders (pure) ────────
+// Each returns {url, headers, body} for the provider's streaming endpoint.
+function buildGeminiRequest({ key, model, source, prompt }) {
+  const parts = [{ text: prompt }];
+  if (source.kind === "pdf") {
+    parts.push({ inline_data: { mime_type: "application/pdf", data: source.base64 } });
+  } else {
+    parts.push({ text: "\n\n--- DOCUMENT ---\n\n" + source.text });
+  }
+  return {
+    url: `${GEMINI_BASE}/${model}:streamGenerateContent?alt=sse`,
+    headers: { "Content-Type": "application/json", "x-goog-api-key": key },
+    body: { contents: [{ parts }], generationConfig: { temperature: 0.4 } },
+  };
+}
+
+function buildOpenAIRequest({ key, model, source, prompt }) {
+  const content = [{ type: "input_text", text: prompt }];
+  if (source.kind === "pdf") {
+    content.push({
+      type: "input_file",
+      filename: source.name || "document.pdf",
+      file_data: "data:application/pdf;base64," + source.base64,
+    });
+  } else {
+    content[0].text += "\n\n--- DOCUMENT ---\n\n" + source.text;
+  }
+  return {
+    url: "https://api.openai.com/v1/responses",
+    headers: { "Content-Type": "application/json", Authorization: "Bearer " + key },
+    body: { model, input: [{ role: "user", content }], stream: true },
+  };
+}
+
+function buildClaudeRequest({ key, model, source, prompt }) {
+  const content = [];
+  if (source.kind === "pdf") {
+    content.push({ type: "document", source: { type: "base64", media_type: "application/pdf", data: source.base64 } });
+    content.push({ type: "text", text: prompt });
+  } else {
+    content.push({ type: "text", text: prompt + "\n\n--- DOCUMENT ---\n\n" + source.text });
+  }
+  return {
+    url: "https://api.anthropic.com/v1/messages",
+    headers: {
+      "Content-Type": "application/json",
+      "x-api-key": key,
+      "anthropic-version": "2023-06-01",
+      "anthropic-dangerous-direct-browser-access": "true",
+    },
+    body: { model, max_tokens: 16000, stream: true, messages: [{ role: "user", content }] },
+  };
+}
+
+// ─── Per-provider SSE chunk extractors (pure) ────
+function geminiChunk(data) {
+  return (data.candidates?.[0]?.content?.parts ?? []).map(p => p.text ?? "").join("");
+}
+function openaiChunk(data) {
+  return data.type === "response.output_text.delta" ? (data.delta ?? "") : "";
+}
+function claudeChunk(data) {
+  return data.type === "content_block_delta" && data.delta?.type === "text_delta"
+    ? (data.delta.text ?? "") : "";
+}
 /* pure-helpers:end */
 
 // ─── Cross-app constants (the localStorage names are a contract:
 //     all apps share one key / model / UI language) ─────────────
 const LS_LANG = "eduapp_lang", LS_KEY = "eduapp_gemini_key", LS_MODEL = "eduapp_model";
-const MODELS = ["gemini-3.5-flash", "gemini-3.1-flash-lite-preview"];
+const LS_AI = "eduapp_ai";
 const MAX_INLINE_MB = 19;
 const MAX_INLINE_BYTES = MAX_INLINE_MB * 1024 * 1024;
-const GEMINI_BASE = "https://generativelanguage.googleapis.com/v1beta/models";
 
-// Stored model if it is still offered, else the current default.
-function resolveModel() {
-  const saved = localStorage.getItem(LS_MODEL);
-  return MODELS.includes(saved) ? saved : MODELS[0];
+// Current AI settings; folds legacy eduapp_gemini_key / eduapp_model in on first run.
+function loadAiSettings() {
+  return normalizeAiSettings(localStorage.getItem(LS_AI), {
+    key: localStorage.getItem(LS_KEY) ?? "",
+    model: localStorage.getItem(LS_MODEL) ?? "",
+  });
+}
+function saveAiSettings(settings) {
+  localStorage.setItem(LS_AI, JSON.stringify(settings));
 }
 
 // ─── File intake ────────────────────────────────
@@ -125,25 +238,18 @@ function readSourceFile(file) {
   });
 }
 
-// ─── Gemini streaming ───────────────────────────
-// Streams slide markdown for a source document; onChunk(accumulatedText)
-// fires per SSE chunk (throttling is the caller's job). Returns the full
-// text; throws Error("status: message") on HTTP errors.
-async function streamGeminiSlides({ key, model, source, prompt, onChunk }) {
-  const parts = [{ text: prompt }];
-  if (source.kind === "pdf") {
-    parts.push({ inline_data: { mime_type: "application/pdf", data: source.base64 } });
-  } else {
-    parts.push({ text: "\n\n--- DOCUMENT ---\n\n" + source.text });
-  }
-  const res = await fetch(`${GEMINI_BASE}/${model}:streamGenerateContent?alt=sse`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json", "x-goog-api-key": key },
-    body: JSON.stringify({ contents: [{ parts }], generationConfig: { temperature: 0.4 } }),
-  });
+// ─── Provider streaming ─────────────────────────
+// Generic SSE POST: builds nothing itself — request comes from a build*Request
+// helper, per-event text extraction from a *Chunk helper. onChunk(accumulated)
+// fires per chunk (throttling is the caller's job). Returns the full text.
+async function streamSseRequest({ url, headers, body }, extractChunk, onChunk) {
+  const res = await fetch(url, { method: "POST", headers, body: JSON.stringify(body) });
   if (!res.ok) {
     let msg;
-    try { msg = JSON.parse(await res.text())?.error?.message; } catch { /* non-JSON error body */ }
+    try {
+      const e = JSON.parse(await res.text());
+      msg = e?.error?.message ?? e?.message;
+    } catch { /* non-JSON error body */ }
     throw new Error(`${res.status}: ${msg ?? res.statusText}`);
   }
   const reader = res.body.getReader();
@@ -157,15 +263,191 @@ async function streamGeminiSlides({ key, model, source, prompt, onChunk }) {
     buf = lines.pop();
     for (const line of lines) {
       if (!line.startsWith("data:")) continue;
+      const payload = line.slice(5).trim();
+      if (!payload || payload === "[DONE]") continue;
       let data;
-      try { data = JSON.parse(line.slice(5).trim()); } catch { continue; }
-      const chunk = (data.candidates?.[0]?.content?.parts ?? []).map(p => p.text ?? "").join("");
+      try { data = JSON.parse(payload); } catch { continue; }
+      // Mid-stream provider errors (e.g. Claude overloaded) arrive as data events.
+      if (data.type === "error" || data.type === "response.failed" || (data.error && !data.candidates)) {
+        throw new Error(data.error?.message ?? data.response?.error?.message ?? data.message ?? "stream error");
+      }
+      const chunk = extractChunk(data);
       if (!chunk) continue;
       acc += chunk;
       onChunk?.(acc);
     }
   }
   return acc;
+}
+
+const PROVIDER_STREAMS = {
+  gemini: [buildGeminiRequest, geminiChunk],
+  openai: [buildOpenAIRequest, openaiChunk],
+  claude: [buildClaudeRequest, claudeChunk],
+};
+
+// Streams slide markdown from whichever provider the settings select.
+function streamSlides({ provider, model, key, source, prompt, onChunk }) {
+  const [build, extract] = PROVIDER_STREAMS[provider] ?? PROVIDER_STREAMS.gemini;
+  return streamSseRequest(build({ key, model, source, prompt }), extract, onChunk);
+}
+
+// ─── AI model selector (chip + <dialog>) ─────────
+// One implementation for all apps; visuals inherit each app's fonts/colors
+// via CSS variables with neutral fallbacks.
+const AI_SELECTOR_CSS = `
+.ai-chip{display:inline-flex;align-items:center;gap:.45em;padding:.4em .85em;
+  border:1px solid var(--border, currentColor);border-radius:999px;background:transparent;
+  color:inherit;font:inherit;font-size:.85em;cursor:pointer;max-width:100%;}
+.ai-chip:hover{border-color:var(--accent, currentColor);}
+.ai-chip .ai-chip-model{opacity:.75;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.ai-dialog{border:1px solid var(--border, #8884);border-radius:12px;padding:1.5rem;
+  max-width:26rem;width:calc(100vw - 2rem);background:var(--bg, Canvas);color:inherit;font:inherit;}
+.ai-dialog::backdrop{background:rgba(0,0,0,.45);}
+.ai-dialog h2{margin:0 0 1rem;font-size:1.1rem;}
+.ai-dialog .ai-field{margin-bottom:1rem;display:block;}
+.ai-dialog label{display:block;font-size:.8em;opacity:.8;margin-bottom:.3em;}
+.ai-dialog select,.ai-dialog input{width:100%;box-sizing:border-box;padding:.5em .6em;
+  border:1px solid var(--border, #8884);border-radius:8px;background:transparent;color:inherit;font:inherit;}
+.ai-dialog .ai-providers{display:flex;gap:.4rem;}
+.ai-dialog .ai-providers button{flex:1;padding:.5em 0;border:1px solid var(--border, #8884);
+  border-radius:8px;background:transparent;color:inherit;font:inherit;cursor:pointer;}
+.ai-dialog .ai-providers button[aria-pressed="true"]{border-color:var(--accent, currentColor);
+  background:var(--accent, currentColor);color:var(--bg, Canvas);}
+.ai-dialog .ai-note{font-size:.75em;opacity:.7;margin:.4em 0 0;}
+.ai-dialog .ai-note a{color:inherit;}
+.ai-dialog .ai-actions{display:flex;justify-content:flex-end;margin-top:1.2rem;}
+.ai-dialog .ai-actions button{padding:.5em 1.4em;border:1px solid var(--border, #8884);
+  border-radius:999px;background:transparent;color:inherit;font:inherit;cursor:pointer;}
+`;
+
+const AI_STRINGS = {
+  pl: {
+    title: "Model AI", provider: "Dostawca", model: "Model",
+    custom: "inny model…", customLabel: "Identyfikator modelu",
+    keyLabel: "Klucz API", close: "Zamknij",
+    keyHelp: "Klucz zostaje w Twojej przeglądarce (localStorage) i jest wysyłany wyłącznie do wybranego dostawcy. Wygenerujesz go na",
+  },
+  en: {
+    title: "AI model", provider: "Provider", model: "Model",
+    custom: "custom model…", customLabel: "Model ID",
+    keyLabel: "API key", close: "Close",
+    keyHelp: "The key stays in your browser (localStorage) and is sent only to the selected provider. Generate one at",
+  },
+};
+
+function mountAiSelector({ chip, getLang }) {
+  const style = document.createElement("style");
+  style.textContent = AI_SELECTOR_CSS;
+  document.head.appendChild(style);
+
+  const dialog = document.createElement("dialog");
+  dialog.className = "ai-dialog";
+  document.body.appendChild(dialog);
+
+  chip.classList.add("ai-chip");
+  chip.type = "button";
+  chip.addEventListener("click", () => { renderDialog(); dialog.showModal(); });
+
+  let settings = loadAiSettings();
+
+  function save() { saveAiSettings(settings); renderChip(); }
+
+  function renderChip() {
+    const info = PROVIDER_INFO[settings.provider];
+    chip.innerHTML = "";
+    chip.append("⚙ " + info.label + " · ");
+    const m = document.createElement("span");
+    m.className = "ai-chip-model";
+    m.textContent = settings.model;
+    chip.appendChild(m);
+  }
+
+  function renderDialog() {
+    const t = AI_STRINGS[getLang()] ?? AI_STRINGS.pl;
+    const info = PROVIDER_INFO[settings.provider];
+    const isCurated = info.models.includes(settings.model);
+    dialog.innerHTML = `
+      <h2>${t.title}</h2>
+      <div class="ai-field">
+        <label>${t.provider}</label>
+        <div class="ai-providers" role="group"></div>
+      </div>
+      <div class="ai-field">
+        <label for="aiModelSelect">${t.model}</label>
+        <select id="aiModelSelect"></select>
+      </div>
+      <div class="ai-field ai-custom" hidden>
+        <label for="aiModelCustom">${t.customLabel}</label>
+        <input id="aiModelCustom" type="text" spellcheck="false" autocomplete="off" />
+      </div>
+      <div class="ai-field">
+        <label for="aiKey">${t.keyLabel} — ${info.label}</label>
+        <input id="aiKey" type="password" autocomplete="off" spellcheck="false" placeholder="${info.keyPlaceholder}" />
+        <p class="ai-note">${t.keyHelp}
+          <a href="${info.keyUrl}" target="_blank" rel="noopener">${info.keyUrl.replace("https://", "")}</a></p>
+      </div>
+      <div class="ai-actions"><button type="button" class="ai-close">${t.close}</button></div>`;
+
+    const providersEl = dialog.querySelector(".ai-providers");
+    for (const [id, p] of Object.entries(PROVIDER_INFO)) {
+      const b = document.createElement("button");
+      b.type = "button";
+      b.textContent = p.label;
+      b.setAttribute("aria-pressed", String(id === settings.provider));
+      b.addEventListener("click", () => {
+        if (id === settings.provider) return;
+        settings.provider = id;
+        settings.model = PROVIDER_INFO[id].models[0];
+        save();
+        renderDialog();
+      });
+      providersEl.appendChild(b);
+    }
+
+    const modelSel = dialog.querySelector("#aiModelSelect");
+    for (const m of info.models) {
+      const opt = document.createElement("option");
+      opt.value = m; opt.textContent = m;
+      modelSel.appendChild(opt);
+    }
+    const customOpt = document.createElement("option");
+    customOpt.value = "__custom__"; customOpt.textContent = t.custom;
+    modelSel.appendChild(customOpt);
+    modelSel.value = isCurated ? settings.model : "__custom__";
+
+    const customField = dialog.querySelector(".ai-custom");
+    const customInput = dialog.querySelector("#aiModelCustom");
+    customField.hidden = isCurated;
+    customInput.value = isCurated ? "" : settings.model;
+
+    modelSel.addEventListener("change", () => {
+      if (modelSel.value === "__custom__") {
+        customField.hidden = false;
+        customInput.focus();
+      } else {
+        customField.hidden = true;
+        settings.model = modelSel.value;
+        save();
+      }
+    });
+    customInput.addEventListener("input", () => {
+      const v = customInput.value.trim();
+      if (v) { settings.model = v; save(); }
+    });
+
+    const keyInput = dialog.querySelector("#aiKey");
+    keyInput.value = settings.keys[settings.provider] ?? "";
+    keyInput.addEventListener("input", () => {
+      settings.keys[settings.provider] = keyInput.value.trim();
+      save();
+    });
+
+    dialog.querySelector(".ai-close").addEventListener("click", () => dialog.close());
+  }
+
+  renderChip();
+  return { refresh: renderChip };
 }
 
 // ─── Lazy PPTX dependencies ─────────────────────

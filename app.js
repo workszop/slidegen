@@ -1,7 +1,7 @@
 /* ============================================================
    eduapp — shared logic (brand-agnostic)
 
-   Requires shared.js (helpers, constants, Gemini + PPTX services)
+   Requires shared.js (helpers, constants, AI provider + PPTX services)
    to be loaded first. A brand HTML file provides ONLY the style layer:
      1. <style> with the brand's :root tokens + component CSS
         (see README "Style contract" for the required class list;
@@ -29,27 +29,27 @@
     presentBrand: "",
   }, window.APP_BRAND);
 
-  // ─── Constants (LS_*, MODELS etc. come from shared.js) ───
+  // ─── Constants (LS_* etc. come from shared.js) ───
   const SAMPLE_MD = `# Dokument → slajdy
 Jak działa ta aplikacja - przewodnik w ośmiu slajdach.
 ---
 ## Co robi ta aplikacja?
 - Zamienia dokument (.txt, .md, .pdf) w prezentację HTML
-- Treść slajdów pisze **Gemini**, w formacie markdown
+- Treść slajdów pisze **AI**, w formacie markdown
 - Slajdy renderuje przeglądarka - bez serwera i instalacji
 - Ten pokaz to tryb demo: wszystko działa bez klucza API
 ---
 ## Krok 1: klucz API
-- Wygeneruj darmowy klucz na aistudio.google.com/apikey
+- Wygeneruj darmowy klucz API u wybranego dostawcy (Gemini, OpenAI lub Claude)
 - Wklej go w ustawieniach na ekranie startowym
 
-> Klucz zostaje w Twojej przeglądarce (localStorage) i jest wysyłany wyłącznie do Google - na żaden inny serwer.
+> Klucz zostaje w Twojej przeglądarce (localStorage) i jest wysyłany wyłącznie do wybranego dostawcy AI - na żaden inny serwer.
 ---
 ## Krok 2: dokument
 - Upuść plik \`.txt\`, \`.md\` lub \`.pdf\` (do 19 MB) albo wklej tekst
-- PDF trafia do Gemini w całości - z tabelami i układem stron
+- PDF trafia do AI w całości - z tabelami i układem stron
 - Wybierz język slajdów (PL/EN) i orientacyjną liczbę slajdów
-- Plik .md z gotowymi slajdami? Przycisk **Prezentuj bez Gemini**
+- Plik .md z gotowymi slajdami? Przycisk **Prezentuj bez AI**
 ---
 ## Krok 3: generowanie i edycja
 - Slajdy pojawiają się na żywo, w trakcie generowania
@@ -86,28 +86,26 @@ Jedno zdanie wstępu.
     pl: {
       appTitle: "Dokument → slajdy",
       eyebrow: BRAND.eyebrow.pl,
-      lead: "Wrzuć tekst, markdown lub PDF - Gemini ułoży z niego slajdy, a przeglądarka wyrenderuje prezentację. Bez instalacji, bez serwera.",
+      lead: "Wrzuć tekst, markdown lub PDF - AI ułoży z niego slajdy, a przeglądarka wyrenderuje prezentację. Bez instalacji, bez serwera.",
       hintNext: "dalej", hintPrev: "wstecz", hintEsc: "edycja",
       dropHere: "Upuść plik tutaj",
       dropTypes: ".txt · .md · .pdf (do 19 MB)",
       browse: "Wybierz plik",
       orPaste: "…albo wklej tekst",
-      apiKeyLabel: "Klucz API Gemini",
-      apiKeyHelp: "Klucz zostaje wyłącznie w Twojej przeglądarce (localStorage) i jest wysyłany bezpośrednio do Google. Wygenerujesz go na",
-      modelLabel: "Model",
+      aiModelLabel: "Model AI",
       slideLangLabel: "Język slajdów",
       countLabel: "Liczba slajdów",
       countAuto: "auto",
       generate: "Generuj slajdy",
-      presentDirect: "Prezentuj bez Gemini",
+      presentDirect: "Prezentuj bez AI",
       hintGenerate: "generuj (gdy plik wczytany)",
       fileLoaded: "wczytano",
       detected: "wykryto",
       errFileType: "Obsługiwane formaty: .txt, .md, .pdf",
       errTooBig: "Plik jest za duży (limit 19 MB). Skróć dokument lub podziel go na części.",
       errNoKeyTitle: "Brak klucza API",
-      errNoKeyBody: "Wklej swój klucz Gemini w sekcji ustawień. Wygenerujesz go na aistudio.google.com/apikey.",
-      errApiTitle: "Błąd API Gemini",
+      errNoKeyBody: "Wklej klucz API dostawcy {provider} w ustawieniach modelu (kliknij wskaźnik modelu). Wygenerujesz go na {url}.",
+      errApiTitle: "Błąd API",
       errEmpty: "Model zwrócił pustą odpowiedź. Spróbuj ponownie lub zmień model.",
       genSending: "Wysyłam dokument…",
       genWaiting: "Generuję slajdy…",
@@ -121,35 +119,33 @@ Jedno zdanie wstępu.
       previewLabel: "Podgląd slajdów",
       hintPresent: "prezentuj",
       helpTitle: "Format slajdów (markdown)",
-      helpIntro: "Gemini generuje slajdy w tym formacie - możesz też napisać własny plik .md i wrzucić go bez klucza API:",
+      helpIntro: "AI generuje slajdy w tym formacie - możesz też napisać własny plik .md i wrzucić go bez klucza API:",
       helpOutro: "Pierwszy slajd (z #) staje się slajdem tytułowym. Kolejne slajdy oddzielaj linią zawierającą wyłącznie trzy myślniki.",
       presentEyebrowWord: "prezentacja",
     },
     en: {
       appTitle: "Document → slides",
       eyebrow: BRAND.eyebrow.en,
-      lead: "Drop in text, markdown, or a PDF — Gemini turns it into slides and your browser renders the deck. No install, no server.",
+      lead: "Drop in text, markdown, or a PDF — AI turns it into slides and your browser renders the deck. No install, no server.",
       hintNext: "next", hintPrev: "back", hintEsc: "edit",
       dropHere: "Drop a file here",
       dropTypes: ".txt · .md · .pdf (up to 19 MB)",
       browse: "Choose file",
       orPaste: "…or paste text",
-      apiKeyLabel: "Gemini API key",
-      apiKeyHelp: "The key stays in your browser (localStorage) and is sent directly to Google. Generate one at",
-      modelLabel: "Model",
+      aiModelLabel: "AI model",
       slideLangLabel: "Slide language",
       countLabel: "Slide count",
       countAuto: "auto",
       generate: "Generate slides",
-      presentDirect: "Present without Gemini",
+      presentDirect: "Present without AI",
       hintGenerate: "generate (when a file is loaded)",
       fileLoaded: "loaded",
       detected: "detected",
       errFileType: "Supported formats: .txt, .md, .pdf",
       errTooBig: "File too large (19 MB limit). Trim the document or split it.",
       errNoKeyTitle: "Missing API key",
-      errNoKeyBody: "Paste your Gemini key in the settings section. Generate one at aistudio.google.com/apikey.",
-      errApiTitle: "Gemini API error",
+      errNoKeyBody: "Paste your {provider} API key in the model settings (click the model chip). Generate one at {url}.",
+      errApiTitle: "API error",
       errEmpty: "The model returned an empty response. Try again or switch models.",
       genSending: "Sending the document…",
       genWaiting: "Generating slides…",
@@ -163,7 +159,7 @@ Jedno zdanie wstępu.
       previewLabel: "Slide preview",
       hintPresent: "present",
       helpTitle: "Slide format (markdown)",
-      helpIntro: "Gemini generates slides in this format — you can also write your own .md file and load it with no API key:",
+      helpIntro: "AI generates slides in this format — you can also write your own .md file and load it with no API key:",
       helpOutro: "The first slide (with #) becomes the title slide. Separate further slides with a line containing only three dashes.",
       presentEyebrowWord: "presentation",
     },
@@ -176,6 +172,7 @@ Jedno zdanie wstępu.
     document.documentElement.lang = lang;
     document.title = t("appTitle");
     renderTexts();
+    aiSelector.refresh();
   }
 
   // ─── Markup (shared structure; brand styles it via CSS) ──
@@ -230,16 +227,10 @@ Jedno zdanie wstępu.
 
     <div class="card settings" id="settingsCard">
       <div class="field">
-        <label class="field-label" for="apiKey" data-i18n="apiKeyLabel"></label>
-        <input type="password" id="apiKey" class="mono-input" placeholder="AIza…" autocomplete="off" spellcheck="false" />
-        <p class="field-help"><span data-i18n="apiKeyHelp"></span>
-          <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">aistudio.google.com/apikey</a></p>
+        <span class="field-label" data-i18n="aiModelLabel"></span>
+        <button id="aiChip"></button>
       </div>
       <div class="settings-row">
-        <div class="field">
-          <label class="field-label" for="model" data-i18n="modelLabel"></label>
-          <select id="model" class="mono-input"></select>
-        </div>
         <div class="field">
           <span class="field-label" id="slideLangLabel" data-i18n="slideLangLabel"></span>
           <div class="lang-toggle" role="group" aria-labelledby="slideLangLabel">
@@ -355,8 +346,7 @@ Jedno zdanie wstępu / one intro line
   const fileChipEl = document.getElementById("fileChip");
   const browseBtn = document.getElementById("browseBtn");
   const pasteAreaEl = document.getElementById("pasteArea");
-  const apiKeyEl = document.getElementById("apiKey");
-  const modelEl = document.getElementById("model");
+  const aiChipEl = document.getElementById("aiChip");
   const slideLangPlBtn = document.getElementById("slideLangPl");
   const slideLangEnBtn = document.getElementById("slideLangEn");
   const countHintEl = document.getElementById("countHint");
@@ -548,12 +538,17 @@ Jedno zdanie wstępu / one intro line
       .catch(err => showError(err.message === "size" ? t("errTooBig") : t("errFileType"), file.name));
   }
 
-  // ─── Gemini ─────────────────────────────────────
+  // ─── Generation (provider-agnostic) ─────────────
   // Streaming: markdown flows into the editor and preview as it arrives
   // (transport lives in shared.js; this function is only the UI reaction).
   async function generateSlides() {
-    const key = localStorage.getItem(LS_KEY)?.trim();
-    if (!key) return showError(t("errNoKeyTitle"), t("errNoKeyBody"));
+    const ai = loadAiSettings();
+    const key = ai.keys[ai.provider]?.trim();
+    if (!key) {
+      const info = PROVIDER_INFO[ai.provider];
+      return showError(t("errNoKeyTitle"),
+        t("errNoKeyBody").replace("{provider}", info.label).replace("{url}", info.keyUrl.replace("https://", "")));
+    }
     if (!state.source || state.generating) return;
 
     state.generating = true;
@@ -563,9 +558,10 @@ Jedno zdanie wstępu / one intro line
     generateBtn.disabled = true;
     let started = false, lastRender = 0;
     try {
-      const acc = await streamGeminiSlides({
+      const acc = await streamSlides({
+        provider: ai.provider,
+        model: ai.model,
         key,
-        model: modelEl.value,
         source: state.source,
         prompt: buildPrompt({ lang: state.slideLang, countHint: countHintEl.value }),
         onChunk(text) {
@@ -620,8 +616,6 @@ Jedno zdanie wstępu / one intro line
     }, 250);
   });
 
-  apiKeyEl.addEventListener("input", () => localStorage.setItem(LS_KEY, apiKeyEl.value.trim()));
-  modelEl.addEventListener("change", () => localStorage.setItem(LS_MODEL, modelEl.value));
   slideLangPlBtn.addEventListener("click", () => { state.slideLang = "pl"; renderInput(); });
   slideLangEnBtn.addEventListener("click", () => { state.slideLang = "en"; renderInput(); });
   errorDismissBtn.addEventListener("click", () => errorPanelEl.classList.add("hidden"));
@@ -674,13 +668,7 @@ Jedno zdanie wstępu / one intro line
   document.querySelectorAll(".brand-logo").forEach(el => { el.src = BRAND.logo; });
   if (BRAND.wordmark) document.querySelector(".wordmark").textContent = BRAND.wordmark;
   document.querySelector(".chrome .tag").textContent = BRAND.tag;
-  MODELS.forEach(m => {
-    const opt = document.createElement("option");
-    opt.value = m; opt.textContent = m;
-    modelEl.appendChild(opt);
-  });
-  apiKeyEl.value = localStorage.getItem(LS_KEY) ?? "";
-  modelEl.value = resolveModel();
+  const aiSelector = mountAiSelector({ chip: aiChipEl, getLang: () => uiLang });
   {
     const params = new URLSearchParams(location.search);
     if (["pl", "en"].includes(params.get("lang"))) { uiLang = params.get("lang"); localStorage.setItem(LS_LANG, uiLang); }

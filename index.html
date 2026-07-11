@@ -35,6 +35,11 @@
   --teal-ink:  #0A5A52;
   --danger:    #D8412A;
 
+  /* Aliases for the shared AI selector component (mountAiSelector in shared.js) */
+  --accent: var(--marigold);
+  --border: var(--line);
+  --bg:     var(--paper);
+
   --focus-ring: 0 0 0 3px rgba(232,146,12,.38);
   --sp-1: 4px; --sp-2: 8px; --sp-3: 12px; --sp-4: 16px;
   --sp-5: 20px; --sp-6: 24px;
@@ -358,12 +363,9 @@ body.presenting .deck-footer { border-top: 0; position: absolute; bottom: 0; lef
     </section>
 
     <section>
-      <h2>Gemini</h2>
+      <h2 data-i18n="aiSectionTitle"></h2>
       <div class="field">
-        <label for="apiKey" data-i18n="apiKeyLabel"></label>
-        <input type="password" id="apiKey" placeholder="AIza…" autocomplete="off" spellcheck="false" />
-        <p class="note"><span data-i18n="apiKeyHelp"></span>
-          <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">aistudio.google.com/apikey</a></p>
+        <button id="aiChip"></button>
       </div>
       <div class="field field-inline">
         <label id="slideLangLabel" data-i18n="slideLangLabel"></label>
@@ -412,7 +414,7 @@ body.presenting .deck-footer { border-top: 0; position: absolute; bottom: 0; lef
 <script src="shared.js"></script>
 <script src="edulab-logo.js"></script>
 <script>
-// ─── Constants (LS_*, MODELS etc. come from ../shared.js) ───
+// ─── Constants (LS_* etc. come from ../shared.js) ───
 const LS_CONFIG = "styler_config";
 
 const DEFAULT_LOGO = window.EDULAB_LOGO; // ../edulab-logo.js
@@ -461,7 +463,7 @@ Jak działa ta aplikacja - krótki przewodnik.
 ---
 ## Własna prezentacja
 - **Wczytaj dokument**: plik .md ze slajdami pokazuje się od razu
-- .txt lub .pdf? Wklej klucz Gemini i kliknij **Generuj slajdy**
+- .txt lub .pdf? Wklej klucz API i kliknij **Generuj slajdy**
 - **Edytuj markdown** otwiera edytor pod podglądem
 
 \`\`\`markdown
@@ -507,15 +509,14 @@ const T = {
     hintNav: "slajdy",
     hintEsc: "wyjście",
     editMd: "Edytuj markdown",
-    apiKeyLabel: "Klucz API Gemini",
-    apiKeyHelp: "Klucz zostaje w Twojej przeglądarce (localStorage) i jest wysyłany bezpośrednio do Google. Wygenerujesz go na",
+    aiSectionTitle: "Model AI",
     slideLangLabel: "Język slajdów",
     generate: "Generuj slajdy",
     fileLoaded: "wczytano",
     genSending: "Wysyłam dokument…",
     genWaiting: "Generuję slajdy…",
     genDone: "Gotowe - slajdy wygenerowane.",
-    errNoKey: "Brak klucza API - wklej klucz Gemini powyżej.",
+    errNoKey: "Wklej klucz API dostawcy {provider} w ustawieniach modelu (kliknij wskaźnik). Wygenerujesz go na {url}.",
     errFileType: "Obsługiwane formaty: .txt, .md, .pdf",
     errTooBig: "Plik jest za duży (limit 19 MB).",
     errEmpty: "Model zwrócił pustą odpowiedź. Spróbuj ponownie.",
@@ -543,15 +544,14 @@ const T = {
     hintNav: "slides",
     hintEsc: "exit",
     editMd: "Edit markdown",
-    apiKeyLabel: "Gemini API key",
-    apiKeyHelp: "The key stays in your browser (localStorage) and is sent directly to Google. Generate one at",
+    aiSectionTitle: "AI model",
     slideLangLabel: "Slide language",
     generate: "Generate slides",
     fileLoaded: "loaded",
     genSending: "Sending the document…",
     genWaiting: "Generating slides…",
     genDone: "Done - slides generated.",
-    errNoKey: "Missing API key - paste your Gemini key above.",
+    errNoKey: "Paste your {provider} API key in the model settings (click the chip). Generate one at {url}.",
     errFileType: "Supported formats: .txt, .md, .pdf",
     errTooBig: "File too large (19 MB limit).",
     errEmpty: "The model returned an empty response. Try again.",
@@ -565,7 +565,7 @@ const state = {
   md: SAMPLE_MD,
   slides: [],
   current: 0,
-  source: null,       // {name, kind:"text"|"pdf", text?, base64?} — for Gemini
+  source: null,       // {name, kind:"text"|"pdf", text?, base64?} — for the AI request
   slideLang: "pl",
   generating: false,
   config: {           // the user's style playground settings
@@ -677,6 +677,7 @@ function renderChromeText() {
   document.querySelectorAll("[data-i18n]").forEach(el => { el.textContent = t(el.dataset.i18n); });
   document.querySelectorAll("[data-i18n-placeholder]").forEach(el => { el.placeholder = t(el.dataset.i18nPlaceholder); });
   document.querySelectorAll(".preset .name").forEach((el, i) => { el.textContent = PRESETS[i].name[uiLang]; });
+  aiSelector.refresh();
 }
 
 // ─── Event listeners ────────────────────────────
@@ -818,9 +819,9 @@ mdEditorEl.addEventListener("input", () => {
   editTimer = setTimeout(() => setMd(mdEditorEl.value, state.current, { fromEditor: true }), 300);
 });
 
-// ─── Document loading + Gemini generation (same logic as the main apps) ───
+// ─── Document loading + AI generation (same logic as the main apps) ───
 const fileNoteEl = $("fileNote"), genNoteEl = $("genNote"),
-  generateBtnEl = $("generateBtn"), apiKeyEl = $("apiKey"),
+  generateBtnEl = $("generateBtn"),
   slideLangPlBtn = $("slideLangPl"), slideLangEnBtn = $("slideLangEn");
 
 function note(el, msg, isError) {
@@ -857,15 +858,19 @@ $("resetBtn").addEventListener("click", () => {
   note(genNoteEl, ""); reflectSource(); setMd(SAMPLE_MD);
 });
 
-apiKeyEl.addEventListener("input", () => localStorage.setItem(LS_KEY, apiKeyEl.value.trim()));
 slideLangPlBtn.addEventListener("click", () => { state.slideLang = "pl"; reflectSource(); });
 slideLangEnBtn.addEventListener("click", () => { state.slideLang = "en"; reflectSource(); });
 
-// Streaming: slides appear in the styled deck as Gemini writes them
+// Streaming: slides appear in the styled deck as the AI writes them
 // (transport lives in ../shared.js; this function is only the UI reaction).
 async function generateSlidesFromSource() {
-  const key = localStorage.getItem(LS_KEY)?.trim();
-  if (!key) return note(genNoteEl, t("errNoKey"), true);
+  const ai = loadAiSettings();
+  const key = ai.keys[ai.provider]?.trim();
+  if (!key) {
+    const info = PROVIDER_INFO[ai.provider];
+    return note(genNoteEl,
+      t("errNoKey").replace("{provider}", info.label).replace("{url}", info.keyUrl.replace("https://", "")), true);
+  }
   if (!state.source || state.generating) return;
 
   state.generating = true;
@@ -873,9 +878,10 @@ async function generateSlidesFromSource() {
   note(genNoteEl, t("genSending"));
   let lastRender = 0;
   try {
-    const acc = await streamGeminiSlides({
+    const acc = await streamSlides({
+      provider: ai.provider,
+      model: ai.model,
       key,
-      model: resolveModel(),
       source: state.source,
       prompt: buildPrompt({ lang: state.slideLang }),
       onChunk(text) {
@@ -943,7 +949,7 @@ document.addEventListener("fullscreenchange", () => {
 
 // ─── Init ───────────────────────────────────────
 $("chromeLogo").src = DEFAULT_LOGO;
-apiKeyEl.value = localStorage.getItem(LS_KEY) ?? "";
+const aiSelector = mountAiSelector({ chip: $("aiChip"), getLang: () => uiLang });
 reflectSource();
 try {
   const saved = JSON.parse(localStorage.getItem(LS_CONFIG));
