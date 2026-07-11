@@ -347,6 +347,20 @@ main#app { flex: 1; display: flex; min-height: 0; }
   font-size: clamp(14px, 1.35vw + 0.8vh, 40px);
 }
 .deck .slide--title { align-self: center; text-align: center; }
+/* Editing: deck letterboxes a fixed 16:9 frame that scales to fit.
+   .slide-frame is inert (display: contents) unless the editor is open. */
+.slide-frame { display: contents; }
+@media (min-width: 769px) {
+  .workbench.editing .deck { container-type: size; }
+  .workbench.editing .slide-frame {
+    display: grid; place-items: start center;
+    width: min(100cqw, 177.78cqh); aspect-ratio: 16 / 9;
+    container-type: size;
+  }
+  .workbench.editing .deck .slide {
+    font-size: clamp(14px, 1.35cqw + 0.8cqh, 40px);
+  }
+}
 .deck-footer {
   flex: none; display: flex; align-items: center; gap: var(--sp-4);
   padding: var(--sp-2) var(--sp-5); border-top: 1px solid var(--line);

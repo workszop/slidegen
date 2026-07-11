@@ -179,7 +179,7 @@
       <div class="deck">
         <div class="deck-bar" id="deckBar" aria-hidden="true"></div>
         <img class="deck-logo brand-logo" alt="" aria-hidden="true">
-        <div class="slide" id="wsStage"></div>
+        <div class="slide-frame"><div class="slide" id="wsStage"></div></div>
       </div>
       <footer class="deck-footer">
         <div class="nav-btns">
@@ -246,6 +246,7 @@
   function setEditorOpen(open) {
     state.editorOpen = open;
     editorPanelEl.classList.toggle("hidden", !open);
+    workspaceEl.classList.toggle("editing", open);
     editToggleBtn.setAttribute("aria-pressed", String(open));
     if (open) editorEl.value = state.md;
   }
