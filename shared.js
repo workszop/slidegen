@@ -364,9 +364,8 @@ function mountAiSelector({ chip, getLang }) {
   function save() { saveAiSettings(settings); renderChip(); }
 
   function renderChip() {
-    const info = PROVIDER_INFO[settings.provider];
     chip.innerHTML = "";
-    chip.append("⚙ " + info.label + " · ");
+    chip.append("⚙ ");
     const m = document.createElement("span");
     m.className = "ai-chip-model";
     m.textContent = settings.model;
