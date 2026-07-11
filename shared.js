@@ -236,6 +236,8 @@ function buildOpenAIImageRequest({ key, model, prompt }) {
       size: "1536x1024",
       quality: "low",
       output_format: "jpeg",
+      stream: true,
+      partial_images: 1,
     },
   };
 }
@@ -271,7 +273,7 @@ function saveAiSettings(settings) {
   localStorage.setItem(LS_AI, JSON.stringify(settings));
 }
 
-async function generateOpenAIImage({ key, model, prompt }) {
+async function generateOpenAIImage({ key, model, prompt, onPartial }) {
   const req = buildOpenAIImageRequest({ key, model, prompt });
   let res;
   try {
@@ -291,10 +293,40 @@ async function generateOpenAIImage({ key, model, prompt }) {
     } catch { /* keep HTTP status text */ }
     throw new Error(`${res.status}: ${message}`);
   }
-  const payload = await res.json();
-  const base64 = payload?.data?.[0]?.b64_json;
-  if (!base64) throw new Error("OpenAI returned no image data");
-  return `data:image/jpeg;base64,${base64}`;
+  if (!res.body) throw new Error("OpenAI returned no image stream");
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "", latestBase64 = "";
+  try {
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split("\n");
+      buffer = lines.pop();
+      for (const line of lines) {
+        if (!line.startsWith("data:")) continue;
+        const raw = line.slice(5).trim();
+        if (!raw || raw === "[DONE]") continue;
+        let event;
+        try { event = JSON.parse(raw); } catch { continue; }
+        if (event.type === "error" || event.error) {
+          const streamError = new Error(event.error?.message ?? event.message ?? "OpenAI image stream failed");
+          streamError.code = "api_error";
+          throw streamError;
+        }
+        if (["image_generation.partial_image", "image_generation.completed"].includes(event.type) && event.b64_json) {
+          latestBase64 = event.b64_json;
+          onPartial?.(`data:image/jpeg;base64,${latestBase64}`, event.type === "image_generation.completed");
+        }
+      }
+    }
+  } catch (cause) {
+    if (cause?.code === "api_error") throw cause;
+    throw makeNetworkError(req.url, cause);
+  }
+  if (!latestBase64) throw new Error("OpenAI returned no image data");
+  return `data:image/jpeg;base64,${latestBase64}`;
 }
 
 function makeNetworkError(url, cause) {

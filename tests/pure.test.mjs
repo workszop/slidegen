@@ -137,6 +137,7 @@ test("buildOpenAIImageRequest uses the image endpoint and landscape JPEG", () =>
   assert.deepEqual(r.body, {
     model: "gpt-image-2", prompt: "P", n: 1,
     size: "1536x1024", quality: "low", output_format: "jpeg",
+    stream: true, partial_images: 1,
   });
 });
 

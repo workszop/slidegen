@@ -580,6 +580,11 @@
             key,
             model,
             prompt: buildSlideImagePrompt(state.slideSegments[slideIndex], additionalPrompt),
+            onPartial(partialImage) {
+              state.images[slideIndex] = partialImage;
+              if (state.view === "present") renderPresent();
+              else renderStage();
+            },
           });
           state.images[slideIndex] = image;
           if (state.view === "present") renderPresent();
