@@ -304,6 +304,164 @@ function streamGeminiSlides({ key, model, source, prompt, onChunk }) {
   return streamSlides({ provider: "gemini", key, model, source, prompt, onChunk });
 }
 
+// ─── AI model selector (chip + <dialog>) ─────────
+// One implementation for all apps; visuals inherit each app's fonts/colors
+// via CSS variables with neutral fallbacks.
+const AI_SELECTOR_CSS = `
+.ai-chip{display:inline-flex;align-items:center;gap:.45em;padding:.4em .85em;
+  border:1px solid var(--border, currentColor);border-radius:999px;background:transparent;
+  color:inherit;font:inherit;font-size:.85em;cursor:pointer;max-width:100%;}
+.ai-chip:hover{border-color:var(--accent, currentColor);}
+.ai-chip .ai-chip-model{opacity:.75;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.ai-dialog{border:1px solid var(--border, #8884);border-radius:12px;padding:1.5rem;
+  max-width:26rem;width:calc(100vw - 2rem);background:var(--bg, Canvas);color:inherit;font:inherit;}
+.ai-dialog::backdrop{background:rgba(0,0,0,.45);}
+.ai-dialog h2{margin:0 0 1rem;font-size:1.1rem;}
+.ai-dialog .ai-field{margin-bottom:1rem;display:block;}
+.ai-dialog label{display:block;font-size:.8em;opacity:.8;margin-bottom:.3em;}
+.ai-dialog select,.ai-dialog input{width:100%;box-sizing:border-box;padding:.5em .6em;
+  border:1px solid var(--border, #8884);border-radius:8px;background:transparent;color:inherit;font:inherit;}
+.ai-dialog .ai-providers{display:flex;gap:.4rem;}
+.ai-dialog .ai-providers button{flex:1;padding:.5em 0;border:1px solid var(--border, #8884);
+  border-radius:8px;background:transparent;color:inherit;font:inherit;cursor:pointer;}
+.ai-dialog .ai-providers button[aria-pressed="true"]{border-color:var(--accent, currentColor);
+  background:var(--accent, currentColor);color:var(--bg, Canvas);}
+.ai-dialog .ai-note{font-size:.75em;opacity:.7;margin:.4em 0 0;}
+.ai-dialog .ai-note a{color:inherit;}
+.ai-dialog .ai-actions{display:flex;justify-content:flex-end;margin-top:1.2rem;}
+.ai-dialog .ai-actions button{padding:.5em 1.4em;border:1px solid var(--border, #8884);
+  border-radius:999px;background:transparent;color:inherit;font:inherit;cursor:pointer;}
+`;
+
+const AI_STRINGS = {
+  pl: {
+    title: "Model AI", provider: "Dostawca", model: "Model",
+    custom: "inny model…", customLabel: "Identyfikator modelu",
+    keyLabel: "Klucz API", close: "Zamknij",
+    keyHelp: "Klucz zostaje w Twojej przeglądarce (localStorage) i jest wysyłany wyłącznie do wybranego dostawcy. Wygenerujesz go na",
+  },
+  en: {
+    title: "AI model", provider: "Provider", model: "Model",
+    custom: "custom model…", customLabel: "Model ID",
+    keyLabel: "API key", close: "Close",
+    keyHelp: "The key stays in your browser (localStorage) and is sent only to the selected provider. Generate one at",
+  },
+};
+
+function mountAiSelector({ chip, getLang }) {
+  const style = document.createElement("style");
+  style.textContent = AI_SELECTOR_CSS;
+  document.head.appendChild(style);
+
+  const dialog = document.createElement("dialog");
+  dialog.className = "ai-dialog";
+  document.body.appendChild(dialog);
+
+  chip.classList.add("ai-chip");
+  chip.type = "button";
+  chip.addEventListener("click", () => { renderDialog(); dialog.showModal(); });
+
+  let settings = loadAiSettings();
+
+  function save() { saveAiSettings(settings); renderChip(); }
+
+  function renderChip() {
+    const info = PROVIDER_INFO[settings.provider];
+    chip.innerHTML = "";
+    chip.append("⚙ " + info.label + " · ");
+    const m = document.createElement("span");
+    m.className = "ai-chip-model";
+    m.textContent = settings.model;
+    chip.appendChild(m);
+  }
+
+  function renderDialog() {
+    const t = AI_STRINGS[getLang()] ?? AI_STRINGS.pl;
+    const info = PROVIDER_INFO[settings.provider];
+    const isCurated = info.models.includes(settings.model);
+    dialog.innerHTML = `
+      <h2>${t.title}</h2>
+      <div class="ai-field">
+        <label>${t.provider}</label>
+        <div class="ai-providers" role="group"></div>
+      </div>
+      <div class="ai-field">
+        <label for="aiModelSelect">${t.model}</label>
+        <select id="aiModelSelect"></select>
+      </div>
+      <div class="ai-field ai-custom" hidden>
+        <label for="aiModelCustom">${t.customLabel}</label>
+        <input id="aiModelCustom" type="text" spellcheck="false" autocomplete="off" />
+      </div>
+      <div class="ai-field">
+        <label for="aiKey">${t.keyLabel} — ${info.label}</label>
+        <input id="aiKey" type="password" autocomplete="off" spellcheck="false" placeholder="${info.keyPlaceholder}" />
+        <p class="ai-note">${t.keyHelp}
+          <a href="${info.keyUrl}" target="_blank" rel="noopener">${info.keyUrl.replace("https://", "")}</a></p>
+      </div>
+      <div class="ai-actions"><button type="button" class="ai-close">${t.close}</button></div>`;
+
+    const providersEl = dialog.querySelector(".ai-providers");
+    for (const [id, p] of Object.entries(PROVIDER_INFO)) {
+      const b = document.createElement("button");
+      b.type = "button";
+      b.textContent = p.label;
+      b.setAttribute("aria-pressed", String(id === settings.provider));
+      b.addEventListener("click", () => {
+        if (id === settings.provider) return;
+        settings.provider = id;
+        settings.model = PROVIDER_INFO[id].models[0];
+        save();
+        renderDialog();
+      });
+      providersEl.appendChild(b);
+    }
+
+    const modelSel = dialog.querySelector("#aiModelSelect");
+    for (const m of info.models) {
+      const opt = document.createElement("option");
+      opt.value = m; opt.textContent = m;
+      modelSel.appendChild(opt);
+    }
+    const customOpt = document.createElement("option");
+    customOpt.value = "__custom__"; customOpt.textContent = t.custom;
+    modelSel.appendChild(customOpt);
+    modelSel.value = isCurated ? settings.model : "__custom__";
+
+    const customField = dialog.querySelector(".ai-custom");
+    const customInput = dialog.querySelector("#aiModelCustom");
+    customField.hidden = isCurated;
+    customInput.value = isCurated ? "" : settings.model;
+
+    modelSel.addEventListener("change", () => {
+      if (modelSel.value === "__custom__") {
+        customField.hidden = false;
+        customInput.focus();
+      } else {
+        customField.hidden = true;
+        settings.model = modelSel.value;
+        save();
+      }
+    });
+    customInput.addEventListener("input", () => {
+      const v = customInput.value.trim();
+      if (v) { settings.model = v; save(); }
+    });
+
+    const keyInput = dialog.querySelector("#aiKey");
+    keyInput.value = settings.keys[settings.provider] ?? "";
+    keyInput.addEventListener("input", () => {
+      settings.keys[settings.provider] = keyInput.value.trim();
+      save();
+    });
+
+    dialog.querySelector(".ai-close").addEventListener("click", () => dialog.close());
+  }
+
+  renderChip();
+  return { refresh: renderChip };
+}
+
 // ─── Lazy PPTX dependencies ─────────────────────
 const PPTX_CDN = "https://cdn.jsdelivr.net/npm/pptxgenjs@4.0.1/dist/pptxgen.bundle.js";
 const PPTX_SRI = "sha384-qb0Xhi7LLYpvW1HCK6oMrmDLSY9sy7vwm6ZlV6KjtrlL9yg30+YN4neTwnmX+Kp8";
