@@ -347,6 +347,20 @@ main#app { flex: 1; display: flex; min-height: 0; }
   font-size: clamp(14px, 1.35vw + 0.8vh, 40px);
 }
 .deck .slide--title { align-self: center; text-align: center; }
+/* Editing: deck letterboxes a fixed 16:9 frame that scales to fit.
+   .slide-frame is inert (display: contents) unless the editor is open. */
+.slide-frame { display: contents; }
+@media (min-width: 769px) {
+  .workbench.editing .deck { container-type: size; }
+  .workbench.editing .slide-frame {
+    display: grid; place-items: start center;
+    width: min(100cqw, 177.78cqh); aspect-ratio: 16 / 9;
+    container-type: size;
+  }
+  .workbench.editing .deck .slide {
+    font-size: clamp(14px, 1.35cqw + 0.8cqh, 40px);
+  }
+}
 .deck-footer {
   flex: none; display: flex; align-items: center; gap: var(--sp-4);
   padding: var(--sp-2) var(--sp-5); border-top: 1px solid var(--line);
@@ -357,10 +371,17 @@ main#app { flex: 1; display: flex; min-height: 0; }
 .deck-counter { font-family: var(--font-mono); }
 .deck-footer .hints { display: flex; gap: var(--sp-4); margin: 0; }
 .editor-panel {
-  flex: none; width: min(440px, 34vw); border-left: 1px solid var(--line);
+  flex: none; width: var(--editor-w, min(440px, 34vw)); border-left: 1px solid var(--line);
   background: var(--paper-2); padding: var(--sp-3); display: flex; flex-direction: column; min-height: 0;
 }
 .editor-head { display: flex; justify-content: flex-end; margin-bottom: var(--sp-2); }
+.editor-close {
+  width: 24px; height: 24px; padding: 0; flex: none;
+  display: inline-flex; align-items: center; justify-content: center;
+  font-size: 12px; line-height: 1; border: 0; border-radius: 6px;
+  background: transparent; color: inherit; opacity: .65; cursor: pointer;
+}
+.editor-close:hover { opacity: 1; background: color-mix(in srgb, var(--border) 60%, transparent); }
 .editor-panel textarea {
   flex: 1; resize: none; font-family: var(--font-mono); font-size: 13px; line-height: 1.55;
   color: var(--ink); background: var(--surface); border: 1px solid var(--line-2);
@@ -385,6 +406,7 @@ window.APP_BRAND = {
   tag: "doc→slides",
   presentBrand: "edulab",
   presetKey: "eduapp_preset_edu",
+  editorWKey: "edu.editorW",
   presets: [
     { id: "papier",   name: { pl: "Papier",   en: "Paper" },    bg: "#FBF7F0", fg: "#211E1A", accent: "#E8920C" },
     { id: "atrament", name: { pl: "Atrament", en: "Ink" },      bg: "#211E1A", fg: "#FBF7F0", accent: "#E8920C" },

@@ -92,6 +92,13 @@ function firstFont(ff) {
   return ff.split(",")[0].trim().replace(/^["']|["']$/g, "");
 }
 
+// Clamp a candidate editor-panel width to [min, maxFraction × viewport].
+// null for non-finite input (absent/corrupt storage) — caller keeps the default.
+function clampPanelWidth(x, min, maxFraction, viewportW) {
+  if (!Number.isFinite(x)) return null;
+  return Math.min(Math.max(x, min), Math.max(min, maxFraction * viewportW));
+}
+
 // ─── AI provider registry (pure data) ───────────
 const GEMINI_BASE = "https://generativelanguage.googleapis.com/v1beta/models";
 const PROVIDER_INFO = {
@@ -357,9 +364,8 @@ function mountAiSelector({ chip, getLang }) {
   function save() { saveAiSettings(settings); renderChip(); }
 
   function renderChip() {
-    const info = PROVIDER_INFO[settings.provider];
     chip.innerHTML = "";
-    chip.append("⚙ " + info.label + " · ");
+    chip.append("⚙ ");
     const m = document.createElement("span");
     m.className = "ai-chip-model";
     m.textContent = settings.model;
@@ -451,6 +457,68 @@ function mountAiSelector({ chip, getLang }) {
 
   renderChip();
   return { refresh: renderChip };
+}
+
+// ─── Editor panel resizer (drag the left edge) ───
+// Injected once; visuals inherit each app's --accent/--border aliases
+// (same convention as the AI selector). Hidden on the mobile breakpoint,
+// where the panel is a fixed overlay and the stored width is ignored.
+const PANEL_RESIZER_CSS = `
+.panel-resizer{position:absolute;left:-3px;top:0;bottom:0;width:6px;
+  cursor:col-resize;z-index:25;touch-action:none;}
+.panel-resizer:hover,body.panel-resizing .panel-resizer{
+  background:color-mix(in srgb, var(--accent, #888) 35%, transparent);}
+body.panel-resizing{cursor:col-resize;user-select:none;}
+@media (min-width: 769px){.has-panel-resizer{position:relative;}}
+@media (max-width: 768px){.panel-resizer{display:none;}}
+`;
+
+function mountPanelResizer({ panel, storageKey, min = 280, maxFraction = 0.6 }) {
+  if (!document.getElementById("panelResizerCss")) {
+    const style = document.createElement("style");
+    style.id = "panelResizerCss";
+    style.textContent = PANEL_RESIZER_CSS;
+    document.head.appendChild(style);
+  }
+  panel.classList.add("has-panel-resizer");
+  const handle = document.createElement("div");
+  handle.className = "panel-resizer";
+  panel.appendChild(handle);
+
+  const apply = w => panel.style.setProperty("--editor-w", w + "px");
+  const stored = clampPanelWidth(
+    parseFloat(localStorage.getItem(storageKey)), min, maxFraction, window.innerWidth);
+  if (stored !== null) apply(stored); // re-clamped on mount (window may have shrunk)
+
+  // Drag state lives in a flag, with move/up on window: pointer capture is
+  // only an optimization (keeps events flowing outside the window), never
+  // the mechanism — if it fails the drag still works and always cleans up.
+  let width = null, dragging = false;
+  handle.addEventListener("pointerdown", e => {
+    e.preventDefault();
+    dragging = true;
+    try { handle.setPointerCapture(e.pointerId); } catch { /* optional */ }
+    document.body.classList.add("panel-resizing");
+  });
+  window.addEventListener("pointermove", e => {
+    if (!dragging) return;
+    const w = clampPanelWidth(
+      panel.getBoundingClientRect().right - e.clientX, min, maxFraction, window.innerWidth);
+    if (w !== null) { width = w; apply(w); }
+  });
+  const finish = () => {
+    if (!dragging) return;
+    dragging = false;
+    document.body.classList.remove("panel-resizing");
+    if (width !== null) localStorage.setItem(storageKey, String(Math.round(width)));
+    width = null;
+  };
+  window.addEventListener("pointerup", finish);
+  window.addEventListener("pointercancel", finish);
+  handle.addEventListener("dblclick", () => {
+    localStorage.removeItem(storageKey);
+    panel.style.removeProperty("--editor-w");
+  });
 }
 
 // ─── Lazy PPTX dependencies ─────────────────────

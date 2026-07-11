@@ -27,6 +27,7 @@
     presentBrand: "",
     presets: [],
     presetKey: "eduapp_preset",
+    editorWKey: "eduapp.editorW",
     exampleMd: { pl: "", en: "" },
   }, window.APP_BRAND);
 
@@ -178,7 +179,7 @@
       <div class="deck">
         <div class="deck-bar" id="deckBar" aria-hidden="true"></div>
         <img class="deck-logo brand-logo" alt="" aria-hidden="true">
-        <div class="slide" id="wsStage"></div>
+        <div class="slide-frame"><div class="slide" id="wsStage"></div></div>
       </div>
       <footer class="deck-footer">
         <div class="nav-btns">
@@ -195,7 +196,7 @@
     </section>
 
     <aside class="editor-panel hidden" id="editorPanel">
-      <div class="editor-head"><button class="btn btn-ghost" id="editorCloseBtn" aria-label="close">✕</button></div>
+      <div class="editor-head"><button class="editor-close" id="editorCloseBtn" aria-label="close">✕</button></div>
       <textarea id="editor" spellcheck="false"></textarea>
     </aside>
   </div>
@@ -245,6 +246,7 @@
   function setEditorOpen(open) {
     state.editorOpen = open;
     editorPanelEl.classList.toggle("hidden", !open);
+    workspaceEl.classList.toggle("editing", open);
     editToggleBtn.setAttribute("aria-pressed", String(open));
     if (open) editorEl.value = state.md;
   }
@@ -290,6 +292,8 @@
   const editToggleBtn = document.getElementById("editToggleBtn");
   const editorCloseBtn = document.getElementById("editorCloseBtn");
   const presetGridEl = document.getElementById("presetGrid");
+
+  mountPanelResizer({ panel: editorPanelEl, storageKey: BRAND.editorWKey });
 
   // ─── Style presets ──────────────────────────────
   let activePreset = 0;

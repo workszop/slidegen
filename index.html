@@ -259,11 +259,36 @@ input[type="color"]:hover { border-color: var(--marigold); }
 .slide--title h1 { font-size: 3.5em; }
 .slide--title p { font-size: 1.3em; }
 
+/* ─── Editing: deck letterboxes a fixed 16:9 frame that scales to fit ───
+   .slide-frame is inert (display: contents) unless the editor is open,
+   so editor-closed geometry is untouched. cq units measure the deck's
+   content box, so the existing deck padding is respected. Desktop only;
+   in present mode the deck reverts to full-bleed. */
+.slide-frame { display: contents; }
+@media (min-width: 769px) {
+  body:not(.presenting) .workbench.editing .deck { container-type: size; }
+  body:not(.presenting) .workbench.editing .slide-frame {
+    display: grid; place-items: start center;
+    width: min(100cqw, 177.78cqh); aspect-ratio: 16 / 9;
+    container-type: size;
+  }
+  body:not(.presenting) .workbench.editing .slide {
+    font-size: clamp(14px, 1.35cqw + 0.8cqh, 40px);
+  }
+}
+
 .editor-panel {
-  flex: none; width: min(440px, 34vw); border-left: 1px solid var(--line);
+  flex: none; width: var(--editor-w, min(440px, 34vw)); border-left: 1px solid var(--line);
   background: var(--paper-2); padding: var(--sp-3); display: flex; flex-direction: column; min-height: 0;
 }
 .editor-head { display: flex; justify-content: flex-end; margin-bottom: var(--sp-2); }
+.editor-close {
+  width: 24px; height: 24px; padding: 0; flex: none;
+  display: inline-flex; align-items: center; justify-content: center;
+  font-size: 12px; line-height: 1; border: 0; border-radius: 6px;
+  background: transparent; color: inherit; opacity: .65; cursor: pointer;
+}
+.editor-close:hover { opacity: 1; background: color-mix(in srgb, var(--border) 60%, transparent); }
 .editor-panel textarea {
   flex: 1; width: auto; height: auto; resize: none;
   font-family: var(--font-mono); font-size: 13px; line-height: 1.55; color: var(--ink);
@@ -389,7 +414,7 @@ body.presenting .deck-footer { border-top: 0; position: absolute; bottom: 0; lef
     <div class="deck" id="deck">
       <div class="deck-bar" id="deckBar" aria-hidden="true"></div>
       <img class="deck-logo" id="deckLogo" alt="" aria-hidden="true">
-      <div class="slide" id="stage" aria-live="polite"></div>
+      <div class="slide-frame"><div class="slide" id="stage" aria-live="polite"></div></div>
     </div>
     <div class="deck-footer">
       <div class="nav-btns">
@@ -406,7 +431,7 @@ body.presenting .deck-footer { border-top: 0; position: absolute; bottom: 0; lef
     </div>
   </main>
   <div class="editor-panel hidden" id="editorDrawer">
-    <div class="editor-head"><button class="btn btn-ghost" id="editorCloseBtn" aria-label="close">✕</button></div>
+    <div class="editor-head"><button class="editor-close" id="editorCloseBtn" aria-label="close">✕</button></div>
     <textarea id="mdEditor" spellcheck="false"></textarea>
   </div>
 </div>
@@ -801,6 +826,7 @@ $("logoClear").addEventListener("click", () => { state.config.logo = ""; saveCon
 
 // ─── Markdown editor drawer ─────────────────────
 const editorDrawerEl = $("editorDrawer"), mdEditorEl = $("mdEditor");
+mountPanelResizer({ panel: editorDrawerEl, storageKey: "styler.editorW" });
 
 // Single entry point for markdown changes — keeps the drawer in sync.
 function setMd(md, slideIndex = 0, { fromEditor = false } = {}) {
@@ -812,6 +838,7 @@ function setMd(md, slideIndex = 0, { fromEditor = false } = {}) {
 
 function setEditorDrawerOpen(open) {
   editorDrawerEl.classList.toggle("hidden", !open);
+  document.querySelector(".workbench").classList.toggle("editing", open);
   if (open) {
     mdEditorEl.value = state.md;
     mdEditorEl.focus();
