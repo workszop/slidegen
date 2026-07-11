@@ -225,6 +225,26 @@ function buildClaudeRequest({ key, model, source, prompt }) {
   };
 }
 
+// Build the OpenAI image prompt for ONE slide. The full deck is passed as
+// read-only context so the illustration fits the presentation; only the
+// target slide is illustrated.
+function buildSlideImagePrompt({ slideMd, direction, deckSegments }) {
+  const deck = (deckSegments ?? []).map(s => s.trim()).filter(Boolean).join("\n\n---\n\n");
+  let prompt =
+    "Create one landscape editorial illustration for a presentation slide. " +
+    "Use a warm, modern workshop aesthetic with simple composition and generous negative space. " +
+    "Do not include text, letters, numbers, logos, watermarks, UI, frames, or slide layouts.\n\n" +
+    "Here is the full presentation for context only — do NOT illustrate these slides, " +
+    "they are provided so the illustration fits the deck:\n\n" +
+    deck +
+    "\n\nNow illustrate the central idea of THIS slide only:\n\n" +
+    (slideMd ?? "").trim();
+  if (direction?.trim()) {
+    prompt += "\n\nAdditional direction from the user:\n" + direction.trim();
+  }
+  return prompt;
+}
+
 function buildOpenAIImageRequest({ key, model, prompt }) {
   return {
     url: "https://api.openai.com/v1/images/generations",
