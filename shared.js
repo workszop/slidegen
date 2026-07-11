@@ -491,27 +491,31 @@ function mountPanelResizer({ panel, storageKey, min = 280, maxFraction = 0.6 }) 
     parseFloat(localStorage.getItem(storageKey)), min, maxFraction, window.innerWidth);
   if (stored !== null) apply(stored); // re-clamped on mount (window may have shrunk)
 
-  let width = null;
+  // Drag state lives in a flag, with move/up on window: pointer capture is
+  // only an optimization (keeps events flowing outside the window), never
+  // the mechanism — if it fails the drag still works and always cleans up.
+  let width = null, dragging = false;
   handle.addEventListener("pointerdown", e => {
     e.preventDefault();
-    handle.setPointerCapture(e.pointerId);
+    dragging = true;
+    try { handle.setPointerCapture(e.pointerId); } catch { /* optional */ }
     document.body.classList.add("panel-resizing");
   });
-  handle.addEventListener("pointermove", e => {
-    if (!handle.hasPointerCapture(e.pointerId)) return;
+  window.addEventListener("pointermove", e => {
+    if (!dragging) return;
     const w = clampPanelWidth(
       panel.getBoundingClientRect().right - e.clientX, min, maxFraction, window.innerWidth);
     if (w !== null) { width = w; apply(w); }
   });
-  const finish = e => {
-    if (!handle.hasPointerCapture(e.pointerId)) return;
-    handle.releasePointerCapture(e.pointerId);
+  const finish = () => {
+    if (!dragging) return;
+    dragging = false;
     document.body.classList.remove("panel-resizing");
     if (width !== null) localStorage.setItem(storageKey, String(Math.round(width)));
     width = null;
   };
-  handle.addEventListener("pointerup", finish);
-  handle.addEventListener("pointercancel", finish);
+  window.addEventListener("pointerup", finish);
+  window.addEventListener("pointercancel", finish);
   handle.addEventListener("dblclick", () => {
     localStorage.removeItem(storageKey);
     panel.style.removeProperty("--editor-w");
