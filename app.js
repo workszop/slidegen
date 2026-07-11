@@ -408,7 +408,7 @@
     document.querySelectorAll(".preset .name").forEach((el, i) => {
       el.textContent = BRAND.presets[i].name[uiLang] ?? BRAND.presets[i].name.pl;
     });
-    if (state.view === "workspace") renderSidebar();
+    if (state.view === "workspace") { renderSidebar(); renderIllustrateControls(); }
   }
 
   function render() {
@@ -582,7 +582,7 @@
 
   // ─── Illustration (single slide, on demand) ─────
   async function illustrateSlide(index) {
-    if (state.illustrating != null) return;
+    if (state.illustrating != null || state.generating) return;
     if (index < 0 || index >= state.slideSegments.length) return;
     if (index === 0 && isTitleSlide(state.slideSegments[index])) return;
     const openaiKey = loadAiSettings().keys.openai?.trim();
@@ -630,7 +630,7 @@
       return showError(t("errNoKeyTitle"),
         t("errNoKeyBody").replace("{provider}", info.label).replace("{url}", info.keyUrl.replace("https://", "")));
     }
-    if (!state.source || state.generating) return;
+    if (!state.source || state.generating || state.illustrating != null) return;
 
     state.generating = true;
     errorPanelEl.classList.add("hidden");
