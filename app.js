@@ -600,7 +600,7 @@
 
   document.addEventListener("keydown", e => {
     if (state.view === "present" && e.key === "Escape") { setView("workspace"); return; }
-    if (e.key === "Escape" && state.view === "workspace" && state.editorOpen) { e.preventDefault(); setEditorOpen(false); return; }
+    if (e.key === "Escape" && state.view === "workspace" && state.editorOpen && !document.querySelector("dialog[open]")) { e.preventDefault(); setEditorOpen(false); return; }
     if (/^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName)) return;
     if (state.view === "present") {
       if (["ArrowRight", " ", "PageDown"].includes(e.key)) { e.preventDefault(); showSlide(state.current + 1); }

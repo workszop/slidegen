@@ -943,7 +943,7 @@ $("presentBtn").addEventListener("click", () => {
 });
 
 document.addEventListener("keydown", e => {
-  if (e.key === "Escape" && !editorDrawerEl.classList.contains("hidden") && !document.body.classList.contains("presenting")) {
+  if (e.key === "Escape" && !editorDrawerEl.classList.contains("hidden") && !document.body.classList.contains("presenting") && !document.querySelector("dialog[open]")) {
     e.preventDefault(); setEditorDrawerOpen(false); return;
   }
   if (/^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName)) return;
