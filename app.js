@@ -12,7 +12,6 @@
           logo:         "data:image/png;base64,…",  // chrome + slide corner
           wordmark:     "edulab" | null,            // text next to logo (null = logo only)
           tag:          "doc→slides",               // mono chip in the chrome bar
-          eyebrow:      { pl: "…", en: "…" },       // input-view page eyebrow
           presentBrand: "edulab",                   // brand name on the title-slide eyebrow
         }
    ============================================================ */
@@ -25,80 +24,24 @@
     logo: "",
     wordmark: null,
     tag: "doc→slides",
-    eyebrow: { pl: "narzędzie edukacyjne", en: "learning tool" },
     presentBrand: "",
+    presets: [],
+    presetKey: "eduapp_preset",
+    exampleMd: { pl: "", en: "" },
   }, window.APP_BRAND);
 
   // ─── Constants (LS_* etc. come from shared.js) ───
-  const SAMPLE_MD = `# Dokument → slajdy
-Jak działa ta aplikacja - przewodnik w ośmiu slajdach.
----
-## Co robi ta aplikacja?
-- Zamienia dokument (.txt, .md, .pdf) w prezentację HTML
-- Treść slajdów pisze **AI**, w formacie markdown
-- Slajdy renderuje przeglądarka - bez serwera i instalacji
-- Ten pokaz to tryb demo: wszystko działa bez klucza API
----
-## Krok 1: klucz API
-- Wygeneruj darmowy klucz API u wybranego dostawcy (Gemini, OpenAI lub Claude)
-- Wklej go w ustawieniach na ekranie startowym
-
-> Klucz zostaje w Twojej przeglądarce (localStorage) i jest wysyłany wyłącznie do wybranego dostawcy AI - na żaden inny serwer.
----
-## Krok 2: dokument
-- Upuść plik \`.txt\`, \`.md\` lub \`.pdf\` (do 19 MB) albo wklej tekst
-- PDF trafia do AI w całości - z tabelami i układem stron
-- Wybierz język slajdów (PL/EN) i orientacyjną liczbę slajdów
-- Plik .md z gotowymi slajdami? Przycisk **Prezentuj bez AI**
----
-## Krok 3: generowanie i edycja
-- Slajdy pojawiają się na żywo, w trakcie generowania
-- Po lewej edytor markdown, po prawej podgląd slajdów
-- Podgląd odświeża się sam podczas pisania
-- Klik w miniaturę otwiera prezentację od tego slajdu
----
-## Format slajdów (markdown)
-
-\`\`\`markdown
-# Tytuł prezentacji
-Jedno zdanie wstępu.
----
-## Nagłówek slajdu
-- punkty, **pogrubienia**, \`kod\`, tabele, > cytaty
-\`\`\`
----
-## Sterowanie prezentacją
-| Klawisz | Działanie |
-|---------|-----------|
-| → / spacja | następny slajd |
-| ← | poprzedni slajd |
-| 1-9 | skok do slajdu |
-| Esc | powrót do edycji |
----
-## Eksport i podsumowanie
-- **Pobierz .md** - wczytasz ponownie bez klucza API
-- **Pobierz .pptx** - edytowalny PowerPoint w tym samym stylu
-- Całość to statyczne pliki: GitHub Pages, e-mail, pendrive
-- Miłego prezentowania`;
 
   // ─── Translations (T + t) ───────────────────────
   const T = {
     pl: {
       appTitle: "Dokument → slajdy",
-      eyebrow: BRAND.eyebrow.pl,
-      lead: "Wrzuć tekst, markdown lub PDF - AI ułoży z niego slajdy, a przeglądarka wyrenderuje prezentację. Bez instalacji, bez serwera.",
       hintNext: "dalej", hintPrev: "wstecz", hintEsc: "edycja",
       dropHere: "Upuść plik tutaj",
-      dropTypes: ".txt · .md · .pdf (do 19 MB)",
       browse: "Wybierz plik",
-      orPaste: "…albo wklej tekst",
-      aiModelLabel: "Model AI",
-      slideLangLabel: "Język slajdów",
-      countLabel: "Liczba slajdów",
+      pasteHere: "…albo wklej tekst tutaj",
       countAuto: "auto",
       generate: "Generuj slajdy",
-      presentDirect: "Prezentuj bez AI",
-      hintGenerate: "generuj (gdy plik wczytany)",
       fileLoaded: "wczytano",
       detected: "wykryto",
       errFileType: "Obsługiwane formaty: .txt, .md, .pdf",
@@ -109,36 +52,25 @@ Jedno zdanie wstępu.
       errEmpty: "Model zwrócił pustą odpowiedź. Spróbuj ponownie lub zmień model.",
       genSending: "Wysyłam dokument…",
       genWaiting: "Generuję slajdy…",
-      back: "← Wróć",
-      regenerate: "Generuj ponownie",
       downloadMd: "Pobierz .md",
       downloadPptx: "Pobierz .pptx",
       errPptxTitle: "Eksport PPTX nie powiódł się",
       present: "Prezentuj",
-      editorLabel: "Markdown slajdów",
-      previewLabel: "Podgląd slajdów",
-      hintPresent: "prezentuj",
-      helpTitle: "Format slajdów (markdown)",
-      helpIntro: "AI generuje slajdy w tym formacie - możesz też napisać własny plik .md i wrzucić go bez klucza API:",
-      helpOutro: "Pierwszy slajd (z #) staje się slajdem tytułowym. Kolejne slajdy oddzielaj linią zawierającą wyłącznie trzy myślniki.",
       presentEyebrowWord: "prezentacja",
+      sideDoc: "Dokument",
+      sideGen: "Generowanie",
+      sideStyle: "Styl",
+      sideActions: "Akcje",
+      edit: "Edytuj",
     },
     en: {
       appTitle: "Document → slides",
-      eyebrow: BRAND.eyebrow.en,
-      lead: "Drop in text, markdown, or a PDF — AI turns it into slides and your browser renders the deck. No install, no server.",
       hintNext: "next", hintPrev: "back", hintEsc: "edit",
       dropHere: "Drop a file here",
-      dropTypes: ".txt · .md · .pdf (up to 19 MB)",
       browse: "Choose file",
-      orPaste: "…or paste text",
-      aiModelLabel: "AI model",
-      slideLangLabel: "Slide language",
-      countLabel: "Slide count",
+      pasteHere: "…or paste text here",
       countAuto: "auto",
       generate: "Generate slides",
-      presentDirect: "Present without AI",
-      hintGenerate: "generate (when a file is loaded)",
       fileLoaded: "loaded",
       detected: "detected",
       errFileType: "Supported formats: .txt, .md, .pdf",
@@ -149,19 +81,16 @@ Jedno zdanie wstępu.
       errEmpty: "The model returned an empty response. Try again or switch models.",
       genSending: "Sending the document…",
       genWaiting: "Generating slides…",
-      back: "← Back",
-      regenerate: "Regenerate",
       downloadMd: "Download .md",
       downloadPptx: "Download .pptx",
       errPptxTitle: "PPTX export failed",
       present: "Present",
-      editorLabel: "Slide markdown",
-      previewLabel: "Slide preview",
-      hintPresent: "present",
-      helpTitle: "Slide format (markdown)",
-      helpIntro: "AI generates slides in this format — you can also write your own .md file and load it with no API key:",
-      helpOutro: "The first slide (with #) becomes the title slide. Separate further slides with a line containing only three dashes.",
       presentEyebrowWord: "presentation",
+      sideDoc: "Document",
+      sideGen: "Generate",
+      sideStyle: "Style",
+      sideActions: "Actions",
+      edit: "Edit",
     },
   };
   let uiLang = localStorage.getItem(LS_LANG) ?? "pl";
@@ -172,6 +101,7 @@ Jedno zdanie wstępu.
     document.documentElement.lang = lang;
     document.title = t("appTitle");
     renderTexts();
+    if (state.deckIsExample) setDeck(BRAND.exampleMd[lang] ?? BRAND.exampleMd.pl, { example: true });
     aiSelector.refresh();
   }
 
@@ -190,111 +120,72 @@ Jedno zdanie wstępu.
 </header>
 
 <main id="app" class="shell" aria-live="polite">
-  <div class="gen-status hidden" id="genStatus" role="status">
-    <div class="gen-bar" aria-hidden="true"><div></div></div>
-    <span id="genStatusText"></span>
-  </div>
-  <div class="error-panel hidden" id="errorPanel" role="status">
-    <strong id="errorTitle"></strong>
-    <span id="errorDetail"></span>
-    <button class="btn btn-ghost" id="errorDismiss">OK</button>
-  </div>
-
-  <section id="view-input">
-    <div class="page-head">
-      <div class="eyebrow" data-i18n="eyebrow"></div>
-      <h1 data-i18n="appTitle"></h1>
-      <p class="lead" data-i18n="lead"></p>
-    </div>
-
-    <div class="input-grid">
-      <div class="card dropzone" id="dropzone" role="button" tabindex="0">
-        <div class="dz-icon" aria-hidden="true">⇣</div>
-        <p class="dz-label" data-i18n="dropHere"></p>
-        <p class="dz-sub" data-i18n="dropTypes"></p>
-        <input type="file" id="fileInput" class="visually-hidden" accept=".txt,.md,.markdown,.pdf" />
-        <div class="file-chip hidden" id="fileChip"></div>
-        <div class="dz-actions">
-          <button class="btn btn-ghost" id="browseBtn" data-i18n="browse"></button>
+  <div class="workspace" id="view-workspace">
+    <aside class="sidebar">
+      <section class="side-section">
+        <h2 class="side-title" data-i18n="sideDoc"></h2>
+        <div class="dropzone dropzone--compact" id="dropzone" role="button" tabindex="0">
+          <span class="dz-label" data-i18n="dropHere"></span>
+          <button class="btn btn-ghost btn-sm" id="browseBtn" data-i18n="browse"></button>
+          <input type="file" id="fileInput" class="visually-hidden" accept=".txt,.md,.markdown,.pdf" />
         </div>
-      </div>
+        <textarea id="pasteArea" rows="2" data-i18n-placeholder="pasteHere" spellcheck="false"></textarea>
+        <div class="file-chip hidden" id="fileChip"></div>
+      </section>
 
-      <div class="card">
-        <label class="field-label" for="pasteArea" data-i18n="orPaste"></label>
-        <textarea id="pasteArea" rows="7" spellcheck="false"></textarea>
-      </div>
-    </div>
-
-    <div class="card settings" id="settingsCard">
-      <div class="field">
-        <span class="field-label" data-i18n="aiModelLabel"></span>
+      <section class="side-section">
+        <h2 class="side-title" data-i18n="sideGen"></h2>
         <button id="aiChip"></button>
-      </div>
-      <div class="settings-row">
-        <div class="field">
-          <span class="field-label" id="slideLangLabel" data-i18n="slideLangLabel"></span>
-          <div class="lang-toggle" role="group" aria-labelledby="slideLangLabel">
+        <div class="side-row">
+          <div class="lang-toggle" role="group" aria-label="PL/EN">
             <button id="slideLangPl" aria-pressed="true">PL</button>
             <button id="slideLangEn" aria-pressed="false">EN</button>
           </div>
-        </div>
-        <div class="field">
-          <label class="field-label" for="countHint" data-i18n="countLabel"></label>
           <select id="countHint" class="mono-input">
             <option value="auto" data-i18n="countAuto"></option>
             <option value="10">~10</option>
             <option value="20">~20</option>
           </select>
         </div>
+        <button class="btn btn-primary btn-block" id="generateBtn" disabled data-i18n="generate"></button>
+        <div class="gen-status hidden" id="genStatus" role="status">
+          <div class="gen-bar" aria-hidden="true"><div></div></div>
+          <span id="genStatusText"></span>
+        </div>
+      </section>
+
+      <section class="side-section">
+        <h2 class="side-title" data-i18n="sideStyle"></h2>
+        <div class="preset-grid" id="presetGrid" role="group"></div>
+      </section>
+
+      <section class="side-section side-actions">
+        <h2 class="side-title" data-i18n="sideActions"></h2>
+        <button class="btn btn-ghost btn-block" id="editToggleBtn" aria-pressed="false" data-i18n="edit"></button>
+        <button class="btn btn-primary btn-block" id="presentBtn" data-i18n="present"></button>
+        <button class="btn btn-ghost btn-block" id="downloadBtn" data-i18n="downloadMd"></button>
+        <button class="btn btn-ghost btn-block" id="pptxBtn" data-i18n="downloadPptx"></button>
+      </section>
+    </aside>
+
+    <section class="stage-col">
+      <div class="error-panel hidden" id="errorPanel" role="status">
+        <strong id="errorTitle"></strong>
+        <span id="errorDetail"></span>
+        <button class="btn btn-ghost" id="errorDismiss">OK</button>
       </div>
-    </div>
-
-    <div class="input-actions">
-      <button class="btn btn-primary" id="generateBtn" disabled data-i18n="generate"></button>
-      <button class="btn btn-ghost hidden" id="presentDirectBtn" data-i18n="presentDirect"></button>
-    </div>
-
-    <div class="hints">
-      <span><kbd>Enter</kbd> <span data-i18n="hintGenerate"></span></span>
-    </div>
-
-    <details class="help">
-      <summary data-i18n="helpTitle"></summary>
-      <p data-i18n="helpIntro"></p>
-      <pre><code># Tytuł prezentacji / Deck title
-Jedno zdanie wstępu / one intro line
----
-## Nagłówek slajdu / Slide heading
-- punkty, **pogrubienia**, \`kod\`, tabele, &gt; cytaty
----
-## Kolejny slajd / Next slide…</code></pre>
-      <p data-i18n="helpOutro"></p>
-    </details>
-  </section>
-
-  <section id="view-edit" class="hidden">
-    <div class="edit-toolbar">
-      <button class="btn btn-ghost" id="backBtn" data-i18n="back"></button>
-      <div class="spacer"></div>
-      <button class="btn btn-ghost" id="regenBtn" data-i18n="regenerate"></button>
-      <button class="btn btn-ghost" id="downloadBtn" data-i18n="downloadMd"></button>
-      <button class="btn btn-ghost" id="pptxBtn" data-i18n="downloadPptx"></button>
-      <button class="btn btn-primary" id="presentBtn" data-i18n="present"></button>
-    </div>
-    <div class="edit-grid">
-      <div class="field">
-        <label class="field-label" for="editor" data-i18n="editorLabel"></label>
-        <textarea id="editor" spellcheck="false"></textarea>
+      <div class="ws-stage-wrap"><div class="slide" id="wsStage"></div></div>
+      <div class="ws-nav">
+        <button class="btn btn-ghost" id="wsPrev" aria-label="prev">←</button>
+        <span class="ws-counter" id="wsCounter"></span>
+        <button class="btn btn-ghost" id="wsNext" aria-label="next">→</button>
       </div>
-      <div class="field">
-        <span class="field-label" data-i18n="previewLabel"></span>
-        <div id="preview"></div>
-      </div>
-    </div>
-    <div class="hints">
-      <span><kbd>Ctrl</kbd>+<kbd>Enter</kbd> <span data-i18n="hintPresent"></span></span>
-    </div>
-  </section>
+    </section>
+
+    <aside class="editor-panel hidden" id="editorPanel">
+      <textarea id="editor" spellcheck="false"></textarea>
+    </aside>
+  </div>
 
   <section id="view-present" class="hidden">
     <div class="present-bar" id="presentBar" aria-hidden="true"></div>
@@ -313,7 +204,9 @@ Jedno zdanie wstępu / one intro line
 
   // ─── State ──────────────────────────────────────
   const state = {
-    view: "input",          // input | edit | present
+    view: "workspace",      // workspace | present
+    editorOpen: false,
+    deckIsExample: true,
     source: null,           // {name, kind, text?|base64?, multi?} — see readSourceFile
     md: "",
     slides: [],
@@ -322,20 +215,34 @@ Jedno zdanie wstępu / one intro line
     slideLang: "pl",
   };
   function setView(v) { state.view = v; render(); }
+  function setDeck(md, { example = false } = {}) {
+    state.deckIsExample = example;
+    setMd(md);
+  }
 
   // Single entry point for markdown changes — keeps slides in sync.
-  function setMd(md, current = 0) {
+  function setMd(md, current = state.current) {
     state.md = md;
     state.current = current;
     renderSlides();
+    renderStage();
+    if (state.editorOpen && editorEl.value !== md) editorEl.value = md;
+  }
+
+  function setEditorOpen(open) {
+    state.editorOpen = open;
+    editorPanelEl.classList.toggle("hidden", !open);
+    workspaceEl.classList.toggle("editing", open);
+    editToggleBtn.setAttribute("aria-pressed", String(open));
+    if (open) editorEl.value = state.md;
   }
 
   // ─── DOM refs ───────────────────────────────────
   const viewEls = {
-    input: document.getElementById("view-input"),
-    edit: document.getElementById("view-edit"),
+    workspace: document.getElementById("view-workspace"),
     present: document.getElementById("view-present"),
   };
+  const workspaceEl = viewEls.workspace;
   const langPlBtn = document.getElementById("langPl");
   const langEnBtn = document.getElementById("langEn");
   const stageEl = document.getElementById("stage");
@@ -351,7 +258,6 @@ Jedno zdanie wstępu / one intro line
   const slideLangEnBtn = document.getElementById("slideLangEn");
   const countHintEl = document.getElementById("countHint");
   const generateBtn = document.getElementById("generateBtn");
-  const presentDirectBtn = document.getElementById("presentDirectBtn");
   const genStatusEl = document.getElementById("genStatus");
   const genStatusTextEl = document.getElementById("genStatusText");
   const errorPanelEl = document.getElementById("errorPanel");
@@ -359,12 +265,43 @@ Jedno zdanie wstępu / one intro line
   const errorDetailEl = document.getElementById("errorDetail");
   const errorDismissBtn = document.getElementById("errorDismiss");
   const editorEl = document.getElementById("editor");
-  const previewEl = document.getElementById("preview");
-  const backBtn = document.getElementById("backBtn");
   const pptxBtn = document.getElementById("pptxBtn");
-  const regenBtn = document.getElementById("regenBtn");
   const downloadBtn = document.getElementById("downloadBtn");
   const presentBtn = document.getElementById("presentBtn");
+  const wsStageEl = document.getElementById("wsStage");
+  const wsPrevBtn = document.getElementById("wsPrev");
+  const wsNextBtn = document.getElementById("wsNext");
+  const wsCounterEl = document.getElementById("wsCounter");
+  const editorPanelEl = document.getElementById("editorPanel");
+  const editToggleBtn = document.getElementById("editToggleBtn");
+  const presetGridEl = document.getElementById("presetGrid");
+
+  // ─── Style presets ──────────────────────────────
+  let activePreset = 0;
+  function applyPreset(i) {
+    const p = BRAND.presets[i];
+    if (!p) return;
+    activePreset = i;
+    const rs = document.documentElement.style;
+    rs.setProperty("--slide-bg", p.bg);
+    rs.setProperty("--slide-fg", p.fg);
+    rs.setProperty("--slide-accent", p.accent);
+    localStorage.setItem(BRAND.presetKey, p.id);
+    document.querySelectorAll(".preset").forEach((b, j) =>
+      b.setAttribute("aria-pressed", String(j === activePreset)));
+  }
+  function renderPresets() {
+    presetGridEl.innerHTML = "";
+    BRAND.presets.forEach((p, i) => {
+      const b = document.createElement("button");
+      b.type = "button";
+      b.className = "preset";
+      b.innerHTML = `<span class="dots"><span style="background:${p.bg}"></span><span style="background:${p.fg}"></span><span style="background:${p.accent}"></span></span><span class="name"></span>`;
+      b.querySelector(".name").textContent = p.name[uiLang] ?? p.name.pl;
+      b.addEventListener("click", () => applyPreset(i));
+      presetGridEl.appendChild(b);
+    });
+  }
 
   // ─── Helpers (DOM-adjacent) ─────────────────────
   // Parsed slide HTML is memoized per segment string: during streaming and
@@ -391,7 +328,13 @@ Jedno zdanie wstępu / one intro line
     document.querySelectorAll("[data-i18n]").forEach(el => {
       el.textContent = t(el.dataset.i18n);
     });
-    if (state.view === "input") renderInput();
+    document.querySelectorAll("[data-i18n-placeholder]").forEach(el => {
+      el.placeholder = t(el.dataset.i18nPlaceholder);
+    });
+    document.querySelectorAll(".preset .name").forEach((el, i) => {
+      el.textContent = BRAND.presets[i].name[uiLang] ?? BRAND.presets[i].name.pl;
+    });
+    if (state.view === "workspace") renderSidebar();
   }
 
   function render() {
@@ -400,8 +343,19 @@ Jedno zdanie wstępu / one intro line
     }
     document.body.classList.toggle("presenting", state.view === "present");
     renderTexts();
-    if (state.view === "edit") renderEdit();
     if (state.view === "present") renderPresent();
+    if (state.view === "workspace") renderStage();
+  }
+
+  function renderStage() {
+    const n = state.slides.length;
+    wsCounterEl.textContent = n ? `${state.current + 1} / ${n}` : "";
+    wsPrevBtn.disabled = state.current <= 0;
+    wsNextBtn.disabled = state.current >= n - 1;
+    if (!n) { wsStageEl.innerHTML = ""; return; }
+    const isTitle = state.current === 0 && isTitleSlide(state.md);
+    wsStageEl.className = "slide" + (isTitle ? " slide--title" : "");
+    wsStageEl.innerHTML = state.slides[state.current];
   }
 
   function renderPresent() {
@@ -423,33 +377,6 @@ Jedno zdanie wstępu / one intro line
   function showSlide(i) {
     state.current = Math.max(0, Math.min(i, state.slides.length - 1));
     renderPresent();
-  }
-
-  function renderEdit() {
-    if (editorEl.value !== state.md) editorEl.value = state.md;
-    regenBtn.classList.toggle("hidden", !state.source);
-    renderPreview();
-  }
-
-  // Preview cards are reused between renders; only cards whose HTML actually
-  // changed are rewritten (matters during streaming and while typing).
-  function renderPreview() {
-    state.slides.forEach((html, i) => {
-      let card = previewEl.children[i];
-      if (!card) {
-        card = document.createElement("div");
-        card.className = "mini";
-        card.addEventListener("click", () => { state.current = Number(card.dataset.index); setView("present"); });
-        previewEl.appendChild(card);
-      }
-      card.dataset.index = i;
-      const inner = `<div class="mini-eyebrow">${i + 1}</div>` + html;
-      if (card._html !== inner) {
-        card.innerHTML = inner;
-        card._html = inner;
-      }
-    });
-    while (previewEl.children.length > state.slides.length) previewEl.lastChild.remove();
   }
 
   // ─── PPTX export (deps lazy-loaded via shared.js) ───
@@ -501,7 +428,7 @@ Jedno zdanie wstępu / one intro line
     URL.revokeObjectURL(a.href);
   }
 
-  function renderInput() {
+  function renderSidebar() {
     const src = state.source;
     fileChipEl.classList.toggle("hidden", !src);
     if (src) {
@@ -509,7 +436,6 @@ Jedno zdanie wstępu / one intro line
       fileChipEl.textContent = `✓ ${t("fileLoaded")}: ${src.name}${langInfo}`;
     }
     generateBtn.disabled = !src;
-    presentDirectBtn.classList.toggle("hidden", !src?.multi);
     slideLangPlBtn.setAttribute("aria-pressed", String(state.slideLang === "pl"));
     slideLangEnBtn.setAttribute("aria-pressed", String(state.slideLang === "en"));
   }
@@ -525,10 +451,11 @@ Jedno zdanie wstępu / one intro line
     state.source = source;
     if (source?.kind === "text") {
       state.slideLang = detectLang(source.text);
-      source.multi = splitSlides(source.text).length > 1; // computed once, read by renderInput
+      source.multi = splitSlides(source.text).length > 1; // computed once, read by renderSidebar
     }
     errorPanelEl.classList.add("hidden");
     render();
+    if (source?.kind === "text" && source.multi) setDeck(source.text, { example: false });
   }
 
   function loadFile(file) {
@@ -568,8 +495,8 @@ Jedno zdanie wstępu / one intro line
           if (!started) {
             started = true;
             genStatusTextEl.textContent = t("genWaiting");
-            setMd("");
-            setView("edit");
+            setEditorOpen(true);
+            setDeck("", { example: false });
           }
           const now = Date.now();
           if (now - lastRender > 400) {
@@ -578,13 +505,13 @@ Jedno zdanie wstępu / one intro line
             editorEl.scrollTop = editorEl.scrollHeight;
             state.md = text;
             renderSlides();
-            renderPreview();
+            state.current = Math.max(0, state.slides.length - 1); // follow the newest slide
+            renderStage();
           }
         },
       });
       if (!acc.trim()) throw new Error(t("errEmpty"));
-      setMd(stripOuterFence(acc.trim()));
-      setView("edit");
+      setDeck(stripOuterFence(acc.trim()), { example: false });
     } catch (err) {
       showError(t("errApiTitle"), String(err.message ?? err));
     } finally {
@@ -600,7 +527,7 @@ Jedno zdanie wstępu / one intro line
 
   // input view
   browseBtn.addEventListener("click", () => fileInputEl.click());
-  dropzoneEl.addEventListener("click", e => { if (e.target === dropzoneEl || e.target.closest(".dz-icon,.dz-label,.dz-sub")) fileInputEl.click(); });
+  dropzoneEl.addEventListener("click", e => { if (e.target === dropzoneEl || e.target.closest(".dz-label")) fileInputEl.click(); });
   dropzoneEl.addEventListener("keydown", e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); fileInputEl.click(); } });
   fileInputEl.addEventListener("change", () => loadFile(fileInputEl.files[0]));
   ["dragover", "dragenter"].forEach(ev => dropzoneEl.addEventListener(ev, e => { e.preventDefault(); dropzoneEl.classList.add("dragover"); }));
@@ -616,23 +543,19 @@ Jedno zdanie wstępu / one intro line
     }, 250);
   });
 
-  slideLangPlBtn.addEventListener("click", () => { state.slideLang = "pl"; renderInput(); });
-  slideLangEnBtn.addEventListener("click", () => { state.slideLang = "en"; renderInput(); });
+  slideLangPlBtn.addEventListener("click", () => { state.slideLang = "pl"; renderSidebar(); });
+  slideLangEnBtn.addEventListener("click", () => { state.slideLang = "en"; renderSidebar(); });
   errorDismissBtn.addEventListener("click", () => errorPanelEl.classList.add("hidden"));
 
-  presentDirectBtn.addEventListener("click", () => {
-    setMd(state.source.text);
-    setView("present");
-  });
   generateBtn.addEventListener("click", () => generateSlides());
 
-  // edit view
+  // editor panel
   let previewTimer;
   editorEl.addEventListener("input", () => {
     clearTimeout(previewTimer);
     previewTimer = setTimeout(() => {
+      state.deckIsExample = false; // manual edits make the deck the user's own
       setMd(editorEl.value, state.current);
-      renderPreview();
     }, 300);
   });
   editorEl.addEventListener("keydown", e => {
@@ -642,25 +565,33 @@ Jedno zdanie wstępu / one intro line
       setView("present");
     }
   });
-  backBtn.addEventListener("click", () => setView("input"));
-  regenBtn.addEventListener("click", () => generateSlides());
   downloadBtn.addEventListener("click", downloadMd);
   pptxBtn.addEventListener("click", downloadPptx);
-  presentBtn.addEventListener("click", () => { setMd(editorEl.value, state.current); setView("present"); });
+  presentBtn.addEventListener("click", () => setView("present"));
+  editToggleBtn.addEventListener("click", () => setEditorOpen(!state.editorOpen));
+
+  // workspace stage nav
+  wsPrevBtn.addEventListener("click", () => {
+    state.current = Math.max(0, state.current - 1);
+    renderStage();
+  });
+  wsNextBtn.addEventListener("click", () => {
+    state.current = Math.min(state.slides.length - 1, state.current + 1);
+    renderStage();
+  });
 
   document.addEventListener("keydown", e => {
-    if (state.view === "input" && e.key === "Enter" && state.source && !state.generating
-        && !/^(TEXTAREA|SELECT|BUTTON|A)$/.test(e.target.tagName)) {
-      e.preventDefault(); generateSlides(); return;
-    }
+    if (state.view === "present" && e.key === "Escape") { setView("workspace"); return; }
     if (/^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName)) return;
     if (state.view === "present") {
       if (["ArrowRight", " ", "PageDown"].includes(e.key)) { e.preventDefault(); showSlide(state.current + 1); }
       else if (["ArrowLeft", "PageUp"].includes(e.key)) { e.preventDefault(); showSlide(state.current - 1); }
       else if (e.key === "Home") { e.preventDefault(); showSlide(0); }
       else if (e.key === "End") { e.preventDefault(); showSlide(state.slides.length - 1); }
-      else if (e.key === "Escape") setView("edit");
       else if (/^[1-9]$/.test(e.key)) showSlide(Number(e.key) - 1);
+    } else if (state.view === "workspace" && !/^BUTTON$/.test(e.target.tagName)) {
+      if (e.key === "ArrowRight") { e.preventDefault(); state.current = Math.min(state.slides.length - 1, state.current + 1); renderStage(); }
+      else if (e.key === "ArrowLeft") { e.preventDefault(); state.current = Math.max(0, state.current - 1); renderStage(); }
     }
   });
 
@@ -669,13 +600,17 @@ Jedno zdanie wstępu / one intro line
   if (BRAND.wordmark) document.querySelector(".wordmark").textContent = BRAND.wordmark;
   document.querySelector(".chrome .tag").textContent = BRAND.tag;
   const aiSelector = mountAiSelector({ chip: aiChipEl, getLang: () => uiLang });
+  renderPresets();
+  {
+    const savedPreset = BRAND.presets.findIndex(p => p.id === localStorage.getItem(BRAND.presetKey));
+    applyPreset(savedPreset >= 0 ? savedPreset : 0);
+  }
   {
     const params = new URLSearchParams(location.search);
     if (["pl", "en"].includes(params.get("lang"))) { uiLang = params.get("lang"); localStorage.setItem(LS_LANG, uiLang); }
-    if (params.has("demo")) { state.md = SAMPLE_MD; renderSlides(); }
-    if (params.has("slide")) state.current = Math.max(0, Number(params.get("slide")) - 1);
+    setDeck(BRAND.exampleMd[uiLang] ?? BRAND.exampleMd.pl, { example: true });
+    if (params.has("slide")) setMd(state.md, Math.max(0, Number(params.get("slide")) - 1));
     if (location.hash === "#present" && state.slides.length) state.view = "present";
-    else if (location.hash === "#edit" && state.md) state.view = "edit";
   }
   document.documentElement.lang = uiLang; // after ?lang so the param wins
   document.title = t("appTitle");
