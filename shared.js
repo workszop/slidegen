@@ -460,6 +460,64 @@ function mountAiSelector({ chip, getLang }) {
   return { refresh: renderChip };
 }
 
+// ─── Editor panel resizer (drag the left edge) ───
+// Injected once; visuals inherit each app's --accent/--border aliases
+// (same convention as the AI selector). Hidden on the mobile breakpoint,
+// where the panel is a fixed overlay and the stored width is ignored.
+const PANEL_RESIZER_CSS = `
+.panel-resizer{position:absolute;left:-3px;top:0;bottom:0;width:6px;
+  cursor:col-resize;z-index:25;touch-action:none;}
+.panel-resizer:hover,body.panel-resizing .panel-resizer{
+  background:color-mix(in srgb, var(--accent, #888) 35%, transparent);}
+body.panel-resizing{cursor:col-resize;user-select:none;}
+@media (min-width: 769px){.has-panel-resizer{position:relative;}}
+@media (max-width: 768px){.panel-resizer{display:none;}}
+`;
+
+function mountPanelResizer({ panel, storageKey, min = 280, maxFraction = 0.6 }) {
+  if (!document.getElementById("panelResizerCss")) {
+    const style = document.createElement("style");
+    style.id = "panelResizerCss";
+    style.textContent = PANEL_RESIZER_CSS;
+    document.head.appendChild(style);
+  }
+  panel.classList.add("has-panel-resizer");
+  const handle = document.createElement("div");
+  handle.className = "panel-resizer";
+  panel.appendChild(handle);
+
+  const apply = w => panel.style.setProperty("--editor-w", w + "px");
+  const stored = clampPanelWidth(
+    parseFloat(localStorage.getItem(storageKey)), min, maxFraction, window.innerWidth);
+  if (stored !== null) apply(stored); // re-clamped on mount (window may have shrunk)
+
+  let width = null;
+  handle.addEventListener("pointerdown", e => {
+    e.preventDefault();
+    handle.setPointerCapture(e.pointerId);
+    document.body.classList.add("panel-resizing");
+  });
+  handle.addEventListener("pointermove", e => {
+    if (!handle.hasPointerCapture(e.pointerId)) return;
+    const w = clampPanelWidth(
+      panel.getBoundingClientRect().right - e.clientX, min, maxFraction, window.innerWidth);
+    if (w !== null) { width = w; apply(w); }
+  });
+  const finish = e => {
+    if (!handle.hasPointerCapture(e.pointerId)) return;
+    handle.releasePointerCapture(e.pointerId);
+    document.body.classList.remove("panel-resizing");
+    if (width !== null) localStorage.setItem(storageKey, String(Math.round(width)));
+    width = null;
+  };
+  handle.addEventListener("pointerup", finish);
+  handle.addEventListener("pointercancel", finish);
+  handle.addEventListener("dblclick", () => {
+    localStorage.removeItem(storageKey);
+    panel.style.removeProperty("--editor-w");
+  });
+}
+
 // ─── Lazy PPTX dependencies ─────────────────────
 const PPTX_CDN = "https://cdn.jsdelivr.net/npm/pptxgenjs@4.0.1/dist/pptxgen.bundle.js";
 const PPTX_SRI = "sha384-qb0Xhi7LLYpvW1HCK6oMrmDLSY9sy7vwm6ZlV6KjtrlL9yg30+YN4neTwnmX+Kp8";

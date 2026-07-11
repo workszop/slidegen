@@ -360,7 +360,7 @@ main#app { flex: 1; display: flex; min-height: 0; }
 .deck-counter { font-family: var(--font-mono); }
 .deck-footer .hints { display: flex; gap: var(--space-4); margin: 0; }
 .editor-panel {
-  flex: none; width: min(440px, 34vw); border-left: 1px solid var(--border-1);
+  flex: none; width: var(--editor-w, min(440px, 34vw)); border-left: 1px solid var(--border-1);
   background: var(--bg-2); padding: var(--space-3); display: flex; flex-direction: column; min-height: 0;
 }
 .editor-head { display: flex; justify-content: flex-end; margin-bottom: var(--space-2); }
@@ -388,6 +388,7 @@ window.APP_BRAND = {
   tag: "doc→slides",
   presentBrand: "Quantica Lab",
   presetKey: "eduapp_preset_quantica",
+  editorWKey: "quantica.editorW",
   presets: [
     { id: "jasny",   name: { pl: "Jasny",   en: "Light" },   bg: "#FFFFFF", fg: "#111111", accent: "#C41E54" },
     { id: "ciemny",  name: { pl: "Ciemny",  en: "Dark" },    bg: "#111111", fg: "#FFFFFF", accent: "#FF4D9A" },

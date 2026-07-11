@@ -27,6 +27,7 @@
     presentBrand: "",
     presets: [],
     presetKey: "eduapp_preset",
+    editorWKey: "eduapp.editorW",
     exampleMd: { pl: "", en: "" },
   }, window.APP_BRAND);
 
@@ -290,6 +291,8 @@
   const editToggleBtn = document.getElementById("editToggleBtn");
   const editorCloseBtn = document.getElementById("editorCloseBtn");
   const presetGridEl = document.getElementById("presetGrid");
+
+  mountPanelResizer({ panel: editorPanelEl, storageKey: BRAND.editorWKey });
 
   // ─── Style presets ──────────────────────────────
   let activePreset = 0;
