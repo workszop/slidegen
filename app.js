@@ -92,9 +92,7 @@ Jedno zdanie wstępu.
       dropTypes: ".txt · .md · .pdf (do 19 MB)",
       browse: "Wybierz plik",
       orPaste: "…albo wklej tekst",
-      apiKeyLabel: "Klucz API Gemini",
-      apiKeyHelp: "Klucz zostaje wyłącznie w Twojej przeglądarce (localStorage) i jest wysyłany bezpośrednio do Google. Wygenerujesz go na",
-      modelLabel: "Model",
+      aiModelLabel: "Model AI",
       slideLangLabel: "Język slajdów",
       countLabel: "Liczba slajdów",
       countAuto: "auto",
@@ -106,7 +104,7 @@ Jedno zdanie wstępu.
       errFileType: "Obsługiwane formaty: .txt, .md, .pdf",
       errTooBig: "Plik jest za duży (limit 19 MB). Skróć dokument lub podziel go na części.",
       errNoKeyTitle: "Brak klucza API",
-      errNoKeyBody: "Wklej swój klucz Gemini w sekcji ustawień. Wygenerujesz go na aistudio.google.com/apikey.",
+      errNoKeyBody: "Wklej klucz API dostawcy {provider} w ustawieniach modelu (kliknij wskaźnik modelu). Wygenerujesz go na {url}.",
       errApiTitle: "Błąd API Gemini",
       errEmpty: "Model zwrócił pustą odpowiedź. Spróbuj ponownie lub zmień model.",
       genSending: "Wysyłam dokument…",
@@ -134,9 +132,7 @@ Jedno zdanie wstępu.
       dropTypes: ".txt · .md · .pdf (up to 19 MB)",
       browse: "Choose file",
       orPaste: "…or paste text",
-      apiKeyLabel: "Gemini API key",
-      apiKeyHelp: "The key stays in your browser (localStorage) and is sent directly to Google. Generate one at",
-      modelLabel: "Model",
+      aiModelLabel: "AI model",
       slideLangLabel: "Slide language",
       countLabel: "Slide count",
       countAuto: "auto",
@@ -148,7 +144,7 @@ Jedno zdanie wstępu.
       errFileType: "Supported formats: .txt, .md, .pdf",
       errTooBig: "File too large (19 MB limit). Trim the document or split it.",
       errNoKeyTitle: "Missing API key",
-      errNoKeyBody: "Paste your Gemini key in the settings section. Generate one at aistudio.google.com/apikey.",
+      errNoKeyBody: "Paste your {provider} API key in the model settings (click the model chip). Generate one at {url}.",
       errApiTitle: "Gemini API error",
       errEmpty: "The model returned an empty response. Try again or switch models.",
       genSending: "Sending the document…",
@@ -176,6 +172,7 @@ Jedno zdanie wstępu.
     document.documentElement.lang = lang;
     document.title = t("appTitle");
     renderTexts();
+    aiSelector.refresh();
   }
 
   // ─── Markup (shared structure; brand styles it via CSS) ──
@@ -230,16 +227,10 @@ Jedno zdanie wstępu.
 
     <div class="card settings" id="settingsCard">
       <div class="field">
-        <label class="field-label" for="apiKey" data-i18n="apiKeyLabel"></label>
-        <input type="password" id="apiKey" class="mono-input" placeholder="AIza…" autocomplete="off" spellcheck="false" />
-        <p class="field-help"><span data-i18n="apiKeyHelp"></span>
-          <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">aistudio.google.com/apikey</a></p>
+        <span class="field-label" data-i18n="aiModelLabel"></span>
+        <button id="aiChip"></button>
       </div>
       <div class="settings-row">
-        <div class="field">
-          <label class="field-label" for="model" data-i18n="modelLabel"></label>
-          <select id="model" class="mono-input"></select>
-        </div>
         <div class="field">
           <span class="field-label" id="slideLangLabel" data-i18n="slideLangLabel"></span>
           <div class="lang-toggle" role="group" aria-labelledby="slideLangLabel">
@@ -355,8 +346,7 @@ Jedno zdanie wstępu / one intro line
   const fileChipEl = document.getElementById("fileChip");
   const browseBtn = document.getElementById("browseBtn");
   const pasteAreaEl = document.getElementById("pasteArea");
-  const apiKeyEl = document.getElementById("apiKey");
-  const modelEl = document.getElementById("model");
+  const aiChipEl = document.getElementById("aiChip");
   const slideLangPlBtn = document.getElementById("slideLangPl");
   const slideLangEnBtn = document.getElementById("slideLangEn");
   const countHintEl = document.getElementById("countHint");
@@ -548,12 +538,17 @@ Jedno zdanie wstępu / one intro line
       .catch(err => showError(err.message === "size" ? t("errTooBig") : t("errFileType"), file.name));
   }
 
-  // ─── Gemini ─────────────────────────────────────
+  // ─── Generation (provider-agnostic) ─────────────
   // Streaming: markdown flows into the editor and preview as it arrives
   // (transport lives in shared.js; this function is only the UI reaction).
   async function generateSlides() {
-    const key = localStorage.getItem(LS_KEY)?.trim();
-    if (!key) return showError(t("errNoKeyTitle"), t("errNoKeyBody"));
+    const ai = loadAiSettings();
+    const key = ai.keys[ai.provider]?.trim();
+    if (!key) {
+      const info = PROVIDER_INFO[ai.provider];
+      return showError(t("errNoKeyTitle"),
+        t("errNoKeyBody").replace("{provider}", info.label).replace("{url}", info.keyUrl.replace("https://", "")));
+    }
     if (!state.source || state.generating) return;
 
     state.generating = true;
@@ -563,9 +558,10 @@ Jedno zdanie wstępu / one intro line
     generateBtn.disabled = true;
     let started = false, lastRender = 0;
     try {
-      const acc = await streamGeminiSlides({
+      const acc = await streamSlides({
+        provider: ai.provider,
+        model: ai.model,
         key,
-        model: modelEl.value,
         source: state.source,
         prompt: buildPrompt({ lang: state.slideLang, countHint: countHintEl.value }),
         onChunk(text) {
@@ -620,8 +616,6 @@ Jedno zdanie wstępu / one intro line
     }, 250);
   });
 
-  apiKeyEl.addEventListener("input", () => localStorage.setItem(LS_KEY, apiKeyEl.value.trim()));
-  modelEl.addEventListener("change", () => localStorage.setItem(LS_MODEL, modelEl.value));
   slideLangPlBtn.addEventListener("click", () => { state.slideLang = "pl"; renderInput(); });
   slideLangEnBtn.addEventListener("click", () => { state.slideLang = "en"; renderInput(); });
   errorDismissBtn.addEventListener("click", () => errorPanelEl.classList.add("hidden"));
@@ -674,13 +668,7 @@ Jedno zdanie wstępu / one intro line
   document.querySelectorAll(".brand-logo").forEach(el => { el.src = BRAND.logo; });
   if (BRAND.wordmark) document.querySelector(".wordmark").textContent = BRAND.wordmark;
   document.querySelector(".chrome .tag").textContent = BRAND.tag;
-  MODELS.forEach(m => {
-    const opt = document.createElement("option");
-    opt.value = m; opt.textContent = m;
-    modelEl.appendChild(opt);
-  });
-  apiKeyEl.value = localStorage.getItem(LS_KEY) ?? "";
-  modelEl.value = resolveModel();
+  const aiSelector = mountAiSelector({ chip: aiChipEl, getLang: () => uiLang });
   {
     const params = new URLSearchParams(location.search);
     if (["pl", "en"].includes(params.get("lang"))) { uiLang = params.get("lang"); localStorage.setItem(LS_LANG, uiLang); }
