@@ -88,6 +88,115 @@ function isTitleSlide(md) {
 function firstFont(ff) {
   return ff.split(",")[0].trim().replace(/^["']|["']$/g, "");
 }
+
+// ─── AI provider registry (pure data) ───────────
+const GEMINI_BASE = "https://generativelanguage.googleapis.com/v1beta/models";
+const PROVIDER_INFO = {
+  gemini: {
+    label: "Gemini",
+    models: ["gemini-3.5-flash", "gemini-3.1-flash-lite-preview"],
+    keyPlaceholder: "AIza…",
+    keyUrl: "https://aistudio.google.com/apikey",
+  },
+  openai: {
+    label: "OpenAI",
+    models: ["gpt-5.6", "gpt-5-mini", "gpt-5-nano"],
+    keyPlaceholder: "sk-…",
+    keyUrl: "https://platform.openai.com/api-keys",
+  },
+  claude: {
+    label: "Claude",
+    models: ["claude-opus-4-8", "claude-sonnet-5", "claude-haiku-4-5"],
+    keyPlaceholder: "sk-ant-…",
+    keyUrl: "https://console.anthropic.com/settings/keys",
+  },
+};
+
+// Parse the eduapp_ai JSON (raw string or null) into valid settings,
+// folding in the legacy single-provider values ({key, model}) on first run.
+function normalizeAiSettings(raw, legacy = {}) {
+  let s = {};
+  try { s = JSON.parse(raw) ?? {}; } catch { /* corrupt JSON — use defaults */ }
+  if (typeof s !== "object" || Array.isArray(s)) s = {};
+  const provider = PROVIDER_INFO[s.provider] ? s.provider : "gemini";
+  const keys = { gemini: "", openai: "", claude: "" };
+  if (s.keys && typeof s.keys === "object") {
+    for (const p of Object.keys(keys)) if (typeof s.keys[p] === "string") keys[p] = s.keys[p];
+  }
+  if (!keys.gemini && typeof legacy.key === "string") keys.gemini = legacy.key;
+  let model = typeof s.model === "string" && s.model.trim() ? s.model.trim() : "";
+  if (!model) {
+    model = (provider === "gemini" && typeof legacy.model === "string" && legacy.model)
+      ? legacy.model : PROVIDER_INFO[provider].models[0];
+  }
+  return { provider, model, keys };
+}
+
+// ─── Per-provider request builders (pure) ────────
+// Each returns {url, headers, body} for the provider's streaming endpoint.
+function buildGeminiRequest({ key, model, source, prompt }) {
+  const parts = [{ text: prompt }];
+  if (source.kind === "pdf") {
+    parts.push({ inline_data: { mime_type: "application/pdf", data: source.base64 } });
+  } else {
+    parts.push({ text: "\n\n--- DOCUMENT ---\n\n" + source.text });
+  }
+  return {
+    url: `${GEMINI_BASE}/${model}:streamGenerateContent?alt=sse`,
+    headers: { "Content-Type": "application/json", "x-goog-api-key": key },
+    body: { contents: [{ parts }], generationConfig: { temperature: 0.4 } },
+  };
+}
+
+function buildOpenAIRequest({ key, model, source, prompt }) {
+  const content = [{ type: "input_text", text: prompt }];
+  if (source.kind === "pdf") {
+    content.push({
+      type: "input_file",
+      filename: source.name || "document.pdf",
+      file_data: "data:application/pdf;base64," + source.base64,
+    });
+  } else {
+    content[0].text += "\n\n--- DOCUMENT ---\n\n" + source.text;
+  }
+  return {
+    url: "https://api.openai.com/v1/responses",
+    headers: { "Content-Type": "application/json", Authorization: "Bearer " + key },
+    body: { model, input: [{ role: "user", content }], stream: true },
+  };
+}
+
+function buildClaudeRequest({ key, model, source, prompt }) {
+  const content = [];
+  if (source.kind === "pdf") {
+    content.push({ type: "document", source: { type: "base64", media_type: "application/pdf", data: source.base64 } });
+    content.push({ type: "text", text: prompt });
+  } else {
+    content.push({ type: "text", text: prompt + "\n\n--- DOCUMENT ---\n\n" + source.text });
+  }
+  return {
+    url: "https://api.anthropic.com/v1/messages",
+    headers: {
+      "Content-Type": "application/json",
+      "x-api-key": key,
+      "anthropic-version": "2023-06-01",
+      "anthropic-dangerous-direct-browser-access": "true",
+    },
+    body: { model, max_tokens: 16000, stream: true, messages: [{ role: "user", content }] },
+  };
+}
+
+// ─── Per-provider SSE chunk extractors (pure) ────
+function geminiChunk(data) {
+  return (data.candidates?.[0]?.content?.parts ?? []).map(p => p.text ?? "").join("");
+}
+function openaiChunk(data) {
+  return data.type === "response.output_text.delta" ? (data.delta ?? "") : "";
+}
+function claudeChunk(data) {
+  return data.type === "content_block_delta" && data.delta?.type === "text_delta"
+    ? (data.delta.text ?? "") : "";
+}
 /* pure-helpers:end */
 
 // ─── Cross-app constants (the localStorage names are a contract:
@@ -96,7 +205,6 @@ const LS_LANG = "eduapp_lang", LS_KEY = "eduapp_gemini_key", LS_MODEL = "eduapp_
 const MODELS = ["gemini-3.5-flash", "gemini-3.1-flash-lite-preview"];
 const MAX_INLINE_MB = 19;
 const MAX_INLINE_BYTES = MAX_INLINE_MB * 1024 * 1024;
-const GEMINI_BASE = "https://generativelanguage.googleapis.com/v1beta/models";
 
 // Stored model if it is still offered, else the current default.
 function resolveModel() {
