@@ -202,9 +202,21 @@ function claudeChunk(data) {
 // ─── Cross-app constants (the localStorage names are a contract:
 //     all apps share one key / model / UI language) ─────────────
 const LS_LANG = "eduapp_lang", LS_KEY = "eduapp_gemini_key", LS_MODEL = "eduapp_model";
+const LS_AI = "eduapp_ai";
 const MODELS = ["gemini-3.5-flash", "gemini-3.1-flash-lite-preview"];
 const MAX_INLINE_MB = 19;
 const MAX_INLINE_BYTES = MAX_INLINE_MB * 1024 * 1024;
+
+// Current AI settings; folds legacy eduapp_gemini_key / eduapp_model in on first run.
+function loadAiSettings() {
+  return normalizeAiSettings(localStorage.getItem(LS_AI), {
+    key: localStorage.getItem(LS_KEY) ?? "",
+    model: localStorage.getItem(LS_MODEL) ?? "",
+  });
+}
+function saveAiSettings(settings) {
+  localStorage.setItem(LS_AI, JSON.stringify(settings));
+}
 
 // Stored model if it is still offered, else the current default.
 function resolveModel() {
@@ -233,25 +245,18 @@ function readSourceFile(file) {
   });
 }
 
-// ─── Gemini streaming ───────────────────────────
-// Streams slide markdown for a source document; onChunk(accumulatedText)
-// fires per SSE chunk (throttling is the caller's job). Returns the full
-// text; throws Error("status: message") on HTTP errors.
-async function streamGeminiSlides({ key, model, source, prompt, onChunk }) {
-  const parts = [{ text: prompt }];
-  if (source.kind === "pdf") {
-    parts.push({ inline_data: { mime_type: "application/pdf", data: source.base64 } });
-  } else {
-    parts.push({ text: "\n\n--- DOCUMENT ---\n\n" + source.text });
-  }
-  const res = await fetch(`${GEMINI_BASE}/${model}:streamGenerateContent?alt=sse`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json", "x-goog-api-key": key },
-    body: JSON.stringify({ contents: [{ parts }], generationConfig: { temperature: 0.4 } }),
-  });
+// ─── Provider streaming ─────────────────────────
+// Generic SSE POST: builds nothing itself — request comes from a build*Request
+// helper, per-event text extraction from a *Chunk helper. onChunk(accumulated)
+// fires per chunk (throttling is the caller's job). Returns the full text.
+async function streamSseRequest({ url, headers, body }, extractChunk, onChunk) {
+  const res = await fetch(url, { method: "POST", headers, body: JSON.stringify(body) });
   if (!res.ok) {
     let msg;
-    try { msg = JSON.parse(await res.text())?.error?.message; } catch { /* non-JSON error body */ }
+    try {
+      const e = JSON.parse(await res.text());
+      msg = e?.error?.message ?? e?.message;
+    } catch { /* non-JSON error body */ }
     throw new Error(`${res.status}: ${msg ?? res.statusText}`);
   }
   const reader = res.body.getReader();
@@ -265,15 +270,38 @@ async function streamGeminiSlides({ key, model, source, prompt, onChunk }) {
     buf = lines.pop();
     for (const line of lines) {
       if (!line.startsWith("data:")) continue;
+      const payload = line.slice(5).trim();
+      if (!payload || payload === "[DONE]") continue;
       let data;
-      try { data = JSON.parse(line.slice(5).trim()); } catch { continue; }
-      const chunk = (data.candidates?.[0]?.content?.parts ?? []).map(p => p.text ?? "").join("");
+      try { data = JSON.parse(payload); } catch { continue; }
+      // Mid-stream provider errors (e.g. Claude overloaded) arrive as data events.
+      if (data.type === "error" || (data.error && !data.candidates)) {
+        throw new Error(data.error?.message ?? "stream error");
+      }
+      const chunk = extractChunk(data);
       if (!chunk) continue;
       acc += chunk;
       onChunk?.(acc);
     }
   }
   return acc;
+}
+
+const PROVIDER_STREAMS = {
+  gemini: [buildGeminiRequest, geminiChunk],
+  openai: [buildOpenAIRequest, openaiChunk],
+  claude: [buildClaudeRequest, claudeChunk],
+};
+
+// Streams slide markdown from whichever provider the settings select.
+function streamSlides({ provider, model, key, source, prompt, onChunk }) {
+  const [build, extract] = PROVIDER_STREAMS[provider] ?? PROVIDER_STREAMS.gemini;
+  return streamSseRequest(build({ key, model, source, prompt }), extract, onChunk);
+}
+
+// Legacy name — TODO(Task 5): remove once app.js and index.html use streamSlides.
+function streamGeminiSlides({ key, model, source, prompt, onChunk }) {
+  return streamSlides({ provider: "gemini", key, model, source, prompt, onChunk });
 }
 
 // ─── Lazy PPTX dependencies ─────────────────────
