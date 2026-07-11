@@ -20,9 +20,12 @@ turn it into slides.
   its own typeface; type any name from fonts.google.com
 - **Logo upload** — appears top-right on every slide (default: the edulab
   rocking horse, auto-inverting on dark backgrounds)
-- **Document → slides via Gemini** — drop a `.txt`, `.md`, or `.pdf`, paste
-  your own [AI Studio key](https://aistudio.google.com/apikey) (stored only in
-  your browser, sent only to Google), and slides stream in live
+- **Document → slides via your choice of AI** — drop a `.txt`, `.md`, or `.pdf`
+  and pick the provider and model (Gemini, OpenAI, or Claude) in the model
+  popup; your API key is stored only in your browser and sent only to the
+  selected provider; slides stream in live. The active provider/model shows as
+  a compact chip in the workspace; click it to change provider, model
+  (including any custom model ID), or key.
 - **Markdown editor drawer** — tweak the deck with a live re-render
 - **Export** — download the deck as an editable `.pptx` in the current look
 - Bilingual UI (PL default / EN), keyboard navigation, fullscreen presenting,
