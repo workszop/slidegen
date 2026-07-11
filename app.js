@@ -119,9 +119,9 @@
   </div>
 </header>
 
-<main id="app" class="shell" aria-live="polite">
-  <div class="workspace" id="view-workspace">
-    <aside class="sidebar">
+<main id="app" aria-live="polite">
+  <div class="workbench" id="view-workspace">
+    <aside class="panel">
       <section class="side-section">
         <h2 class="side-title" data-i18n="sideDoc"></h2>
         <div class="dropzone dropzone--compact" id="dropzone" role="button" tabindex="0">
@@ -168,18 +168,29 @@
       </section>
     </aside>
 
-    <section class="stage-col">
+    <section class="stage-wrap">
       <div class="error-panel hidden" id="errorPanel" role="status">
         <strong id="errorTitle"></strong>
         <span id="errorDetail"></span>
         <button class="btn btn-ghost" id="errorDismiss">OK</button>
       </div>
-      <div class="ws-stage-wrap"><div class="slide" id="wsStage"></div></div>
-      <div class="ws-nav">
-        <button class="btn btn-ghost" id="wsPrev" aria-label="prev">←</button>
-        <span class="ws-counter" id="wsCounter"></span>
-        <button class="btn btn-ghost" id="wsNext" aria-label="next">→</button>
+      <div class="deck">
+        <div class="deck-bar" id="deckBar" aria-hidden="true"></div>
+        <img class="deck-logo brand-logo" alt="" aria-hidden="true">
+        <div class="slide" id="wsStage"></div>
       </div>
+      <footer class="deck-footer">
+        <div class="nav-btns">
+          <button class="btn btn-ghost" id="wsPrev" aria-label="prev">←</button>
+          <button class="btn btn-ghost" id="wsNext" aria-label="next">→</button>
+        </div>
+        <span class="deck-counter" id="wsCounter"></span>
+        <div class="spacer"></div>
+        <div class="hints">
+          <span><kbd>→</kbd> <span data-i18n="hintNext"></span></span>
+          <span><kbd>←</kbd> <span data-i18n="hintPrev"></span></span>
+        </div>
+      </footer>
     </section>
 
     <aside class="editor-panel hidden" id="editorPanel">
@@ -272,6 +283,7 @@
   const wsPrevBtn = document.getElementById("wsPrev");
   const wsNextBtn = document.getElementById("wsNext");
   const wsCounterEl = document.getElementById("wsCounter");
+  const deckBarEl = document.getElementById("deckBar");
   const editorPanelEl = document.getElementById("editorPanel");
   const editToggleBtn = document.getElementById("editToggleBtn");
   const presetGridEl = document.getElementById("presetGrid");
@@ -352,6 +364,7 @@
     wsCounterEl.textContent = n ? `${state.current + 1} / ${n}` : "";
     wsPrevBtn.disabled = state.current <= 0;
     wsNextBtn.disabled = state.current >= n - 1;
+    deckBarEl.style.width = n ? `${((state.current + 1) / n) * 100}%` : "0%";
     if (!n) { wsStageEl.innerHTML = ""; return; }
     const isTitle = state.current === 0 && isTitleSlide(state.md);
     wsStageEl.className = "slide" + (isTitle ? " slide--title" : "");
