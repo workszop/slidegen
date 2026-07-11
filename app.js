@@ -29,7 +29,7 @@
     presentBrand: "",
   }, window.APP_BRAND);
 
-  // ─── Constants (LS_*, MODELS etc. come from shared.js) ───
+  // ─── Constants (LS_* etc. come from shared.js) ───
   const SAMPLE_MD = `# Dokument → slajdy
 Jak działa ta aplikacja - przewodnik w ośmiu slajdach.
 ---

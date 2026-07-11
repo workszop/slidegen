@@ -203,7 +203,6 @@ function claudeChunk(data) {
 //     all apps share one key / model / UI language) ─────────────
 const LS_LANG = "eduapp_lang", LS_KEY = "eduapp_gemini_key", LS_MODEL = "eduapp_model";
 const LS_AI = "eduapp_ai";
-const MODELS = ["gemini-3.5-flash", "gemini-3.1-flash-lite-preview"];
 const MAX_INLINE_MB = 19;
 const MAX_INLINE_BYTES = MAX_INLINE_MB * 1024 * 1024;
 
@@ -216,12 +215,6 @@ function loadAiSettings() {
 }
 function saveAiSettings(settings) {
   localStorage.setItem(LS_AI, JSON.stringify(settings));
-}
-
-// Stored model if it is still offered, else the current default.
-function resolveModel() {
-  const saved = localStorage.getItem(LS_MODEL);
-  return MODELS.includes(saved) ? saved : MODELS[0];
 }
 
 // ─── File intake ────────────────────────────────
@@ -297,11 +290,6 @@ const PROVIDER_STREAMS = {
 function streamSlides({ provider, model, key, source, prompt, onChunk }) {
   const [build, extract] = PROVIDER_STREAMS[provider] ?? PROVIDER_STREAMS.gemini;
   return streamSseRequest(build({ key, model, source, prompt }), extract, onChunk);
-}
-
-// Legacy name — TODO(Task 5): remove once app.js and index.html use streamSlides.
-function streamGeminiSlides({ key, model, source, prompt, onChunk }) {
-  return streamSlides({ provider: "gemini", key, model, source, prompt, onChunk });
 }
 
 // ─── AI model selector (chip + <dialog>) ─────────
