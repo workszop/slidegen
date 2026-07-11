@@ -1,10 +1,9 @@
 # slidegen — Studio stylów prezentacji
 
 Slide generator from txt, markdown or pdf — a zero-build presentation style
-studio in the **edulab** look. Design how a slide deck looks in real time:
-4 preset templates, any Google Font (with live previews), accent/text/background
-color pickers, and logo upload — then load your own document and let Gemini
-turn it into slides.
+studio in the **edulab** look, plus two deck-first workspaces (edulab and
+Quantica Lab) that turn any document into a branded slide deck with your
+choice of AI provider.
 
 **Live apps:**
 
@@ -20,13 +19,21 @@ turn it into slides.
   its own typeface; type any name from fonts.google.com
 - **Logo upload** — appears top-right on every slide (default: the edulab
   rocking horse, auto-inverting on dark backgrounds)
-- **Document → slides via your choice of AI** — drop a `.txt`, `.md`, or `.pdf`
-  and pick the provider and model (Gemini, OpenAI, or Claude) in the model
-  popup; your API key is stored only in your browser and sent only to the
-  selected provider; slides stream in live. The active provider/model shows as
-  a compact chip in the workspace; click it to change provider, model
-  (including any custom model ID), or key.
-- **Markdown editor drawer** — tweak the deck with a live re-render
+- **Deck-first workspace (edu.html / quantica.html)** — each app opens
+  straight into an example deck about itself, no upload required first. A
+  sidebar holds everything: **Document** (drop/paste a `.txt`, `.md`, or
+  `.pdf`), **Generate** (AI model chip + slide count/language), **Style**
+  (four brand-locked presets), and **Actions** (edit, present, download). The
+  stage in the middle shows the live deck with prev/next navigation and a
+  slide counter; an editor panel opens to the right of the slide — toggle it
+  manually or let it auto-open as slides stream in during generation.
+- **Document → slides via your choice of AI** — pick the provider and model
+  (Gemini, OpenAI, or Claude) from the model chip in the **Generate** section;
+  your API key is stored only in your browser and sent only to the selected
+  provider; slides stream in live, replacing the example deck.
+- **4 brand style presets per app** — one click restyles the whole deck
+  (stage, present mode, and `.pptx` export); the choice persists per app and
+  survives reload.
 - **Export** — download the deck as an editable `.pptx` in the current look
 - Bilingual UI (PL default / EN), keyboard navigation, fullscreen presenting,
   settings persisted in localStorage
