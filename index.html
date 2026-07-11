@@ -371,8 +371,9 @@ body.presenting .deck-footer { border-top: 0; position: absolute; bottom: 0; lef
       <div class="field field-inline">
         <label id="slideLangLabel" data-i18n="slideLangLabel"></label>
         <div class="lang-toggle" role="group" aria-labelledby="slideLangLabel">
-          <button id="slideLangPl" aria-pressed="true">PL</button>
+          <button id="slideLangPl" aria-pressed="false">PL</button>
           <button id="slideLangEn" aria-pressed="false">EN</button>
+          <button id="slideLangAuto" aria-pressed="true">Auto</button>
         </div>
       </div>
       <button class="btn btn-primary btn-block" id="generateBtn" disabled data-i18n="generate"></button>
@@ -567,7 +568,7 @@ const state = {
   slides: [],
   current: 0,
   source: null,       // {name, kind:"text"|"pdf", text?, base64?} — for the AI request
-  slideLang: "pl",
+  slideLang: "auto",
   generating: false,
   config: {           // the user's style playground settings
     preset: 0,
@@ -823,7 +824,7 @@ mdEditorEl.addEventListener("input", () => {
 // ─── Document loading + AI generation (same logic as the main apps) ───
 const fileNoteEl = $("fileNote"), genNoteEl = $("genNote"),
   generateBtnEl = $("generateBtn"),
-  slideLangPlBtn = $("slideLangPl"), slideLangEnBtn = $("slideLangEn");
+  slideLangPlBtn = $("slideLangPl"), slideLangEnBtn = $("slideLangEn"), slideLangAutoBtn = $("slideLangAuto");
 
 function note(el, msg, isError) {
   el.textContent = msg;
@@ -835,6 +836,7 @@ function reflectSource() {
   note(fileNoteEl, state.source ? `✓ ${t("fileLoaded")}: ${state.source.name}` : "");
   slideLangPlBtn.setAttribute("aria-pressed", String(state.slideLang === "pl"));
   slideLangEnBtn.setAttribute("aria-pressed", String(state.slideLang === "en"));
+  slideLangAutoBtn.setAttribute("aria-pressed", String(state.slideLang === "auto"));
 }
 
 $("mdBtn").addEventListener("click", () => mdInputEl.click());
@@ -845,7 +847,6 @@ mdInputEl.addEventListener("change", () => {
   readSourceFile(file).then(source => {
     state.source = source;
     if (source.kind === "text") {
-      state.slideLang = detectLang(source.text);
       // markdown that already contains slide delimiters previews immediately
       if (splitSlides(source.text).length > 1) setMd(source.text);
     }
@@ -861,6 +862,7 @@ $("resetBtn").addEventListener("click", () => {
 
 slideLangPlBtn.addEventListener("click", () => { state.slideLang = "pl"; reflectSource(); });
 slideLangEnBtn.addEventListener("click", () => { state.slideLang = "en"; reflectSource(); });
+slideLangAutoBtn.addEventListener("click", () => { state.slideLang = "auto"; reflectSource(); });
 
 // Streaming: slides appear in the styled deck as the AI writes them
 // (transport lives in ../shared.js; this function is only the UI reaction).

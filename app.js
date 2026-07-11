@@ -137,9 +137,10 @@
         <h2 class="side-title" data-i18n="sideGen"></h2>
         <button id="aiChip"></button>
         <div class="side-row">
-          <div class="lang-toggle" role="group" aria-label="PL/EN">
-            <button id="slideLangPl" aria-pressed="true">PL</button>
+          <div class="lang-toggle" role="group" aria-label="PL/EN/Auto">
+            <button id="slideLangPl" aria-pressed="false">PL</button>
             <button id="slideLangEn" aria-pressed="false">EN</button>
+            <button id="slideLangAuto" aria-pressed="true">Auto</button>
           </div>
           <select id="countHint" class="mono-input">
             <option value="auto" data-i18n="countAuto"></option>
@@ -223,7 +224,7 @@
     slides: [],
     current: 0,
     generating: false,
-    slideLang: "pl",
+    slideLang: "auto",
   };
   function setView(v) { state.view = v; render(); }
   function setDeck(md, { example = false } = {}) {
@@ -267,6 +268,7 @@
   const aiChipEl = document.getElementById("aiChip");
   const slideLangPlBtn = document.getElementById("slideLangPl");
   const slideLangEnBtn = document.getElementById("slideLangEn");
+  const slideLangAutoBtn = document.getElementById("slideLangAuto");
   const countHintEl = document.getElementById("countHint");
   const generateBtn = document.getElementById("generateBtn");
   const genStatusEl = document.getElementById("genStatus");
@@ -445,12 +447,13 @@
     const src = state.source;
     fileChipEl.classList.toggle("hidden", !src);
     if (src) {
-      const langInfo = src.kind === "text" ? ` · ${t("detected")}: ${state.slideLang.toUpperCase()}` : "";
+      const langInfo = src.kind === "text" ? ` · ${t("detected")}: ${detectLang(src.text).toUpperCase()}` : "";
       fileChipEl.textContent = `✓ ${t("fileLoaded")}: ${src.name}${langInfo}`;
     }
     generateBtn.disabled = !src;
     slideLangPlBtn.setAttribute("aria-pressed", String(state.slideLang === "pl"));
     slideLangEnBtn.setAttribute("aria-pressed", String(state.slideLang === "en"));
+    slideLangAutoBtn.setAttribute("aria-pressed", String(state.slideLang === "auto"));
   }
 
   function showError(title, detail) {
@@ -463,7 +466,6 @@
   function setSource(source) {
     state.source = source;
     if (source?.kind === "text") {
-      state.slideLang = detectLang(source.text);
       source.multi = splitSlides(source.text).length > 1; // computed once, read by renderSidebar
     }
     errorPanelEl.classList.add("hidden");
@@ -558,6 +560,7 @@
 
   slideLangPlBtn.addEventListener("click", () => { state.slideLang = "pl"; renderSidebar(); });
   slideLangEnBtn.addEventListener("click", () => { state.slideLang = "en"; renderSidebar(); });
+  slideLangAutoBtn.addEventListener("click", () => { state.slideLang = "auto"; renderSidebar(); });
   errorDismissBtn.addEventListener("click", () => errorPanelEl.classList.add("hidden"));
 
   generateBtn.addEventListener("click", () => generateSlides());
