@@ -282,6 +282,13 @@ input[type="color"]:hover { border-color: var(--marigold); }
   background: var(--paper-2); padding: var(--sp-3); display: flex; flex-direction: column; min-height: 0;
 }
 .editor-head { display: flex; justify-content: flex-end; margin-bottom: var(--sp-2); }
+.editor-close {
+  width: 24px; height: 24px; padding: 0; flex: none;
+  display: inline-flex; align-items: center; justify-content: center;
+  font-size: 12px; line-height: 1; border: 0; border-radius: 6px;
+  background: transparent; color: inherit; opacity: .65; cursor: pointer;
+}
+.editor-close:hover { opacity: 1; background: color-mix(in srgb, var(--border) 60%, transparent); }
 .editor-panel textarea {
   flex: 1; width: auto; height: auto; resize: none;
   font-family: var(--font-mono); font-size: 13px; line-height: 1.55; color: var(--ink);
@@ -424,7 +431,7 @@ body.presenting .deck-footer { border-top: 0; position: absolute; bottom: 0; lef
     </div>
   </main>
   <div class="editor-panel hidden" id="editorDrawer">
-    <div class="editor-head"><button class="btn btn-ghost" id="editorCloseBtn" aria-label="close">✕</button></div>
+    <div class="editor-head"><button class="editor-close" id="editorCloseBtn" aria-label="close">✕</button></div>
     <textarea id="mdEditor" spellcheck="false"></textarea>
   </div>
 </div>

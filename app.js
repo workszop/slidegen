@@ -196,7 +196,7 @@
     </section>
 
     <aside class="editor-panel hidden" id="editorPanel">
-      <div class="editor-head"><button class="btn btn-ghost" id="editorCloseBtn" aria-label="close">✕</button></div>
+      <div class="editor-head"><button class="editor-close" id="editorCloseBtn" aria-label="close">✕</button></div>
       <textarea id="editor" spellcheck="false"></textarea>
     </aside>
   </div>
