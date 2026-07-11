@@ -3,10 +3,10 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>doc2slide</title>
+<title>doc2slide — eksperymentalny</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Raleway:wght@400;500;600;700;800&family=DM+Mono:wght@400;500&family=Poppins:wght@400;500;600;700&family=Geist+Mono:wght@400;500;600&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Raleway:wght@400;500;600;700;800&family=DM+Mono:wght@400;500&display=swap">
 <script defer src="https://cdn.jsdelivr.net/npm/marked@18.0.5/lib/marked.umd.js"
         integrity="sha384-ZD0fTOwPMHi7zM6WTVIWJR21I07lq0ccnqz3J6WMvQKG9thh4y7TA1QE6PJu0Af8" crossorigin="anonymous"></script>
 <script defer src="https://cdn.jsdelivr.net/npm/dompurify@3.0.11/dist/purify.min.js"
@@ -17,9 +17,9 @@
 <script src="favicon.js"></script>
 <style>
 /* ============================================================
-   Quantica Lab app — edulab chrome (Editorial Color, Raleway),
-   quantica slides (Poppins, pink). Logic lives in app.js;
-   this file is design only. Style contract: see README.
+   edulab style layer — Editorial Color tokens, Raleway type
+   Logic lives in app.js; this file is design only.
+   Style contract classes: see README "Style contract".
    ============================================================ */
 
 :root {
@@ -99,14 +99,6 @@
   --h1: 44px; --h2: 33px; --h3: 25px; --h4: 19px;
   --body-lg: 18px; --body: 16px; --body-sm: 14px;
   --caption: 13px; --overline: 12px;
-
-  /* ---- Quantica slide identity (generated slides keep the quantica look) ---- */
-  --quantica-pink:   #C41E54;
-  --deep-berry:      #8A004C;
-  --magenta-tint:    #FFE6F1;
-  --violet-primary:  #7030A0;
-  --font-slide:      'Poppins', 'Inter', system-ui, sans-serif;
-  --font-slide-mono: 'Geist Mono', ui-monospace, 'SF Mono', Menlo, monospace;
 }
 
 /* ============================================================
@@ -191,6 +183,11 @@ textarea, .mono-input {
   border-radius: var(--r-sm); padding: var(--sp-3); width: 100%;
 }
 textarea { resize: vertical; }
+.experimental-label { font-family: var(--font-mono); font-size: var(--overline); color: var(--ink-2); }
+.experimental-toggle { display: flex; align-items: flex-start; gap: var(--sp-2); font-size: var(--body-sm); cursor: pointer; }
+.experimental-toggle input { margin-top: 2px; accent-color: var(--marigold); }
+.image-options { display: flex; flex-direction: column; gap: var(--sp-2); padding: var(--sp-3); border-radius: var(--r-sm); background: var(--paper-2); }
+.experimental-note { margin: 0; color: var(--ink-3); font-size: var(--caption); line-height: 1.45; }
 
 .gen-status { max-width: 480px; margin: 0 auto var(--sp-6); text-align: center; color: var(--ink-2); font-size: var(--body-sm); }
 .gen-bar { height: 4px; border-radius: var(--r-pill); background: var(--marigold-soft); overflow: hidden; margin-bottom: var(--sp-3); }
@@ -234,7 +231,7 @@ body.presenting .chrome { display: none; }
 #view-present { position: fixed; inset: 0; background: var(--slide-bg, var(--paper)); display: flex; flex-direction: column; }
 .present-bar {
   position: absolute; top: 0; left: 0; height: 4px; width: 0%;
-  background: var(--slide-accent, var(--quantica-pink)); transition: width 450ms cubic-bezier(.2,.6,.2,1); z-index: 5;
+  background: var(--slide-accent, var(--marigold)); transition: width 450ms cubic-bezier(.2,.6,.2,1); z-index: 5;
 }
 .slide-logo {
   position: absolute; top: calc(4px + 2.5vh); right: 3vw; z-index: 4;
@@ -244,8 +241,7 @@ body.presenting .chrome { display: none; }
    on every slide; only the title slide stays vertically centered. */
 .stage { flex: 1; display: grid; place-items: start center; padding: 14vh 4vw 3vh; overflow: hidden; }
 /* Fluid deck scaling: one viewport-driven base size on the slide,
-   everything inside in em — the whole slide grows/shrinks with the window.
-   Slides keep the QUANTICA identity: Poppins, Geist Mono code, pink. */
+   everything inside in em — the whole slide grows/shrinks with the window. */
 .slide {
   width: min(1600px, 90vw); max-height: 88vh; overflow: auto;
   font-size: clamp(15px, 1.55vw + 0.9vh, 46px);
@@ -255,34 +251,34 @@ body.presenting .chrome { display: none; }
 }
 
 .slide .slide-eyebrow {
-  font-family: var(--font-slide-mono); font-weight: 500; font-size: .55em;
-  letter-spacing: .08em; text-transform: uppercase; color: var(--slide-accent, var(--quantica-pink));
+  font-family: var(--font-mono); font-weight: 500; font-size: .55em;
+  letter-spacing: .14em; text-transform: uppercase; color: var(--slide-accent, var(--marigold-ink));
   margin-bottom: .9em;
 }
 .slide h1 {
-  font-family: var(--font-slide); font-weight: 700;
+  font-family: var(--font-display); font-weight: 800;
   font-size: 3em; line-height: 1.05; letter-spacing: -0.02em;
   margin: 0 0 .35em;
 }
 .slide h2 {
-  font-family: var(--font-slide); font-weight: 700; font-size: 2.1em;
-  line-height: 1.1; letter-spacing: -0.01em; margin: 0 0 .6em;
+  font-family: var(--font-display); font-weight: 700; font-size: 2.1em;
+  line-height: 1.1; letter-spacing: -0.015em; margin: 0 0 .6em;
 }
-.slide h3 { font-family: var(--font-slide); font-weight: 700; font-size: 1.35em; margin: 1em 0 .5em; }
+.slide h3 { font-family: var(--font-display); font-weight: 700; font-size: 1.35em; margin: 1em 0 .5em; }
 .slide p, .slide li { font-size: 1em; line-height: 1.55; color: var(--slide-fg-muted); }
 .slide p { margin: 0 0 .6em; }
 .slide li { margin-bottom: .45em; }
-.slide li::marker { color: var(--slide-accent, var(--quantica-pink)); }
+.slide li::marker { color: var(--slide-accent, var(--marigold)); }
 .slide strong { color: var(--slide-fg, var(--ink)); font-weight: 700; }
 .slide em { color: var(--slide-fg, var(--ink)); }
-.slide a { color: var(--quantica-pink); }
+.slide a { color: var(--teal-ink); }
 /* Mono rules for presenting code — REQUIRED in every style */
 .slide code {
-  font-family: var(--font-slide-mono); font-size: .9em; color: var(--slide-fg, var(--ink));
+  font-family: var(--font-mono); font-size: .9em; color: var(--slide-fg, var(--ink));
   background: var(--slide-surface); padding: .1em .4em; border-radius: var(--r-xs);
 }
 .slide pre {
-  font-family: var(--font-slide-mono);
+  font-family: var(--font-mono);
   background: var(--slide-surface); border: 1px solid var(--slide-surface);
   border-radius: var(--r-md); padding: .8em; overflow-x: auto; font-size: .8em;
   line-height: 1.5;
@@ -290,21 +286,25 @@ body.presenting .chrome { display: none; }
 .slide pre code { background: none; padding: 0; font-size: 1em; }
 .slide blockquote {
   margin: .9em 0; padding: .6em 1em;
-  border: 1px solid var(--slide-accent, var(--quantica-pink)); background: var(--magenta-tint);
-  border-radius: var(--r-md); color: var(--deep-berry);
+  border-left: .18em solid var(--slide-accent, var(--marigold)); background: var(--marigold-soft);
+  border-radius: 0 var(--r-md) var(--r-md) 0; color: var(--marigold-ink);
 }
 .slide blockquote p { color: inherit; margin: 0; }
 .slide table { border-collapse: collapse; width: 100%; font-size: .92em; }
 .slide th {
-  font-family: var(--font-slide-mono); font-size: .6em; letter-spacing: .08em;
+  font-family: var(--font-mono); font-size: .6em; letter-spacing: .08em;
   text-transform: uppercase; text-align: left; color: var(--ink-3);
   border-bottom: 2px solid var(--line-2); padding: .5em .7em;
 }
 .slide td { border-bottom: 1px solid var(--line); padding: .55em .7em; color: var(--slide-fg-muted); }
+.slide--illustrated { width: min(1600px, 94vw); }
+.slide-layout { display: grid; grid-template-columns: minmax(0, 1.08fr) minmax(260px, .92fr); gap: 1.4em; align-items: center; }
+.slide-copy { min-width: 0; }
+.slide-generated-image { display: block; width: 100%; max-height: 52vh; object-fit: cover; border-radius: var(--r-md); box-shadow: 0 12px 34px rgba(33,30,26,.14); }
 
 .slide--title { text-align: center; align-self: center; }
-.slide--title .slide-eyebrow { color: var(--violet-primary); }
-.slide--title h1 { color: var(--slide-accent, var(--quantica-pink)); font-size: 3.6em; }
+.slide--title .slide-eyebrow { color: var(--teal-ink); }
+.slide--title h1 { color: var(--slide-fg, var(--ink)); font-size: 3.6em; }
 .slide--title p { font-size: 1.3em; color: var(--slide-fg-muted); }
 
 .present-footer {
@@ -320,6 +320,8 @@ body.presenting .chrome { display: none; }
   .hints { display: none; }
   .stage { padding: var(--sp-6) var(--sp-4); }
   .present-footer .hints { display: none; }
+  .slide-layout { grid-template-columns: 1fr; }
+  .slide-generated-image { max-height: 34vh; }
 }
 
 /* ─── Full-bleed workbench (styler recipe) ─── */
@@ -346,7 +348,7 @@ main#app { flex: 1; display: flex; min-height: 0; }
 }
 .deck-bar {
   position: absolute; top: 0; left: 0; height: 4px; width: 0%;
-  background: var(--slide-accent, var(--quantica-pink));
+  background: var(--slide-accent, var(--marigold));
   transition: width 450ms cubic-bezier(.2,.6,.2,1); z-index: 5;
 }
 .deck-logo {
@@ -412,26 +414,28 @@ body.presenting .workbench { display: none; }
 <body>
 <script>
 window.APP_BRAND = {
-  logo: "data:image/png;base64,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",
-  wordmark: null,
-  tag: "doc2slide",
-  presentBrand: "Quantica Lab",
-  presetKey: "eduapp_preset_quantica",
-  editorWKey: "quantica.editorW",
+  logo: window.EDULAB_LOGO,
+  wordmark: "edulab",
+  tag: "doc2slide · lab",
+  presentBrand: "edulab",
+  presetKey: "eduapp_preset_experimental",
+  editorWKey: "experimental.editorW",
+  experimentalImages: true,
   presets: [
-    { id: "jasny",   name: { pl: "Jasny",   en: "Light" },   bg: "#FFFFFF", fg: "#111111", accent: "#C41E54" },
-    { id: "ciemny",  name: { pl: "Ciemny",  en: "Dark" },    bg: "#111111", fg: "#FFFFFF", accent: "#FF4D9A" },
-    { id: "magenta", name: { pl: "Magenta", en: "Magenta" }, bg: "#FFE6F1", fg: "#111111", accent: "#8A004C" },
-    { id: "mono",    name: { pl: "Mono",    en: "Mono" },    bg: "#F5F6F8", fg: "#111111", accent: "#3A3A42" },
+    { id: "papier",   name: { pl: "Papier",   en: "Paper" },    bg: "#FBF7F0", fg: "#211E1A", accent: "#E8920C" },
+    { id: "atrament", name: { pl: "Atrament", en: "Ink" },      bg: "#211E1A", fg: "#FBF7F0", accent: "#E8920C" },
+    { id: "morski",   name: { pl: "Morski",   en: "Teal" },     bg: "#FBF7F0", fg: "#211E1A", accent: "#0E8C7F" },
+    { id: "kontrast", name: { pl: "Kontrast", en: "Contrast" }, bg: "#FFFFFF", fg: "#211E1A", accent: "#211E1A" },
   ],
   exampleMd: {
-    pl: `# doc2slide
-Przewodnik po tworzeniu prezentacji w wariancie Quantica Lab.
+    pl: `# doc2slide · lab
+Eksperymentalny wariant edulab z dodatkowymi instrukcjami i ilustracjami AI.
 ---
-## Jak działa doc2slide?
+## Co oferuje ten wariant?
 - Wgraj materiał źródłowy w panelu **Dokument**
-- Wybierz model, język i orientacyjną liczbę slajdów
-- Kliknij **Generuj slajdy**, a potem sprawdź i popraw wynik
+- Dodaj własne instrukcje, które rozszerzą podstawowy prompt aplikacji
+- Opcjonalnie wygeneruj ilustrację do każdego slajdu treści
+- Sprawdź wynik, popraw tekst i wybierz styl edulab
 
 > Ten przewodnik możesz przeglądać przyciskami pod slajdem lub klawiszami ← i →.
 ---
@@ -443,23 +447,31 @@ Przewodnik po tworzeniu prezentacji w wariancie Quantica Lab.
 ---
 ## 2. Skonfiguruj model AI
 - Kliknij nazwę modelu w sekcji **Generowanie**
-- Wybierz Gemini, OpenAI albo Claude i wklej własny klucz API
+- Tekst może przygotować Gemini, OpenAI albo Claude
+- Ilustracje korzystają z osobnego modelu GPT Image i wymagają klucza OpenAI
 - Klucz jest zapisany tylko w pamięci tej przeglądarki
 
 > Podczas generowania treść dokumentu jest wysyłana bezpośrednio do wybranego dostawcy AI.
 ---
-## 3. Ustaw język i długość
+## 3. Dopasuj sposób generowania
 - **Auto** zachowuje język dokumentu; możesz wymusić polski lub angielski
 - Wybierz około 10 albo 20 slajdów lub pozostaw ustawienie **auto**
-- Kliknij **Generuj slajdy** i poczekaj, aż pojawi się cała prezentacja
+- W polu **Dodatkowe instrukcje dla AI** opisz ton, odbiorców lub zakres prezentacji
+- Instrukcje uzupełniają zasady doc2slide, ale nie zastępują formatu slajdów
 ---
-## 4. Sprawdź i popraw treść
+## 4. Dodaj ilustracje
+- Zaznacz **Generuj ilustracje z OpenAI** i wybierz model obrazu
+- doc2slide najpierw przygotuje tekst, a potem obrazy do slajdów treści
+- Ilustracje są generowane bez napisów, logo i elementów interfejsu
+- Generowanie obrazów zwiększa czas oraz koszt wywołań API
+---
+## 5. Sprawdź i popraw treść
 - Przejrzyj slajdy i upewnij się, że nie brakuje ważnych informacji
 - Kliknij **Edytuj**, aby otworzyć tekst prezentacji po prawej stronie
 - Zmiany widać na bieżąco; slajdy rozdziela osobna linia \`---\`
-- Skracaj długie akapity — jeden slajd powinien przekazywać jedną główną myśl
+- Zweryfikuj tekst i obrazy wygenerowane przez AI przed udostępnieniem
 ---
-## 5. Wybierz styl i prezentuj
+## 6. Wybierz styl i prezentuj
 - W sekcji **Styl** jednym kliknięciem zmienisz wygląd całej prezentacji
 - Wybrany styl zostanie użyty także w pliku PowerPoint
 - Kliknij **Prezentuj**, aby uruchomić tryb prezentacji
@@ -470,49 +482,58 @@ Przewodnik po tworzeniu prezentacji w wariancie Quantica Lab.
 | ← | poprzedni slajd |
 | Esc | powrót do edycji |
 ---
-## 6. Zapisz swoją pracę
+## 7. Zapisz swoją pracę
 - **Pobierz .md** zapisuje treść i podział slajdów do dalszej edycji
-- **Pobierz .pptx** tworzy edytowalną prezentację PowerPoint
+- **Pobierz .pptx** tworzy edytowalną prezentację PowerPoint razem z ilustracjami
 - Przed udostępnieniem sprawdź układ, fakty i dane wygenerowane przez AI
 
 Gotowe — wgraj własny dokument w panelu po lewej stronie.`,
-    en: `# doc2slide
-A short guide to creating presentations in the Quantica Lab style.
+    en: `# doc2slide · lab
+An experimental edulab variant with extra instructions and AI illustrations.
 ---
-## What is this?
-- Drop a document (.txt, .md, .pdf) - **AI** turns it into slides
-- Everything runs in your browser - no server, no install
-- This deck is the example: browse it with ← →
+## What does this variant add?
+- Upload a source document or paste text
+- Add your own instructions on top of the built-in slide prompt
+- Optionally generate an illustration for every content slide
+- Review the result, edit the text, and apply an edulab style
 ---
 ## Load your material
-- Drop a file in the **Document** panel (up to 19 MB) or paste text
-- PDFs go to the AI whole - tables and layout included
-- Got a ready .md deck? It loads instantly, no AI needed
+- Upload a .txt, .md, or .pdf file in the **Document** panel
+- You can also paste text below the file control
+- A ready-made .md deck opens immediately without AI
 ---
-## Pick an AI model
-- Click the model chip in the **Generate** section
-- Choose Gemini, OpenAI, or Claude - with your own API key
-> The key stays in your browser and is sent only to the provider you picked.
+## Configure the models
+- Gemini, OpenAI, or Claude can generate the slide text
+- GPT Image models generate illustrations and require an OpenAI key
+- Keys are stored only in this browser
+
+> During generation, document content is sent directly to the selected AI providers.
 ---
-## Choose a style
-- Four styles in the **Style** section - one click restyles the whole deck
-- Colors stay within the Quantica Lab palette, also in the .pptx export
+## Add your instructions
+- Choose the language and approximate number of slides
+- Describe the audience, tone, emphasis, or examples in **Additional AI instructions**
+- Your instructions extend the built-in doc2slide format rules
 ---
-## Edit the content
+## Generate illustrations
+- Enable **Generate illustrations with OpenAI** and choose an image model
+- Text is generated first, followed by one image per content slide
+- Image generation adds API cost and may take longer
+---
+## Review and edit
 - The **Edit** button opens a markdown editor to the right of the slide
 - Changes render live; slides are separated by a \`---\` line
-- During generation the editor opens itself and shows the AI stream
+- Verify both text and AI-generated imagery before sharing
 ---
-## Present
+## Present and export
 | Key | Action |
 |-----|--------|
 | → | next slide |
 | ← | previous slide |
 | Esc | back to editing |
 ---
-## Export and go
+## Save your work
 - **Download .md** - reload it anytime without an API key
-- **Download .pptx** - editable PowerPoint in the chosen style
+- **Download .pptx** - editable PowerPoint with generated illustrations
 - Happy presenting!`,
   },
 };

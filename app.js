@@ -29,6 +29,7 @@
     presetKey: "eduapp_preset",
     editorWKey: "eduapp.editorW",
     exampleMd: { pl: "", en: "" },
+    experimentalImages: false,
   }, window.APP_BRAND);
 
   // ─── Constants (LS_* etc. come from shared.js) ───
@@ -63,6 +64,16 @@
       sideStyle: "Styl",
       sideActions: "Akcje",
       edit: "Edytuj",
+      additionalPrompt: "Dodatkowe instrukcje dla AI",
+      additionalPromptPh: "np. użyj konkretnych przykładów i krótkich nagłówków",
+      generateImages: "Generuj ilustracje z OpenAI",
+      imageModel: "Model obrazu",
+      imageNote: "Jedna ilustracja do każdego slajdu treści. Wymaga klucza OpenAI i zwiększa koszt generowania.",
+      genImages: "Generuję ilustracje: {current}/{total}",
+      errNoOpenAIKey: "Aby generować ilustracje, zapisz klucz OpenAI w ustawieniach modelu.",
+      errImageTitle: "Nie wszystkie ilustracje zostały wygenerowane",
+      imageAlt: "Ilustracja wygenerowana przez AI",
+      errNetwork: "Nie udało się połączyć z {host}. Sprawdź połączenie, blokowanie przez rozszerzenia lub zaporę sieciową i spróbuj ponownie.",
     },
     en: {
       appTitle: "doc2slide",
@@ -92,6 +103,16 @@
       sideStyle: "Style",
       sideActions: "Actions",
       edit: "Edit",
+      additionalPrompt: "Additional AI instructions",
+      additionalPromptPh: "e.g. use concrete examples and short headings",
+      generateImages: "Generate illustrations with OpenAI",
+      imageModel: "Image model",
+      imageNote: "One illustration per content slide. Requires an OpenAI key and increases generation cost.",
+      genImages: "Generating illustrations: {current}/{total}",
+      errNoOpenAIKey: "Save an OpenAI key in the model settings to generate illustrations.",
+      errImageTitle: "Some illustrations could not be generated",
+      imageAlt: "AI-generated illustration",
+      errNetwork: "Could not connect to {host}. Check your connection, browser extensions, or network firewall and try again.",
     },
   };
   let uiLang = localStorage.getItem(LS_LANG) ?? "pl";
@@ -108,6 +129,18 @@
 
   // ─── Markup (shared structure; brand styles it via CSS) ──
   const wordmarkHtml = BRAND.wordmark ? `<div class="wordmark"></div>` : "";
+  const experimentalControlsHtml = BRAND.experimentalImages ? `
+        <label class="experimental-label" for="additionalPrompt" data-i18n="additionalPrompt"></label>
+        <textarea id="additionalPrompt" rows="3" data-i18n-placeholder="additionalPromptPh"></textarea>
+        <label class="experimental-toggle">
+          <input id="generateImages" type="checkbox" />
+          <span data-i18n="generateImages"></span>
+        </label>
+        <div class="image-options hidden" id="imageOptions">
+          <label class="experimental-label" for="imageModel" data-i18n="imageModel"></label>
+          <select id="imageModel" class="mono-input"></select>
+          <p class="experimental-note" data-i18n="imageNote"></p>
+        </div>` : "";
   document.body.insertAdjacentHTML("afterbegin", `
 <header class="chrome">
   <img class="chrome-mark brand-logo" alt="" aria-hidden="true">
@@ -149,6 +182,7 @@
             <option value="20">~20</option>
           </select>
         </div>
+        ${experimentalControlsHtml}
         <button class="btn btn-primary btn-block" id="generateBtn" disabled data-i18n="generate"></button>
         <div class="gen-status hidden" id="genStatus" role="status">
           <div class="gen-bar" aria-hidden="true"><div></div></div>
@@ -224,6 +258,8 @@
     source: null,           // {name, kind, text?|base64?, multi?} — see readSourceFile
     md: "",
     slides: [],
+    slideSegments: [],
+    images: [],
     current: 0,
     generating: false,
     slideLang: "auto",
@@ -292,6 +328,10 @@
   const editToggleBtn = document.getElementById("editToggleBtn");
   const editorCloseBtn = document.getElementById("editorCloseBtn");
   const presetGridEl = document.getElementById("presetGrid");
+  const additionalPromptEl = document.getElementById("additionalPrompt");
+  const generateImagesEl = document.getElementById("generateImages");
+  const imageOptionsEl = document.getElementById("imageOptions");
+  const imageModelEl = document.getElementById("imageModel");
 
   mountPanelResizer({ panel: editorPanelEl, storageKey: BRAND.editorWKey });
 
@@ -328,7 +368,8 @@
   const slideHtmlCache = new Map();
   function renderSlides() {
     if (slideHtmlCache.size > 500) slideHtmlCache.clear();
-    state.slides = splitSlides(stripOuterFence(state.md)).map(seg => {
+    state.slideSegments = splitSlides(stripOuterFence(state.md));
+    state.slides = state.slideSegments.map(seg => {
       let html = slideHtmlCache.get(seg);
       if (html === undefined) {
         html = DOMPurify.sanitize(marked.parse(seg));
@@ -336,6 +377,7 @@
       }
       return html;
     });
+    state.images = state.images.slice(0, state.slides.length);
     state.current = Math.min(state.current, Math.max(0, state.slides.length - 1));
   }
 
@@ -374,8 +416,16 @@
     deckBarEl.style.width = n ? `${((state.current + 1) / n) * 100}%` : "0%";
     if (!n) { wsStageEl.innerHTML = ""; return; }
     const isTitle = state.current === 0 && isTitleSlide(state.md);
-    wsStageEl.className = "slide" + (isTitle ? " slide--title" : "");
-    wsStageEl.innerHTML = state.slides[state.current];
+    const image = state.images[state.current];
+    wsStageEl.className = "slide" + (isTitle ? " slide--title" : "") + (image ? " slide--illustrated" : "");
+    wsStageEl.innerHTML = image
+      ? `<div class="slide-layout"><div class="slide-copy">${state.slides[state.current]}</div><img class="slide-generated-image" alt=""></div>`
+      : state.slides[state.current];
+    if (image) {
+      const img = wsStageEl.querySelector(".slide-generated-image");
+      img.src = image;
+      img.alt = t("imageAlt");
+    }
   }
 
   function renderPresent() {
@@ -387,9 +437,17 @@
     const eyebrow = isTitle
       ? [BRAND.presentBrand, t("presentEyebrowWord")].filter(Boolean).join(" · ")
       : [`${i + 1} / ${n}`, title].filter(Boolean).join(" · ");
-    stageEl.className = "slide" + (isTitle ? " slide--title" : "");
-    stageEl.innerHTML = `<div class="slide-eyebrow"></div>` + state.slides[i];
+    const image = state.images[i];
+    stageEl.className = "slide" + (isTitle ? " slide--title" : "") + (image ? " slide--illustrated" : "");
+    stageEl.innerHTML = `<div class="slide-eyebrow"></div>` + (image
+      ? `<div class="slide-layout"><div class="slide-copy">${state.slides[i]}</div><img class="slide-generated-image" alt=""></div>`
+      : state.slides[i]);
     stageEl.querySelector(".slide-eyebrow").textContent = eyebrow;
+    if (image) {
+      const img = stageEl.querySelector(".slide-generated-image");
+      img.src = image;
+      img.alt = t("imageAlt");
+    }
     presentBarEl.style.width = `${((i + 1) / n) * 100}%`;
     presentCounterEl.textContent = `${i + 1} / ${n}`;
   }
@@ -427,6 +485,7 @@
       await ensurePptxDeps();
       await exportDeckToPptx({
         slidesMd: splitSlides(stripOuterFence(state.md)),
+        images: state.images,
         theme: readDeckTheme(),
         logo: BRAND.logo || null,
         brandName: BRAND.presentBrand,
@@ -467,9 +526,16 @@
     errorPanelEl.classList.remove("hidden");
   }
 
+  function apiErrorDetail(err) {
+    return err?.code === "network_error"
+      ? t("errNetwork").replace("{host}", err.host || "API")
+      : String(err?.message ?? err);
+  }
+
   // ─── File loading ───────────────────────────────
   function setSource(source) {
     state.source = source;
+    state.images = [];
     if (source?.kind === "text") {
       source.multi = splitSlides(source.text).length > 1; // computed once, read by renderSidebar
     }
@@ -486,15 +552,68 @@
   }
 
   // ─── Generation (provider-agnostic) ─────────────
+  function buildSlideImagePrompt(slideMd, additionalPrompt) {
+    let prompt =
+      "Create one landscape editorial illustration for a presentation slide. " +
+      "Use a warm, modern workshop aesthetic with simple composition and generous negative space. " +
+      "Do not include text, letters, numbers, logos, watermarks, UI, frames, or slide layouts. " +
+      "Illustrate the central idea of this slide:\n\n" + slideMd.trim();
+    if (additionalPrompt?.trim()) {
+      prompt += "\n\nAdditional direction from the user:\n" + additionalPrompt.trim();
+    }
+    return prompt;
+  }
+
+  async function generateIllustrations({ key, model, additionalPrompt }) {
+    const indices = state.slideSegments
+      .map((_, i) => i)
+      .filter(i => !(i === 0 && isTitleSlide(state.slideSegments[i])));
+    let cursor = 0, completed = 0;
+    const failures = [];
+    async function worker() {
+      for (;;) {
+        const position = cursor++;
+        if (position >= indices.length) return;
+        const slideIndex = indices[position];
+        try {
+          const image = await generateOpenAIImage({
+            key,
+            model,
+            prompt: buildSlideImagePrompt(state.slideSegments[slideIndex], additionalPrompt),
+          });
+          state.images[slideIndex] = image;
+          if (state.view === "present") renderPresent();
+          else renderStage();
+        } catch (err) {
+          failures.push(`${slideIndex + 1}: ${apiErrorDetail(err)}`);
+        } finally {
+          completed += 1;
+          genStatusTextEl.textContent = t("genImages")
+            .replace("{current}", completed)
+            .replace("{total}", indices.length);
+        }
+      }
+    }
+    await worker();
+    if (failures.length) {
+      showError(t("errImageTitle"), failures.join(" · "));
+    }
+  }
+
   // Streaming: markdown flows into the editor and preview as it arrives
   // (transport lives in shared.js; this function is only the UI reaction).
   async function generateSlides() {
     const ai = loadAiSettings();
     const key = ai.keys[ai.provider]?.trim();
+    const wantsImages = Boolean(BRAND.experimentalImages && generateImagesEl?.checked);
+    const openaiKey = ai.keys.openai?.trim();
     if (!key) {
       const info = PROVIDER_INFO[ai.provider];
       return showError(t("errNoKeyTitle"),
         t("errNoKeyBody").replace("{provider}", info.label).replace("{url}", info.keyUrl.replace("https://", "")));
+    }
+    if (wantsImages && !openaiKey) {
+      return showError(t("errNoKeyTitle"), t("errNoOpenAIKey"));
     }
     if (!state.source || state.generating) return;
 
@@ -503,6 +622,7 @@
     genStatusEl.classList.remove("hidden");
     genStatusTextEl.textContent = t("genSending");
     generateBtn.disabled = true;
+    state.images = [];
     let started = false, lastRender = 0;
     try {
       const acc = await streamSlides({
@@ -510,7 +630,11 @@
         model: ai.model,
         key,
         source: state.source,
-        prompt: buildPrompt({ lang: state.slideLang, countHint: countHintEl.value }),
+        prompt: buildPrompt({
+          lang: state.slideLang,
+          countHint: countHintEl.value,
+          additionalPrompt: additionalPromptEl?.value ?? "",
+        }),
         onChunk(text) {
           if (!started) {
             started = true;
@@ -532,8 +656,17 @@
       });
       if (!acc.trim()) throw new Error(t("errEmpty"));
       setDeck(stripOuterFence(acc.trim()), { example: false });
+      if (wantsImages) {
+        genStatusTextEl.textContent = t("genImages").replace("{current}", "0")
+          .replace("{total}", Math.max(0, state.slides.length - (isTitleSlide(state.md) ? 1 : 0)));
+        await generateIllustrations({
+          key: openaiKey,
+          model: imageModelEl.value,
+          additionalPrompt: additionalPromptEl?.value ?? "",
+        });
+      }
     } catch (err) {
-      showError(t("errApiTitle"), String(err.message ?? err));
+      showError(t("errApiTitle"), apiErrorDetail(err));
     } finally {
       state.generating = false;
       genStatusEl.classList.add("hidden");
@@ -567,6 +700,9 @@
   slideLangEnBtn.addEventListener("click", () => { state.slideLang = "en"; renderSidebar(); });
   slideLangAutoBtn.addEventListener("click", () => { state.slideLang = "auto"; renderSidebar(); });
   errorDismissBtn.addEventListener("click", () => errorPanelEl.classList.add("hidden"));
+  generateImagesEl?.addEventListener("change", () => {
+    imageOptionsEl.classList.toggle("hidden", !generateImagesEl.checked);
+  });
 
   generateBtn.addEventListener("click", () => generateSlides());
 
@@ -623,6 +759,14 @@
   if (BRAND.wordmark) document.querySelector(".wordmark").textContent = BRAND.wordmark;
   document.querySelector(".chrome .tag").textContent = BRAND.tag;
   const aiSelector = mountAiSelector({ chip: aiChipEl, getLang: () => uiLang });
+  if (imageModelEl) {
+    OPENAI_IMAGE_MODELS.forEach(model => {
+      const option = document.createElement("option");
+      option.value = model;
+      option.textContent = model;
+      imageModelEl.appendChild(option);
+    });
+  }
   renderPresets();
   {
     const savedPreset = BRAND.presets.findIndex(p => p.id === localStorage.getItem(BRAND.presetKey));

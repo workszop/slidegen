@@ -44,7 +44,7 @@ Jedno zdanie wstępu.
 ## 5. Prezentuj i zapisz
 | Klawisz | Działanie |
 |---------|-----------|
-| → / spacja | następny slajd |
+| → | następny slajd |
 | ← | poprzedni slajd |
 | Esc | powrót do edycji |
 ---

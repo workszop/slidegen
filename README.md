@@ -10,6 +10,8 @@ choice of AI provider.
 - doc2slide — studio stylów: https://workszop.github.io/slidegen/
 - doc2slide — edulab: https://workszop.github.io/slidegen/edu.html
 - doc2slide — Quantica Lab: https://workszop.github.io/slidegen/quantica.html
+- doc2slide · lab — edulab with experimental OpenAI illustrations:
+  https://workszop.github.io/slidegen/experimental.html
 
 ## Features
 
@@ -49,6 +51,11 @@ choice of AI provider.
 - **Export** — download the deck as an editable `.pptx` in the current look
 - Bilingual UI (PL default / EN), keyboard navigation, fullscreen presenting,
   settings persisted in localStorage
+- **Experimental illustrated deck** (`experimental.html`) — keeps the edulab
+  look, accepts additional user instructions on top of the built-in slide
+  prompt, and can generate one landscape illustration per content slide with
+  an OpenAI GPT Image model. Generated images appear in the live deck,
+  presentation mode, and `.pptx` export.
 
 ## Updating AI models
 

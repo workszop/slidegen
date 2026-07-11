@@ -2,6 +2,7 @@
    Update model IDs here; request/streaming logic lives in shared.js. */
 const AI_MODEL_CATALOG = {
   defaultProvider: "gemini",
+  imageModels: ["gpt-image-2", "gpt-image-1.5", "gpt-image-1-mini"],
   providers: {
     gemini: {
       label: "Gemini",

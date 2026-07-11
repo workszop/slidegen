@@ -10,8 +10,9 @@ const section = src.split("/* pure-helpers:start */")[1].split("/* pure-helpers:
 const H = new Function(`${catalogSrc}\n${section}; return {
   stripOuterFence, splitSlides, detectLang, buildPrompt, deckTitle, isTitleSlide, firstFont,
   clampPanelWidth,
-  PROVIDER_INFO, DEFAULT_PROVIDER, validateModelCatalog, normalizeAiSettings,
+  PROVIDER_INFO, DEFAULT_PROVIDER, OPENAI_IMAGE_MODELS, validateModelCatalog, normalizeAiSettings,
   buildGeminiRequest, buildOpenAIRequest, buildClaudeRequest,
+  buildOpenAIImageRequest,
   geminiChunk, openaiChunk, claudeChunk,
 };`)();
 
@@ -31,6 +32,7 @@ test("PROVIDER_INFO lists three providers with models", () => {
 test("validateModelCatalog rejects unsafe or ambiguous entries", () => {
   const valid = {
     defaultProvider: "gemini",
+    imageModels: [...H.OPENAI_IMAGE_MODELS],
     providers: Object.fromEntries(Object.entries(H.PROVIDER_INFO).map(([id, p]) => [id, {
       ...p, models: [...p.models],
     }])),
@@ -50,7 +52,11 @@ test("validateModelCatalog falls back to the first supported default", () => {
   const providers = Object.fromEntries(Object.entries(H.PROVIDER_INFO).map(([id, p]) => [id, {
     ...p, models: [...p.models],
   }]));
-  const result = H.validateModelCatalog({ defaultProvider: "unknown", providers });
+  const result = H.validateModelCatalog({
+    defaultProvider: "unknown",
+    imageModels: [...H.OPENAI_IMAGE_MODELS],
+    providers,
+  });
   assert.equal(result.defaultProvider, "gemini");
 });
 
@@ -91,6 +97,13 @@ test("buildPrompt language modes", () => {
   assert.match(H.buildPrompt({ lang: "auto" }), /same language as the source document/);
 });
 
+test("buildPrompt appends additional instructions after the format contract", () => {
+  const prompt = H.buildPrompt({ lang: "pl", additionalPrompt: "Skup się na przykładach." });
+  assert.match(prompt, /Additional instructions from the user/);
+  assert.match(prompt, /Skup się na przykładach\./);
+  assert.ok(prompt.indexOf("Output raw markdown") < prompt.indexOf("Skup się na przykładach"));
+});
+
 // ── request builders ──
 const TEXT_SRC = { name: "notes.md", kind: "text", text: "hello world" };
 const PDF_SRC = { name: "doc.pdf", kind: "pdf", base64: "QUJD" };
@@ -115,6 +128,16 @@ test("buildOpenAIRequest uses responses API with input_file for PDF", () => {
   const t = H.buildOpenAIRequest({ key: "K", model: "gpt-5.6", source: TEXT_SRC, prompt: "P" });
   assert.equal(t.body.input[0].content.length, 1);
   assert.match(t.body.input[0].content[0].text, /hello world/);
+});
+
+test("buildOpenAIImageRequest uses the image endpoint and landscape JPEG", () => {
+  const r = H.buildOpenAIImageRequest({ key: "K", model: "gpt-image-2", prompt: "P" });
+  assert.equal(r.url, "https://api.openai.com/v1/images/generations");
+  assert.equal(r.headers.Authorization, "Bearer K");
+  assert.deepEqual(r.body, {
+    model: "gpt-image-2", prompt: "P", n: 1,
+    size: "1536x1024", quality: "low", output_format: "jpeg",
+  });
 });
 
 test("buildClaudeRequest uses document block and browser headers", () => {

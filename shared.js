@@ -54,7 +54,7 @@ function detectLang(text) {
 }
 
 // Full instruction prompt for Gemini. countHint is optional ("auto"/undefined = model's choice).
-function buildPrompt({ lang, countHint }) {
+function buildPrompt({ lang, countHint, additionalPrompt }) {
   const language =
     lang === "pl" ? "po polsku (in Polish, „polskim” języku)"
     : lang === "en" ? "in English"
@@ -70,7 +70,11 @@ function buildPrompt({ lang, countHint }) {
     "- You may end with a short summary slide.\n" +
     `- Write the slides ${language}.\n`;
   if (countHint && countHint !== "auto") p += `- Aim for about ${countHint} slides.\n`;
-  p += "- Output raw markdown only — no surrounding code fence, no commentary.";
+  p += "- Output raw markdown only — no surrounding code fence, no commentary.\n";
+  if (additionalPrompt?.trim()) {
+    p += "\nAdditional instructions from the user (apply them without breaking the markdown format above):\n" +
+      additionalPrompt.trim() + "\n";
+  }
   return p;
 }
 
@@ -123,7 +127,21 @@ function validateModelCatalog(catalog) {
   if (extra.length) throw new Error(`Invalid AI model catalogue: unsupported provider ${extra[0]}`);
   const defaultProvider = SUPPORTED_PROVIDER_IDS.includes(catalog.defaultProvider)
     ? catalog.defaultProvider : SUPPORTED_PROVIDER_IDS[0];
-  return Object.freeze({ defaultProvider, providers: Object.freeze(providers) });
+  if (!Array.isArray(catalog.imageModels) || !catalog.imageModels.length) {
+    throw new Error("Invalid AI model catalogue: missing imageModels");
+  }
+  const imageModels = catalog.imageModels.map(model => typeof model === "string" ? model.trim() : "");
+  if (imageModels.some(model => !model || /\s/.test(model))) {
+    throw new Error("Invalid AI model catalogue: invalid image model ID");
+  }
+  if (new Set(imageModels).size !== imageModels.length) {
+    throw new Error("Invalid AI model catalogue: duplicate image model IDs");
+  }
+  return Object.freeze({
+    defaultProvider,
+    providers: Object.freeze(providers),
+    imageModels: Object.freeze(imageModels),
+  });
 }
 
 const MODEL_CATALOG = validateModelCatalog(
@@ -131,6 +149,7 @@ const MODEL_CATALOG = validateModelCatalog(
 );
 const DEFAULT_PROVIDER = MODEL_CATALOG.defaultProvider;
 const PROVIDER_INFO = MODEL_CATALOG.providers;
+const OPENAI_IMAGE_MODELS = MODEL_CATALOG.imageModels;
 
 // Parse the eduapp_ai JSON (raw string or null) into valid settings,
 // folding in the legacy single-provider values ({key, model}) on first run.
@@ -206,6 +225,21 @@ function buildClaudeRequest({ key, model, source, prompt }) {
   };
 }
 
+function buildOpenAIImageRequest({ key, model, prompt }) {
+  return {
+    url: "https://api.openai.com/v1/images/generations",
+    headers: { "Content-Type": "application/json", Authorization: "Bearer " + key },
+    body: {
+      model,
+      prompt,
+      n: 1,
+      size: "1536x1024",
+      quality: "low",
+      output_format: "jpeg",
+    },
+  };
+}
+
 // ─── Per-provider SSE chunk extractors (pure) ────
 function geminiChunk(data) {
   return (data.candidates?.[0]?.content?.parts ?? []).map(p => p.text ?? "").join("");
@@ -237,6 +271,54 @@ function saveAiSettings(settings) {
   localStorage.setItem(LS_AI, JSON.stringify(settings));
 }
 
+async function generateOpenAIImage({ key, model, prompt }) {
+  const req = buildOpenAIImageRequest({ key, model, prompt });
+  let res;
+  try {
+    res = await fetch(req.url, {
+      method: "POST",
+      headers: req.headers,
+      body: JSON.stringify(req.body),
+    });
+  } catch (cause) {
+    throw makeNetworkError(req.url, cause);
+  }
+  if (!res.ok) {
+    let message = res.statusText;
+    try {
+      const payload = await res.json();
+      message = payload?.error?.message ?? payload?.message ?? message;
+    } catch { /* keep HTTP status text */ }
+    throw new Error(`${res.status}: ${message}`);
+  }
+  const payload = await res.json();
+  const base64 = payload?.data?.[0]?.b64_json;
+  if (!base64) throw new Error("OpenAI returned no image data");
+  return `data:image/jpeg;base64,${base64}`;
+}
+
+function makeNetworkError(url, cause) {
+  const err = new Error("network_error", { cause });
+  err.code = "network_error";
+  try { err.host = new URL(url).host; } catch { err.host = url; }
+  return err;
+}
+
+async function fetchWithNetworkRetry(url, options) {
+  try {
+    return await fetch(url, options);
+  } catch {
+    // A single short retry handles transient DNS/connection failures without
+    // hiding persistent browser, extension, or firewall blocks.
+    await new Promise(resolve => setTimeout(resolve, 500));
+    try {
+      return await fetch(url, options);
+    } catch (cause) {
+      throw makeNetworkError(url, cause);
+    }
+  }
+}
+
 // ─── File intake ────────────────────────────────
 // Resolves {name, kind:"text"|"pdf", text?|base64?}; rejects Error("type"|"size"|"read").
 function readSourceFile(file) {
@@ -263,7 +345,7 @@ function readSourceFile(file) {
 // helper, per-event text extraction from a *Chunk helper. onChunk(accumulated)
 // fires per chunk (throttling is the caller's job). Returns the full text.
 async function streamSseRequest({ url, headers, body }, extractChunk, onChunk) {
-  const res = await fetch(url, { method: "POST", headers, body: JSON.stringify(body) });
+  const res = await fetchWithNetworkRetry(url, { method: "POST", headers, body: JSON.stringify(body) });
   if (!res.ok) {
     let msg;
     try {

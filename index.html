@@ -90,31 +90,31 @@ kbd {
 
 .panel {
   width: 280px; flex: none; overflow-y: auto;
-  padding: var(--sp-5); border-right: 1px solid var(--line);
-  display: flex; flex-direction: column; gap: var(--sp-6);
+  padding: var(--sp-4) var(--sp-5); border-right: 1px solid var(--line);
+  display: flex; flex-direction: column; gap: 14px;
   background: var(--paper);
 }
 .panel h2 {
   font-family: var(--font-mono); font-weight: 500; font-size: 11px;
   letter-spacing: .14em; text-transform: uppercase; color: var(--marigold-ink);
-  margin: 0 0 var(--sp-3);
+  margin: 0 0 var(--sp-2);
 }
 .panel section { margin: 0; }
 
 .preset-grid { display: grid; grid-template-columns: 1fr 1fr; gap: var(--sp-2); }
 .preset {
-  border: 2px solid var(--line); border-radius: var(--r-md); padding: var(--sp-3);
+  border: 2px solid var(--line); border-radius: var(--r-md); padding: 7px 9px;
   background: var(--surface); text-align: left;
   transition: border-color .2s, transform .1s;
 }
 .preset:hover { transform: translateY(-2px); }
 .preset:active { transform: translateY(2px); }
 .preset[aria-pressed="true"] { border-color: var(--marigold); }
-.preset .dots { display: flex; gap: 4px; margin-bottom: 6px; }
-.preset .dots span { width: 14px; height: 14px; border-radius: 50%; border: 1px solid rgba(0,0,0,.12); }
+.preset .dots { display: flex; gap: 4px; margin-bottom: 4px; }
+.preset .dots span { width: 12px; height: 12px; border-radius: 50%; border: 1px solid rgba(0,0,0,.12); }
 .preset .name { font-weight: 700; font-size: 13px; }
 
-.field { display: flex; flex-direction: column; gap: var(--sp-1); margin-bottom: var(--sp-3); }
+.field { display: flex; flex-direction: column; gap: var(--sp-1); margin-bottom: 6px; }
 .field-inline { flex-direction: row; align-items: center; justify-content: space-between; }
 .field label {
   font-family: var(--font-mono); font-size: 11px; letter-spacing: .1em;
@@ -136,7 +136,7 @@ kbd {
 /* Round color pickers — hide the native square-in-frame look */
 input[type="color"] {
   -webkit-appearance: none; appearance: none;
-  width: 34px; height: 34px; padding: 0; border: 2px solid var(--line-2);
+  width: 30px; height: 30px; padding: 0; border: 2px solid var(--line-2);
   border-radius: 50%; background: none; cursor: pointer; overflow: hidden; flex: none;
 }
 input[type="color"]::-webkit-color-swatch-wrapper { padding: 0; }
@@ -149,7 +149,7 @@ input[type="color"]:hover { border-color: var(--marigold); }
 .font-current {
   width: 100%; display: flex; justify-content: space-between; align-items: center;
   background: var(--surface); border: 1px solid var(--line-2); border-radius: var(--r-sm);
-  padding: 8px 10px; font-size: 15px; color: var(--ink);
+  padding: 6px 10px; font-size: 14px; color: var(--ink);
 }
 .font-current .caret { color: var(--ink-3); font-size: 11px; }
 .font-menu {
@@ -172,7 +172,7 @@ input[type="color"]:hover { border-color: var(--marigold); }
 
 .btn {
   display: inline-flex; align-items: center; justify-content: center; gap: var(--sp-2);
-  border: 0; border-radius: var(--r-pill); padding: 8px 16px; font-weight: 600; font-size: 13px;
+  border: 0; border-radius: var(--r-pill); padding: 6px 16px; font-weight: 600; font-size: 13px;
   transition: background .2s, transform .1s;
 }
 .btn:active { transform: scale(.97); }
@@ -558,6 +558,7 @@ const T = {
     errFileType: "Obsługiwane formaty: .txt, .md, .pdf",
     errTooBig: "Plik jest za duży (limit 19 MB).",
     errEmpty: "Model zwrócił pustą odpowiedź. Spróbuj ponownie.",
+    errNetwork: "Nie udało się połączyć z {host}. Sprawdź połączenie, rozszerzenia przeglądarki lub zaporę sieciową i spróbuj ponownie.",
   },
   en: {
     appTitle: "doc2slide",
@@ -593,6 +594,7 @@ const T = {
     errFileType: "Supported formats: .txt, .md, .pdf",
     errTooBig: "File too large (19 MB limit).",
     errEmpty: "The model returned an empty response. Try again.",
+    errNetwork: "Could not connect to {host}. Check your connection, browser extensions, or network firewall and try again.",
   },
 };
 let uiLang = localStorage.getItem(LS_LANG) ?? "pl";
@@ -940,7 +942,10 @@ async function generateSlidesFromSource() {
     setMd(stripOuterFence(acc.trim()));
     note(genNoteEl, t("genDone"));
   } catch (err) {
-    note(genNoteEl, String(err.message ?? err), true);
+    const detail = err?.code === "network_error"
+      ? t("errNetwork").replace("{host}", err.host || "API")
+      : String(err.message ?? err);
+    note(genNoteEl, detail, true);
   } finally {
     state.generating = false;
     reflectSource();

@@ -73,7 +73,7 @@
   // ─── Main export ────────────────────────────────
   // opts: { slidesMd: string[], theme: {bg, fg, bodyColor?, accent,
   //         headingFont, bodyFont, monoFont}, logo?: dataURI,
-  //         brandName?: string, fileName: string }
+  //         brandName?: string, images?: (dataURI|undefined)[], fileName: string }
   return async function exportDeckToPptx(opts) {
     const t = opts.theme;
     const th = {
@@ -104,6 +104,8 @@
     opts.slidesMd.forEach((md, idx) => {
       const slide = pptx.addSlide({ masterName: "DECK" });
       const tokens = marked.lexer(md);
+      const illustration = opts.images?.[idx];
+      const bodyW = illustration ? 5.25 : BODY_W;
 
       // Title slide: first `#` heading + intro paragraph, centered.
       const head = idx === 0 ? tokens.find(tok => tok.type === "heading" && tok.depth === 1) : null;
@@ -126,6 +128,14 @@
         return;
       }
 
+      if (illustration) {
+        slide.addImage({
+          data: illustration,
+          x: 6.25, y: 1.42, w: 3.15, h: 3.55,
+          sizing: { type: "contain", w: 3.15, h: 3.55 },
+        });
+      }
+
       let y = BODY_Y;
       const room = () => Math.max(H - 0.45 - y, 0.4);
       const headingRuns = (tok, size) =>
@@ -136,9 +146,9 @@
         switch (tok.type) {
           case "heading": {
             if (tok.depth <= 2) {
-              slide.addText(headingRuns(tok, 27), { x: LEFT, y: TITLE_Y, w: BODY_W, h: 0.62, fit: "shrink" });
+              slide.addText(headingRuns(tok, 27), { x: LEFT, y: TITLE_Y, w: bodyW, h: 0.62, fit: "shrink" });
             } else {
-              slide.addText(headingRuns(tok, 17), { x: LEFT, y, w: BODY_W, h: 0.38, fit: "shrink" });
+              slide.addText(headingRuns(tok, 17), { x: LEFT, y, w: bodyW, h: 0.38, fit: "shrink" });
               y += 0.46;
             }
             break;
@@ -154,14 +164,14 @@
               runs.push(...itemRuns);
             });
             const hEst = Math.min(tok.items.length * 0.42, room());
-            slide.addText(runs, { x: LEFT + 0.1, y, w: BODY_W - 0.1, h: hEst, fit: "shrink", paraSpaceAfter: 8 });
+            slide.addText(runs, { x: LEFT + 0.1, y, w: bodyW - 0.1, h: hEst, fit: "shrink", paraSpaceAfter: 8 });
             y += hEst + 0.12;
             break;
           }
           case "paragraph": {
             const lines = Math.max(1, Math.ceil(plain(tok.tokens).length / 95));
             const hEst = Math.min(lines * 0.3 + 0.08, room());
-            slide.addText(inlineRuns(tok.tokens, baseRun, th), { x: LEFT, y, w: BODY_W, h: hEst, fit: "shrink" });
+            slide.addText(inlineRuns(tok.tokens, baseRun, th), { x: LEFT, y, w: bodyW, h: hEst, fit: "shrink" });
             y += hEst + 0.12;
             break;
           }
@@ -170,7 +180,7 @@
             const lines = Math.max(1, Math.ceil(text.length / 85));
             const hEst = Math.min(lines * 0.32 + 0.28, room());
             slide.addText(text, {
-              x: LEFT, y, w: BODY_W, h: hEst, fit: "shrink",
+              x: LEFT, y, w: bodyW, h: hEst, fit: "shrink",
               fontFace: th.bodyFont, fontSize: 15, italic: true, color: th.fg,
               fill: { color: th.accentSoft }, margin: 10,
             });
@@ -184,7 +194,7 @@
               options: { fontFace: th.monoFont, fontSize: 12, color: th.fg, breakLine: i < lines.length - 1 },
             }));
             const hEst = Math.min(lines.length * 0.24 + 0.3, room());
-            slide.addText(runs, { x: LEFT, y, w: BODY_W, h: hEst, fill: { color: th.wash }, margin: 10, fit: "shrink" });
+            slide.addText(runs, { x: LEFT, y, w: bodyW, h: hEst, fill: { color: th.wash }, margin: 10, fit: "shrink" });
             y += hEst + 0.16;
             break;
           }
@@ -198,7 +208,7 @@
               options: { fontFace: th.bodyFont, fontSize: 13, color: th.body },
             })));
             slide.addTable([header, ...rows], {
-              x: LEFT, y, w: BODY_W,
+              x: LEFT, y, w: bodyW,
               border: { type: "solid", pt: 0.75, color: th.line },
               fill: { color: th.bg }, valign: "middle", margin: 4,
             });
