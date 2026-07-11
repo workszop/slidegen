@@ -151,11 +151,6 @@ kbd {
 /* ============================================================
    Components — shared
    ============================================================ */
-.card {
-  background: var(--surface); border: 1px solid var(--line);
-  border-radius: var(--r-lg); box-shadow: var(--shadow-sm); padding: var(--sp-6);
-}
-
 .btn {
   display: inline-flex; align-items: center; gap: var(--sp-2);
   border: 0; border-radius: var(--r-pill); padding: 10px 22px;
@@ -181,14 +176,6 @@ kbd {
   background: var(--teal-soft); color: var(--teal-ink);
   padding: 4px 14px; border-radius: var(--r-pill); margin-top: var(--sp-2);
 }
-
-.field { display: flex; flex-direction: column; gap: var(--sp-2); }
-.field-label {
-  font-family: var(--font-mono); font-size: var(--overline);
-  letter-spacing: .1em; text-transform: uppercase; color: var(--ink-2);
-}
-.field-help { margin: 0; font-size: var(--caption); color: var(--ink-3); }
-.field-help a { color: var(--teal-ink); }
 
 textarea, .mono-input {
   font-family: var(--font-mono); font-size: var(--body-sm); color: var(--ink);
@@ -268,6 +255,8 @@ body.presenting .shell { max-width: none; padding: 0; }
   width: min(1600px, 90vw); max-height: 88vh; overflow: auto;
   font-size: clamp(15px, 1.55vw + 0.9vh, 46px);
   color: var(--slide-fg, var(--ink));
+  --slide-fg-muted: color-mix(in srgb, var(--slide-fg, var(--ink)) 72%, var(--slide-bg, var(--paper)));
+  --slide-surface: color-mix(in srgb, var(--slide-fg, var(--ink)) 8%, var(--slide-bg, var(--paper)));
 }
 
 .slide .slide-eyebrow {
@@ -285,7 +274,7 @@ body.presenting .shell { max-width: none; padding: 0; }
   line-height: 1.1; letter-spacing: -0.015em; margin: 0 0 .6em;
 }
 .slide h3 { font-family: var(--font-display); font-weight: 700; font-size: 1.35em; margin: 1em 0 .5em; }
-.slide p, .slide li { font-size: 1em; line-height: 1.55; color: var(--ink-2); }
+.slide p, .slide li { font-size: 1em; line-height: 1.55; color: var(--slide-fg-muted); }
 .slide p { margin: 0 0 .6em; }
 .slide li { margin-bottom: .45em; }
 .slide li::marker { color: var(--slide-accent, var(--marigold)); }
@@ -295,11 +284,11 @@ body.presenting .shell { max-width: none; padding: 0; }
 /* Mono rules for presenting code — REQUIRED in every style */
 .slide code {
   font-family: var(--font-mono); font-size: .9em; color: var(--slide-fg, var(--ink));
-  background: var(--paper-3); padding: .1em .4em; border-radius: var(--r-xs);
+  background: var(--slide-surface); padding: .1em .4em; border-radius: var(--r-xs);
 }
 .slide pre {
   font-family: var(--font-mono);
-  background: var(--paper-2); border: 1px solid var(--line);
+  background: var(--slide-surface); border: 1px solid var(--slide-surface);
   border-radius: var(--r-md); padding: .8em; overflow-x: auto; font-size: .8em;
   line-height: 1.5;
 }
@@ -316,12 +305,12 @@ body.presenting .shell { max-width: none; padding: 0; }
   text-transform: uppercase; text-align: left; color: var(--ink-3);
   border-bottom: 2px solid var(--line-2); padding: .5em .7em;
 }
-.slide td { border-bottom: 1px solid var(--line); padding: .55em .7em; color: var(--ink-2); }
+.slide td { border-bottom: 1px solid var(--line); padding: .55em .7em; color: var(--slide-fg-muted); }
 
 .slide--title { text-align: center; align-self: center; }
 .slide--title .slide-eyebrow { color: var(--teal-ink); }
 .slide--title h1 { color: var(--slide-fg, var(--ink)); font-size: 3.6em; }
-.slide--title p { font-size: 1.3em; color: var(--ink-2); }
+.slide--title p { font-size: 1.3em; color: var(--slide-fg-muted); }
 
 .present-footer {
   display: flex; align-items: center; justify-content: space-between;
@@ -346,7 +335,6 @@ window.APP_BRAND = {
   logo: window.EDULAB_LOGO,
   wordmark: "edulab",
   tag: "doc→slides",
-  eyebrow: { pl: "edulab · narzędzie warsztatowe", en: "edulab · workshop tool" },
   presentBrand: "edulab",
   presetKey: "eduapp_preset_edu",
   presets: [

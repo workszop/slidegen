@@ -12,7 +12,6 @@
           logo:         "data:image/png;base64,…",  // chrome + slide corner
           wordmark:     "edulab" | null,            // text next to logo (null = logo only)
           tag:          "doc→slides",               // mono chip in the chrome bar
-          eyebrow:      { pl: "…", en: "…" },       // input-view page eyebrow
           presentBrand: "edulab",                   // brand name on the title-slide eyebrow
         }
    ============================================================ */
@@ -25,7 +24,6 @@
     logo: "",
     wordmark: null,
     tag: "doc→slides",
-    eyebrow: { pl: "narzędzie edukacyjne", en: "learning tool" },
     presentBrand: "",
     presets: [],
     presetKey: "eduapp_preset",
@@ -42,9 +40,6 @@
       dropHere: "Upuść plik tutaj",
       browse: "Wybierz plik",
       pasteHere: "…albo wklej tekst tutaj",
-      aiModelLabel: "Model AI",
-      slideLangLabel: "Język slajdów",
-      countLabel: "Liczba slajdów",
       countAuto: "auto",
       generate: "Generuj slajdy",
       fileLoaded: "wczytano",
@@ -57,13 +52,10 @@
       errEmpty: "Model zwrócił pustą odpowiedź. Spróbuj ponownie lub zmień model.",
       genSending: "Wysyłam dokument…",
       genWaiting: "Generuję slajdy…",
-      back: "← Wróć",
-      regenerate: "Generuj ponownie",
       downloadMd: "Pobierz .md",
       downloadPptx: "Pobierz .pptx",
       errPptxTitle: "Eksport PPTX nie powiódł się",
       present: "Prezentuj",
-      hintPresent: "prezentuj",
       presentEyebrowWord: "prezentacja",
       sideDoc: "Dokument",
       sideGen: "Generowanie",
@@ -77,9 +69,6 @@
       dropHere: "Drop a file here",
       browse: "Choose file",
       pasteHere: "…or paste text here",
-      aiModelLabel: "AI model",
-      slideLangLabel: "Slide language",
-      countLabel: "Slide count",
       countAuto: "auto",
       generate: "Generate slides",
       fileLoaded: "loaded",
@@ -92,13 +81,10 @@
       errEmpty: "The model returned an empty response. Try again or switch models.",
       genSending: "Sending the document…",
       genWaiting: "Generating slides…",
-      back: "← Back",
-      regenerate: "Regenerate",
       downloadMd: "Download .md",
       downloadPptx: "Download .pptx",
       errPptxTitle: "PPTX export failed",
       present: "Present",
-      hintPresent: "present",
       presentEyebrowWord: "presentation",
       sideDoc: "Document",
       sideGen: "Generate",
@@ -358,6 +344,7 @@
     document.body.classList.toggle("presenting", state.view === "present");
     renderTexts();
     if (state.view === "present") renderPresent();
+    if (state.view === "workspace") renderStage();
   }
 
   function renderStage() {
@@ -621,10 +608,7 @@
   {
     const params = new URLSearchParams(location.search);
     if (["pl", "en"].includes(params.get("lang"))) { uiLang = params.get("lang"); localStorage.setItem(LS_LANG, uiLang); }
-  }
-  setDeck(BRAND.exampleMd[uiLang] ?? BRAND.exampleMd.pl, { example: true });
-  {
-    const params = new URLSearchParams(location.search);
+    setDeck(BRAND.exampleMd[uiLang] ?? BRAND.exampleMd.pl, { example: true });
     if (params.has("slide")) setMd(state.md, Math.max(0, Number(params.get("slide")) - 1));
     if (location.hash === "#present" && state.slides.length) state.view = "present";
   }
