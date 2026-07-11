@@ -66,12 +66,16 @@
       edit: "Edytuj",
       additionalPrompt: "Dodatkowe instrukcje dla AI",
       additionalPromptPh: "np. użyj konkretnych przykładów i krótkich nagłówków",
-      generateImages: "Generuj ilustracje z OpenAI",
       imageModel: "Model obrazu",
-      imageNote: "Jedna ilustracja do każdego slajdu treści. Wymaga klucza OpenAI i zwiększa koszt generowania.",
-      genImages: "Generuję ilustracje: {current}/{total}",
+      illustrationNote: "Wskazówki do ilustracji",
+      illustrationNotePh: "np. płaska ilustracja, ciepłe barwy",
+      imageNote: "Ilustruj wybrany slajd przyciskiem pod podglądem. Wymaga klucza OpenAI i zwiększa koszt.",
+      illustrateSlide: "Ilustruj ten slajd",
+      regenerateSlide: "Generuj ilustrację ponownie",
+      removeIllustration: "Usuń ilustrację",
+      genImageOne: "Ilustruję slajd {n}…",
       errNoOpenAIKey: "Aby generować ilustracje, zapisz klucz OpenAI w ustawieniach modelu.",
-      errImageTitle: "Nie wszystkie ilustracje zostały wygenerowane",
+      errImageTitle: "Nie udało się wygenerować ilustracji",
       imageAlt: "Ilustracja wygenerowana przez AI",
       errNetwork: "Nie udało się połączyć z {host}. Sprawdź połączenie, blokowanie przez rozszerzenia lub zaporę sieciową i spróbuj ponownie.",
     },
@@ -105,12 +109,16 @@
       edit: "Edit",
       additionalPrompt: "Additional AI instructions",
       additionalPromptPh: "e.g. use concrete examples and short headings",
-      generateImages: "Generate illustrations with OpenAI",
       imageModel: "Image model",
-      imageNote: "One illustration per content slide. Requires an OpenAI key and increases generation cost.",
-      genImages: "Generating illustrations: {current}/{total}",
+      illustrationNote: "Illustration direction",
+      illustrationNotePh: "e.g. flat illustration, warm palette",
+      imageNote: "Illustrate a chosen slide with the button under the preview. Requires an OpenAI key and adds cost.",
+      illustrateSlide: "Illustrate this slide",
+      regenerateSlide: "Regenerate illustration",
+      removeIllustration: "Remove illustration",
+      genImageOne: "Illustrating slide {n}…",
       errNoOpenAIKey: "Save an OpenAI key in the model settings to generate illustrations.",
-      errImageTitle: "Some illustrations could not be generated",
+      errImageTitle: "Could not generate the illustration",
       imageAlt: "AI-generated illustration",
       errNetwork: "Could not connect to {host}. Check your connection, browser extensions, or network firewall and try again.",
     },
@@ -132,13 +140,11 @@
   const experimentalControlsHtml = BRAND.experimentalImages ? `
         <label class="experimental-label" for="additionalPrompt" data-i18n="additionalPrompt"></label>
         <textarea id="additionalPrompt" rows="3" data-i18n-placeholder="additionalPromptPh"></textarea>
-        <label class="experimental-toggle">
-          <input id="generateImages" type="checkbox" />
-          <span data-i18n="generateImages"></span>
-        </label>
-        <div class="image-options hidden" id="imageOptions">
+        <div class="image-options" id="imageOptions">
           <label class="experimental-label" for="imageModel" data-i18n="imageModel"></label>
           <select id="imageModel" class="mono-input"></select>
+          <label class="experimental-label" for="illustrationNote" data-i18n="illustrationNote"></label>
+          <input id="illustrationNote" class="mono-input" type="text" data-i18n-placeholder="illustrationNotePh" />
           <p class="experimental-note" data-i18n="imageNote"></p>
         </div>` : "";
   document.body.insertAdjacentHTML("afterbegin", `
@@ -329,9 +335,8 @@
   const editorCloseBtn = document.getElementById("editorCloseBtn");
   const presetGridEl = document.getElementById("presetGrid");
   const additionalPromptEl = document.getElementById("additionalPrompt");
-  const generateImagesEl = document.getElementById("generateImages");
-  const imageOptionsEl = document.getElementById("imageOptions");
   const imageModelEl = document.getElementById("imageModel");
+  const illustrationNoteEl = document.getElementById("illustrationNote");
 
   mountPanelResizer({ panel: editorPanelEl, storageKey: BRAND.editorWKey });
 
@@ -705,9 +710,6 @@
   slideLangEnBtn.addEventListener("click", () => { state.slideLang = "en"; renderSidebar(); });
   slideLangAutoBtn.addEventListener("click", () => { state.slideLang = "auto"; renderSidebar(); });
   errorDismissBtn.addEventListener("click", () => errorPanelEl.classList.add("hidden"));
-  generateImagesEl?.addEventListener("change", () => {
-    imageOptionsEl.classList.toggle("hidden", !generateImagesEl.checked);
-  });
 
   generateBtn.addEventListener("click", () => generateSlides());
 
