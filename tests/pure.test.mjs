@@ -12,7 +12,7 @@ const H = new Function(`${catalogSrc}\n${section}; return {
   clampPanelWidth,
   PROVIDER_INFO, DEFAULT_PROVIDER, OPENAI_IMAGE_MODELS, validateModelCatalog, normalizeAiSettings,
   buildGeminiRequest, buildOpenAIRequest, buildClaudeRequest,
-  buildOpenAIImageRequest,
+  buildOpenAIImageRequest, buildSlideImagePrompt,
   geminiChunk, openaiChunk, claudeChunk,
 };`)();
 
@@ -181,4 +181,34 @@ test("clampPanelWidth returns null for garbage input", () => {
 
 test("clampPanelWidth keeps min when viewport shrinks below it", () => {
   assert.equal(H.clampPanelWidth(500, 280, 0.6, 400), 280);   // max(280, 240) = 280
+});
+
+// ── buildSlideImagePrompt (deck context + target slide) ──
+test("buildSlideImagePrompt embeds every deck segment as context", () => {
+  const p = H.buildSlideImagePrompt({
+    slideMd: "## Target\n- point",
+    direction: "",
+    deckSegments: ["# Title", "## Target\n- point", "## Other"],
+  });
+  assert.match(p, /do NOT illustrate these/i);
+  assert.match(p, /# Title/);
+  assert.match(p, /## Other/);
+  // the target slide appears under the "illustrate THIS slide" instruction
+  assert.match(p, /illustrate the central idea of THIS slide[\s\S]*## Target/i);
+  // no leftover user-direction heading when direction is empty
+  assert.doesNotMatch(p, /Additional direction from the user/);
+});
+
+test("buildSlideImagePrompt appends user direction when provided", () => {
+  const p = H.buildSlideImagePrompt({
+    slideMd: "## Target",
+    direction: "  flat vector, warm palette  ",
+    deckSegments: ["## Target"],
+  });
+  assert.match(p, /Additional direction from the user:\nflat vector, warm palette/);
+});
+
+test("buildSlideImagePrompt forbids text and layout artefacts", () => {
+  const p = H.buildSlideImagePrompt({ slideMd: "x", direction: "", deckSegments: ["x"] });
+  assert.match(p, /Do not include text, letters, numbers, logos/);
 });
