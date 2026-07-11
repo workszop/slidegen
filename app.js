@@ -567,6 +567,7 @@
   editorEl.addEventListener("input", () => {
     clearTimeout(previewTimer);
     previewTimer = setTimeout(() => {
+      state.deckIsExample = false; // manual edits make the deck the user's own
       setMd(editorEl.value, state.current);
     }, 300);
   });
