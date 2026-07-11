@@ -331,7 +331,7 @@ main#app { flex: 1; display: flex; min-height: 0; }
   letter-spacing: var(--tracking-caps); text-transform: uppercase; color: var(--fg-brand);
 }
 .stage-wrap { flex: 1; display: flex; flex-direction: column; min-width: 0; position: relative; }
-.stage-wrap .error-panel { position: absolute; top: var(--space-3); left: 50%; transform: translateX(-50%); z-index: 20; }
+.stage-wrap .error-panel { position: absolute; top: var(--space-3); left: 50%; transform: translateX(-50%); z-index: 40; width: max-content; max-width: min(640px, 90%); }
 .deck {
   flex: 1; display: grid; place-items: start center; padding: 14vh 3vw 3vh; overflow: hidden;
   position: relative; background: var(--slide-bg, var(--bg-1));
@@ -361,8 +361,9 @@ main#app { flex: 1; display: flex; min-height: 0; }
 .deck-footer .hints { display: flex; gap: var(--space-4); margin: 0; }
 .editor-panel {
   flex: none; width: min(440px, 34vw); border-left: 1px solid var(--border-1);
-  background: var(--bg-2); padding: var(--space-3); display: flex; min-height: 0;
+  background: var(--bg-2); padding: var(--space-3); display: flex; flex-direction: column; min-height: 0;
 }
+.editor-head { display: flex; justify-content: flex-end; margin-bottom: var(--space-2); }
 .editor-panel textarea {
   flex: 1; resize: none; font-family: var(--font-mono); font-size: 13px; line-height: 1.55;
   color: var(--fg-1); background: var(--bg-1); border: 1px solid var(--border-2);

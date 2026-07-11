@@ -195,6 +195,7 @@
     </section>
 
     <aside class="editor-panel hidden" id="editorPanel">
+      <div class="editor-head"><button class="btn btn-ghost" id="editorCloseBtn" aria-label="close">✕</button></div>
       <textarea id="editor" spellcheck="false"></textarea>
     </aside>
   </div>
@@ -244,7 +245,6 @@
   function setEditorOpen(open) {
     state.editorOpen = open;
     editorPanelEl.classList.toggle("hidden", !open);
-    workspaceEl.classList.toggle("editing", open);
     editToggleBtn.setAttribute("aria-pressed", String(open));
     if (open) editorEl.value = state.md;
   }
@@ -288,6 +288,7 @@
   const deckBarEl = document.getElementById("deckBar");
   const editorPanelEl = document.getElementById("editorPanel");
   const editToggleBtn = document.getElementById("editToggleBtn");
+  const editorCloseBtn = document.getElementById("editorCloseBtn");
   const presetGridEl = document.getElementById("presetGrid");
 
   // ─── Style presets ──────────────────────────────
@@ -585,6 +586,7 @@
   pptxBtn.addEventListener("click", downloadPptx);
   presentBtn.addEventListener("click", () => setView("present"));
   editToggleBtn.addEventListener("click", () => setEditorOpen(!state.editorOpen));
+  editorCloseBtn.addEventListener("click", () => setEditorOpen(false));
 
   // workspace stage nav
   wsPrevBtn.addEventListener("click", () => {
@@ -598,6 +600,7 @@
 
   document.addEventListener("keydown", e => {
     if (state.view === "present" && e.key === "Escape") { setView("workspace"); return; }
+    if (e.key === "Escape" && state.view === "workspace" && state.editorOpen) { e.preventDefault(); setEditorOpen(false); return; }
     if (/^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName)) return;
     if (state.view === "present") {
       if (["ArrowRight", " ", "PageDown"].includes(e.key)) { e.preventDefault(); showSlide(state.current + 1); }
