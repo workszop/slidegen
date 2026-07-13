@@ -56,7 +56,7 @@
       errEmpty: "Model zwrócił pustą odpowiedź. Spróbuj ponownie lub zmień model.",
       genSending: "Wysyłam dokument…",
       genWaiting: "Generuję slajdy…",
-      downloadMd: "Pobierz .md",
+      downloadHtml: "Pobierz html",
       downloadPptx: "Pobierz .pptx",
       errPptxTitle: "Eksport PPTX nie powiódł się",
       present: "Prezentuj",
@@ -99,7 +99,7 @@
       errEmpty: "The model returned an empty response. Try again or switch models.",
       genSending: "Sending the document…",
       genWaiting: "Generating slides…",
-      downloadMd: "Download .md",
+      downloadHtml: "Download HTML",
       downloadPptx: "Download .pptx",
       errPptxTitle: "PPTX export failed",
       present: "Present",
@@ -214,7 +214,7 @@
         <h2 class="side-title" data-i18n="sideActions"></h2>
         <button class="btn btn-ghost btn-block" id="editToggleBtn" aria-pressed="false" data-i18n="edit"></button>
         <button class="btn btn-primary btn-block" id="presentBtn" data-i18n="present"></button>
-        <button class="btn btn-ghost btn-block" id="downloadBtn" data-i18n="downloadMd"></button>
+        <button class="btn btn-ghost btn-block" id="downloadBtn" data-i18n="downloadHtml"></button>
         <button class="btn btn-ghost btn-block" id="pptxBtn" data-i18n="downloadPptx"></button>
       </section>
     </aside>
@@ -535,11 +535,89 @@
     }
   }
 
-  function downloadMd() {
-    const blob = new Blob([state.md], { type: "text/markdown" });
+  function escapeHtml(value) {
+    return String(value).replace(/[&<>"']/g, char => ({
+      "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
+    })[char]);
+  }
+
+  function downloadHtml() {
+    const title = deckTitle(state.md) || "slides";
+    const styleText = [...document.querySelectorAll("style")].map(style => style.textContent).join("\n");
+    const fontLinks = [...document.querySelectorAll('link[rel="stylesheet"]')]
+      .map(link => `<link rel="stylesheet" href="${escapeHtml(link.href)}">`).join("\n");
+    const hasTitle = isTitleSlide(state.md);
+    const slides = state.slides.map((slideHtml, index) => {
+      const isTitle = index === 0 && hasTitle;
+      const image = state.images[index];
+      const eyebrow = isTitle
+        ? [BRAND.presentBrand, t("presentEyebrowWord")].filter(Boolean).join(" · ")
+        : [`${index + 1} / ${state.slides.length}`, title].filter(Boolean).join(" · ");
+      const content = image
+        ? `<div class="slide-layout"><div class="slide-copy">${slideHtml}</div><img class="slide-generated-image" src="${escapeHtml(image)}" alt="${escapeHtml(t("imageAlt"))}"></div>`
+        : slideHtml;
+      return `<section class="slide${isTitle ? " slide--title" : ""}${image ? " slide--illustrated" : ""}${index ? " hidden" : ""}" data-export-slide>
+        <div class="slide-eyebrow">${escapeHtml(eyebrow)}</div>${content}</section>`;
+    }).join("\n");
+    const logo = BRAND.logo
+      ? `<img class="slide-logo" src="${escapeHtml(BRAND.logo)}" alt="" aria-hidden="true">`
+      : "";
+    const html = `<!DOCTYPE html>
+<html lang="${escapeHtml(uiLang)}">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>${escapeHtml(title)}</title>
+${fontLinks}
+<style>${styleText}
+.export-nav { display: flex; align-items: center; gap: 8px; }
+.export-nav button { border: 1px solid var(--line-2, currentColor); border-radius: 999px; padding: 4px 14px; background: transparent; color: inherit; font: inherit; cursor: pointer; }
+</style>
+</head>
+<body class="presenting">
+<main id="app">
+  <section id="view-present">
+    <div class="present-bar" id="presentBar" aria-hidden="true"></div>
+    ${logo}
+    <div class="stage">${slides}</div>
+    <div class="present-footer">
+      <div class="export-nav">
+        <button id="prevBtn" type="button" aria-label="${uiLang === "pl" ? "Poprzedni slajd" : "Previous slide"}">←</button>
+        <button id="nextBtn" type="button" aria-label="${uiLang === "pl" ? "Następny slajd" : "Next slide"}">→</button>
+      </div>
+      <div class="present-counter" id="presentCounter"></div>
+    </div>
+  </section>
+</main>
+<script>
+(() => {
+  const slides = [...document.querySelectorAll("[data-export-slide]")];
+  const bar = document.getElementById("presentBar");
+  const counter = document.getElementById("presentCounter");
+  let current = 0;
+  function show(index) {
+    current = Math.max(0, Math.min(index, slides.length - 1));
+    slides.forEach((slide, i) => slide.classList.toggle("hidden", i !== current));
+    bar.style.width = slides.length ? ((current + 1) / slides.length * 100) + "%" : "0%";
+    counter.textContent = slides.length ? (current + 1) + " / " + slides.length : "";
+  }
+  document.getElementById("prevBtn").addEventListener("click", () => show(current - 1));
+  document.getElementById("nextBtn").addEventListener("click", () => show(current + 1));
+  document.addEventListener("keydown", event => {
+    if (["ArrowRight", " ", "PageDown"].includes(event.key)) { event.preventDefault(); show(current + 1); }
+    else if (["ArrowLeft", "PageUp"].includes(event.key)) { event.preventDefault(); show(current - 1); }
+    else if (event.key === "Home") { event.preventDefault(); show(0); }
+    else if (event.key === "End") { event.preventDefault(); show(slides.length - 1); }
+  });
+  show(0);
+})();
+<\/script>
+</body>
+</html>`;
+    const blob = new Blob([html], { type: "text/html;charset=utf-8" });
     const a = document.createElement("a");
     a.href = URL.createObjectURL(blob);
-    a.download = (deckTitle(state.md) || "slides") + ".md";
+    a.download = title + ".html";
     a.click();
     URL.revokeObjectURL(a.href);
   }
@@ -737,7 +815,7 @@
       setView("present");
     }
   });
-  downloadBtn.addEventListener("click", downloadMd);
+  downloadBtn.addEventListener("click", downloadHtml);
   pptxBtn.addEventListener("click", downloadPptx);
   presentBtn.addEventListener("click", () => setView("present"));
   editToggleBtn.addEventListener("click", () => setEditorOpen(!state.editorOpen));

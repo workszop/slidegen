@@ -48,7 +48,8 @@ choice of AI provider.
 - **4 brand style presets per app** — one click restyles the whole deck
   (stage, present mode, and `.pptx` export); the choice persists per app and
   survives reload.
-- **Export** — download the deck as an editable `.pptx` in the current look
+- **Export** — download the deck as a standalone `.html` presentation or an
+  editable `.pptx` in the current look
 - Bilingual UI (PL default / EN), keyboard navigation, fullscreen presenting,
   settings persisted in localStorage
 - **Experimental illustrated deck** (`experimental.html`) — keeps the edulab
