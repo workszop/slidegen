@@ -8,7 +8,7 @@ const catalogSrc = readFileSync(new URL("../ai-models.js", import.meta.url), "ut
 const src = readFileSync(new URL("../shared.js", import.meta.url), "utf8");
 const section = src.split("/* pure-helpers:start */")[1].split("/* pure-helpers:end */")[0];
 const H = new Function(`${catalogSrc}\n${section}; return {
-  stripOuterFence, splitSlides, detectLang, buildPrompt, deckTitle, isTitleSlide, firstFont,
+  stripOuterFence, splitSlides, detectLang, buildPrompt, deckTitle, isTitleSlide, reconcileSlideImages, firstFont,
   clampPanelWidth,
   PROVIDER_INFO, DEFAULT_PROVIDER, OPENAI_IMAGE_MODELS, validateModelCatalog, normalizeAiSettings,
   buildGeminiRequest, buildOpenAIRequest, buildClaudeRequest,
@@ -19,6 +19,22 @@ const H = new Function(`${catalogSrc}\n${section}; return {
 // ── existing helpers keep working ──
 test("splitSlides splits on --- outside fences", () => {
   assert.deepEqual(H.splitSlides("# a\n---\n## b"), ["# a", "## b"]);
+});
+
+test("reconcileSlideImages follows unchanged slides across structural edits", () => {
+  const previous = ["# Title", "## Alpha", "## Beta"];
+  const images = [undefined, "alpha.jpg", "beta.jpg"];
+  assert.deepEqual(
+    H.reconcileSlideImages(previous, images, ["# Title", "## New", "## Beta", "## Alpha"]),
+    [undefined, undefined, "beta.jpg", "alpha.jpg"],
+  );
+});
+
+test("reconcileSlideImages drops images for edited slides and preserves duplicate occurrences", () => {
+  assert.deepEqual(
+    H.reconcileSlideImages(["same", "same", "old"], [undefined, "second.jpg", "old.jpg"], ["same", "same", "new"]),
+    [undefined, "second.jpg", undefined],
+  );
 });
 
 // ── PROVIDER_INFO ──
@@ -210,5 +226,6 @@ test("buildSlideImagePrompt appends user direction when provided", () => {
 
 test("buildSlideImagePrompt forbids text and layout artefacts", () => {
   const p = H.buildSlideImagePrompt({ slideMd: "x", direction: "", deckSegments: ["x"] });
+  assert.match(p, /black and white contour image in the style of Notion/);
   assert.match(p, /Do not include text, letters, numbers, logos/);
 });

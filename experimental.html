@@ -416,6 +416,7 @@ window.APP_BRAND = {
   wordmark: "edulab",
   tag: "doc2slide · lab",
   presentBrand: "edulab",
+  title: { pl: "doc2slide — eksperymentalny", en: "doc2slide — experimental" },
   presetKey: "eduapp_preset_experimental",
   editorWKey: "experimental.editorW",
   experimentalImages: true,
@@ -458,8 +459,9 @@ Eksperymentalny wariant edulab z dodatkowymi instrukcjami i ilustracjami AI.
 - Instrukcje uzupełniają zasady doc2slide, ale nie zastępują formatu slajdów
 ---
 ## 4. Dodaj ilustracje
-- Zaznacz **Generuj ilustracje z OpenAI** i wybierz model obrazu
-- doc2slide najpierw przygotuje tekst, a potem obrazy do slajdów treści
+- Wybierz model obrazu i opcjonalnie wpisz wskazówki do ilustracji
+- Przejdź do wybranego slajdu treści i kliknij **Ilustruj ten slajd** pod podglądem
+- Każdą ilustrację generujesz osobno; możesz ją usunąć albo wygenerować ponownie
 - Ilustracje są generowane bez napisów, logo i elementów interfejsu
 - Generowanie obrazów zwiększa czas oraz koszt wywołań API
 ---
@@ -513,8 +515,9 @@ An experimental edulab variant with extra instructions and AI illustrations.
 - Your instructions extend the built-in doc2slide format rules
 ---
 ## Generate illustrations
-- Enable **Generate illustrations with OpenAI** and choose an image model
-- Text is generated first, followed by one image per content slide
+- Choose an image model and optionally enter illustration direction
+- Open a content slide and click **Illustrate this slide** below the preview
+- Each illustration is generated separately and can be removed or regenerated
 - Image generation adds API cost and may take longer
 ---
 ## Review and edit

@@ -13,6 +13,7 @@
           wordmark:     "edulab" | null,            // text next to logo (null = logo only)
           tag:          "doc2slide",                 // app name in the chrome bar
           presentBrand: "edulab",                   // brand name on the title-slide eyebrow
+          title:        { pl: "doc2slide", en: "doc2slide" }, // browser title (optional)
         }
    ============================================================ */
 
@@ -30,6 +31,7 @@
     editorWKey: "eduapp.editorW",
     exampleMd: { pl: "", en: "" },
     experimentalImages: false,
+    title: null,
   }, window.APP_BRAND);
 
   // ─── Constants (LS_* etc. come from shared.js) ───
@@ -125,11 +127,15 @@
   };
   let uiLang = localStorage.getItem(LS_LANG) ?? "pl";
   function t(key) { return T[uiLang][key] ?? key; }
+  function browserTitle() {
+    if (typeof BRAND.title === "string") return BRAND.title;
+    return BRAND.title?.[uiLang] ?? BRAND.title?.pl ?? t("appTitle");
+  }
   function setUiLang(lang) {
     uiLang = lang;
     localStorage.setItem(LS_LANG, lang);
     document.documentElement.lang = lang;
-    document.title = t("appTitle");
+    document.title = browserTitle();
     renderTexts();
     if (state.deckIsExample) setDeck(BRAND.exampleMd[lang] ?? BRAND.exampleMd.pl, { example: true });
     aiSelector.refresh();
@@ -381,6 +387,8 @@
   const slideHtmlCache = new Map();
   function renderSlides() {
     if (slideHtmlCache.size > 500) slideHtmlCache.clear();
+    const previousSegments = state.slideSegments;
+    const previousImages = state.images;
     state.slideSegments = splitSlides(stripOuterFence(state.md));
     state.slides = state.slideSegments.map(seg => {
       let html = slideHtmlCache.get(seg);
@@ -390,7 +398,7 @@
       }
       return html;
     });
-    state.images = state.images.slice(0, state.slides.length);
+    state.images = reconcileSlideImages(previousSegments, previousImages, state.slideSegments);
     state.current = Math.min(state.current, Math.max(0, state.slides.length - 1));
   }
 
@@ -588,6 +596,7 @@
     const openaiKey = loadAiSettings().keys.openai?.trim();
     if (!openaiKey) return showError(t("errNoKeyTitle"), t("errNoOpenAIKey"));
 
+    const previousImage = state.images[index];
     state.illustrating = index;
     errorPanelEl.classList.add("hidden");
     genStatusEl.classList.remove("hidden");
@@ -612,6 +621,9 @@
       if (state.view === "present") renderPresent();
       else renderStage();
     } catch (err) {
+      state.images[index] = previousImage;
+      if (state.view === "present") renderPresent();
+      else renderStage();
       showError(t("errImageTitle"), apiErrorDetail(err));
     } finally {
       state.illustrating = null;
@@ -789,6 +801,6 @@
     if (location.hash === "#present" && state.slides.length) state.view = "present";
   }
   document.documentElement.lang = uiLang; // after ?lang so the param wins
-  document.title = t("appTitle");
+  document.title = browserTitle();
   render();
 })();

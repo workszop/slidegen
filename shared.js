@@ -90,6 +90,19 @@ function isTitleSlide(md) {
   return /^#\s/.test(md.trim());
 }
 
+// Keep generated images attached to unchanged slide markdown when slides are
+// inserted, removed, or reordered. Changed slides intentionally lose images
+// that no longer describe their content.
+function reconcileSlideImages(previousSegments, previousImages, nextSegments) {
+  const imagesBySegment = new Map();
+  (previousSegments ?? []).forEach((segment, index) => {
+    const queue = imagesBySegment.get(segment) ?? [];
+    queue.push(previousImages?.[index]);
+    imagesBySegment.set(segment, queue);
+  });
+  return (nextSegments ?? []).map(segment => imagesBySegment.get(segment)?.shift());
+}
+
 // First family name from a CSS font-family list, unquoted.
 function firstFont(ff) {
   return ff.split(",")[0].trim().replace(/^["']|["']$/g, "");
@@ -232,7 +245,8 @@ function buildSlideImagePrompt({ slideMd, direction, deckSegments }) {
   const deck = (deckSegments ?? []).map(s => s.trim()).filter(Boolean).join("\n\n---\n\n");
   let prompt =
     "Create one landscape editorial illustration for a presentation slide. " +
-    "Use a warm, modern workshop aesthetic with simple composition and generous negative space. " +
+    "Create a black and white contour image in the style of Notion, " +
+    "with simple composition and generous negative space. " +
     "Do not include text, letters, numbers, logos, watermarks, UI, frames, or slide layouts.\n\n" +
     "Here is the full presentation for context only — do NOT illustrate these slides, " +
     "they are provided so the illustration fits the deck:\n\n" +
