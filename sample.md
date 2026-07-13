@@ -49,6 +49,6 @@ Jedno zdanie wstępu.
 | Esc | powrót do edycji |
 ---
 ## Eksport
-- **Pobierz .md** zapisuje treść i podział slajdów do dalszej edycji
+- **Pobierz html** zapisuje samodzielną prezentację do otwarcia w przeglądarce
 - **Pobierz .pptx** tworzy edytowalną prezentację PowerPoint
 - Przed udostępnieniem obejrzyj całość w trybie prezentacji
