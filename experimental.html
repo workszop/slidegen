@@ -428,12 +428,13 @@ window.APP_BRAND = {
   ],
   exampleMd: {
     pl: `# doc2slide · lab
-Eksperymentalny wariant edulab z dodatkowymi instrukcjami i ilustracjami AI.
+Eksperymentalny wariant edulab z instrukcjami i ilustracjami AI generowanymi dla wybranych slajdów.
 ---
 ## Co oferuje ten wariant?
 - Wgraj materiał źródłowy w panelu **Dokument**
 - Dodaj własne instrukcje, które rozszerzą podstawowy prompt aplikacji
-- Opcjonalnie wygeneruj ilustrację do każdego slajdu treści
+- Ilustruj wybrane slajdy pojedynczo; wynik możesz usunąć lub wygenerować ponownie
+- Domyślny styl obrazu to czarno-biały kontur w estetyce Notion
 - Sprawdź wynik, popraw tekst i wybierz styl edulab
 
 > Ten przewodnik możesz przeglądać przyciskami pod slajdem lub klawiszami ← i →.
@@ -462,6 +463,7 @@ Eksperymentalny wariant edulab z dodatkowymi instrukcjami i ilustracjami AI.
 - Wybierz model obrazu i opcjonalnie wpisz wskazówki do ilustracji
 - Przejdź do wybranego slajdu treści i kliknij **Ilustruj ten slajd** pod podglądem
 - Każdą ilustrację generujesz osobno; możesz ją usunąć albo wygenerować ponownie
+- Domyślnie powstaje czarno-biały obraz konturowy w stylu Notion
 - Ilustracje są generowane bez napisów, logo i elementów interfejsu
 - Generowanie obrazów zwiększa czas oraz koszt wywołań API
 ---
@@ -489,12 +491,13 @@ Eksperymentalny wariant edulab z dodatkowymi instrukcjami i ilustracjami AI.
 
 Gotowe — wgraj własny dokument w panelu po lewej stronie.`,
     en: `# doc2slide · lab
-An experimental edulab variant with extra instructions and AI illustrations.
+An experimental edulab variant with custom instructions and AI illustrations for selected slides.
 ---
 ## What does this variant add?
 - Upload a source document or paste text
 - Add your own instructions on top of the built-in slide prompt
-- Optionally generate an illustration for every content slide
+- Illustrate selected slides one at a time, then remove or regenerate the result
+- Images default to black-and-white contours in the style of Notion
 - Review the result, edit the text, and apply an edulab style
 ---
 ## Load your material
@@ -518,6 +521,7 @@ An experimental edulab variant with extra instructions and AI illustrations.
 - Choose an image model and optionally enter illustration direction
 - Open a content slide and click **Illustrate this slide** below the preview
 - Each illustration is generated separately and can be removed or regenerated
+- The default output is a black-and-white contour image in the style of Notion
 - Image generation adds API cost and may take longer
 ---
 ## Review and edit
