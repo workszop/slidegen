@@ -687,6 +687,63 @@
     return xml.replace(pattern, `<a:${tag}><a:srgbClr val="${color}"/></a:${tag}>`);
   }
 
+  // Port of fix-theme.py's fix_ph_title_idx. PowerPoint only treats a
+  // <p:ph type="title"> with NO idx as the canonical title; one carrying an
+  // idx is not remapped when a theme or template is applied and surfaces as a
+  // stray text box. PptxGenJS always assigns an idx, so strip it from slides
+  // and layouts together to keep the pair matched.
+  function repairTitlePlaceholderIdx(xml) {
+    return xml.replace(/<p:ph\b[^>]*?\/?>/g, tag =>
+      (/type="title"/.test(tag) ? tag.replace(/\s+idx="\d+"/, "") : tag));
+  }
+
+  // Port of fix-theme.py's fix_run_sz, narrowed to placeholder-bound shapes.
+  // The script strips every run size on a slide, which is correct once a deck
+  // is placeholder-only. Body copy here still renders as positioned text boxes
+  // that inherit from nothing, so stripping their size would collapse them to
+  // the default; they keep it until that content moves into placeholders.
+  // A placeholder run inherits the same size from the layout's defRPr, so
+  // removing it is visually neutral and lets a template restyle the text.
+  function repairRunSizes(xml) {
+    return xml.replace(/<p:sp>[\s\S]*?<\/p:sp>/g, shape =>
+      (shape.includes("<p:ph")
+        ? shape.replace(/(<a:(?:rPr|endParaRPr)\b[^>]*?)\s+sz="\d+"/g, "$1")
+        : shape));
+  }
+
+  function layoutPlaceholders(xml) {
+    return [...xml.matchAll(/<p:ph\b([^>]*?)\/?>/g)].map(match => ({
+      type: /type="(\w+)"/.exec(match[1])?.[1] ?? "body",
+      idx: /idx="(\d+)"/.exec(match[1])?.[1] ?? "",
+    }));
+  }
+
+  // Tables and pictures never reach their layout placeholder: PptxGenJS
+  // ignores the documented `placeholder` option for a table, and types the
+  // picture's own <p:ph> only in the layout. Either way the layout declares a
+  // slot the slide does not fill, which PowerPoint renders as an empty
+  // "Click to add text" box as soon as a theme is applied. Bind them here.
+  function bindFramePlaceholders(xml, layoutXml) {
+    const slots = layoutPlaceholders(layoutXml);
+    const claim = type => slots.find(slot => slot.type === type);
+    let out = xml.replace(/<p:pic>[\s\S]*?<\/p:pic>/g, pic => {
+      const tag = /<p:ph\b[^>]*?\/?>/.exec(pic);
+      if (!tag || /type="/.test(tag[0])) return pic;
+      const slot = claim("pic");
+      return slot ? pic.replace(tag[0], tag[0].replace("<p:ph", `<p:ph type="${slot.type}"`)) : pic;
+    });
+    out = out.replace(/<p:graphicFrame>[\s\S]*?<\/p:graphicFrame>/g, frame => {
+      if (frame.includes("<p:ph")) return frame;
+      const slot = claim("tbl");
+      if (!slot) return frame;
+      const ph = `<p:ph type="${slot.type}"${slot.idx ? ` idx="${slot.idx}"` : ""}/>`;
+      return frame.includes("<p:nvPr/>")
+        ? frame.replace("<p:nvPr/>", `<p:nvPr>${ph}</p:nvPr>`)
+        : frame.replace(/<p:nvPr>/, `<p:nvPr>${ph}`);
+    });
+    return out;
+  }
+
   function repairPlaceholderTypes(xml) {
     // PptxGenJS 4.0.1 emits pic/tbl placeholders without their type
     // attribute. Keep the documented placeholder API above and repair the
@@ -751,13 +808,19 @@
       .map(async path => {
         const file = zip.file(path);
         const xml = await file.async("string");
-        zip.file(path, repairPlaceholderTypes(xml));
+        zip.file(path, repairTitlePlaceholderIdx(repairPlaceholderTypes(xml)));
       }));
 
     await Promise.all(Object.keys(zip.files)
       .filter(path => /^ppt\/slides\/slide\d+\.xml$/.test(path))
       .map(async path => {
-        const xml = await zip.file(path).async("string");
+        let xml = await zip.file(path).async("string");
+        const relsPath = path.replace("ppt/slides/", "ppt/slides/_rels/") + ".rels";
+        const rels = await zip.file(relsPath)?.async("string");
+        const layout = rels && /slideLayout\d+\.xml/.exec(rels)?.[0];
+        const layoutXml = layout && await zip.file(`ppt/slideLayouts/${layout}`)?.async("string");
+        if (layoutXml) xml = bindFramePlaceholders(xml, layoutXml);
+        xml = repairTitlePlaceholderIdx(repairRunSizes(xml));
         zip.file(path, repairShapeIds(xml));
       }));
 
