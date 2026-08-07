@@ -565,6 +565,18 @@
     })[char]);
   }
 
+  // The active preset lives as inline custom properties on <html>, which
+  // collectExportCss cannot reach: it only walks stylesheet rules. Without
+  // this the export falls back to the default preset on every var().
+  function collectExportPresetCss() {
+    const inline = document.documentElement.style;
+    const declarations = ["--slide-bg", "--slide-fg", "--slide-accent"]
+      .map(name => [name, inline.getPropertyValue(name).trim()])
+      .filter(([, value]) => value && /^[#\w(),.%\s-]+$/.test(value))
+      .map(([name, value]) => `${name}: ${value};`);
+    return declarations.length ? `:root { ${declarations.join(" ")} }` : "";
+  }
+
   function collectExportCss() {
     return [...document.styleSheets].map(sheet => {
       try {
@@ -579,7 +591,7 @@
 
   function downloadHtml() {
     const title = deckTitle(state.md) || "slides";
-    const styleText = collectExportCss();
+    const styleText = [collectExportCss(), collectExportPresetCss()].filter(Boolean).join("\n");
     const fontLinks = [...document.querySelectorAll('link[rel="stylesheet"]')]
       .filter(link => /^https:\/\/fonts\.googleapis\.com\//.test(link.href))
       .map(link => `<link rel="stylesheet" href="${escapeHtml(link.href)}">`).join("\n");

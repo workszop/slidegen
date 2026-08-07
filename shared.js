@@ -234,7 +234,11 @@ function buildClaudeRequest({ key, model, source, prompt }) {
       "anthropic-version": "2023-06-01",
       "anthropic-dangerous-direct-browser-access": "true",
     },
-    body: { model, max_tokens: 16000, stream: true, messages: [{ role: "user", content }] },
+    // 64000 is the output ceiling of the smallest model offered (Haiku 4.5);
+    // Sonnet 5 and Opus 4.8 allow 128000. The request streams, so the large
+    // budget costs nothing until it is used. Sonnet 5 thinks by default and
+    // thinking shares this budget, which the previous 16000 truncated.
+    body: { model, max_tokens: 64000, stream: true, messages: [{ role: "user", content }] },
   };
 }
 
