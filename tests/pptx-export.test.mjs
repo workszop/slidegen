@@ -1,4 +1,5 @@
 import { test } from "node:test";
+import { deflateSync as zlibSync } from "node:zlib";
 import assert from "node:assert/strict";
 import { createRequire } from "node:module";
 
@@ -251,4 +252,80 @@ test("keeps shape ids unique when a table shares a slide with other content", as
     const ids = [...xml.matchAll(/<p:cNvPr\b[^>]*\bid="(\d+)"/g)].map(match => match[1]);
     assert.equal(new Set(ids).size, ids.length, `${name} must not reuse a shape id`);
   }
+});
+
+// A real PNG of exact dimensions, so the exporter must read its intrinsic size.
+function makePng(width, height) {
+  const crcTable = Array.from({ length: 256 }, (_, n) => {
+    let c = n;
+    for (let k = 0; k < 8; k += 1) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1;
+    return c >>> 0;
+  });
+  const crc = buf => {
+    let c = 0xffffffff;
+    for (const byte of buf) c = crcTable[(c ^ byte) & 0xff] ^ (c >>> 8);
+    return (c ^ 0xffffffff) >>> 0;
+  };
+  const chunk = (type, data) => {
+    const len = Buffer.alloc(4);
+    len.writeUInt32BE(data.length);
+    const body = Buffer.concat([Buffer.from(type, "ascii"), data]);
+    const sum = Buffer.alloc(4);
+    sum.writeUInt32BE(crc(body));
+    return Buffer.concat([len, body, sum]);
+  };
+  const ihdr = Buffer.alloc(13);
+  ihdr.writeUInt32BE(width, 0);
+  ihdr.writeUInt32BE(height, 4);
+  ihdr[8] = 8; ihdr[9] = 2; // 8-bit truecolour
+  const raw = Buffer.alloc(height * (width * 3 + 1)); // filter byte + RGB per row
+  const png = Buffer.concat([
+    Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
+    chunk("IHDR", ihdr),
+    chunk("IDAT", zlibSync(raw)),
+    chunk("IEND", Buffer.alloc(0)),
+  ]);
+  return "data:image/png;base64," + png.toString("base64");
+}
+
+async function picGeometry(zip, pattern, objectName) {
+  const EMU = 914400;
+  const files = await xmlFiles(zip, pattern);
+  for (const { xml } of files) {
+    for (const m of xml.matchAll(/<p:pic>[\s\S]*?<\/p:pic>/g)) {
+      if (!m[0].includes(`name="${objectName}"`)) continue;
+      const ext = m[0].match(/<a:ext cx="(\d+)" cy="(\d+)"\/>/);
+      if (ext) return { w: +ext[1] / EMU, h: +ext[2] / EMU };
+    }
+  }
+  return null;
+}
+
+test("the brand logo keeps its aspect ratio inside the reserved corner", async () => {
+  for (const [w, h] of [[135, 108], [400, 100], [100, 400]]) {
+    const deck = DeckModel.create(["# T\nsub", "## Body\n\ntext"], { marked });
+    const buffer = await exportDeckToPptx({
+      deck, theme: {}, logo: makePng(w, h), outputType: "nodebuffer", onWarnings() {},
+    });
+    const zip = await JSZip.loadAsync(buffer);
+    const box = await picGeometry(zip, /^ppt\/slideLayouts\/slideLayout\d+\.xml$/, "Brand logo");
+    assert.ok(box, `logo ${w}x${h} should be placed`);
+    assert.ok(Math.abs(box.w / box.h - w / h) < 0.02,
+      `logo ${w}x${h}: expected aspect ${(w / h).toFixed(3)}, got ${(box.w / box.h).toFixed(3)}`);
+    assert.ok(box.w <= 1.12 + 1e-6 && box.h <= 0.46 + 1e-6,
+      `logo ${w}x${h} must stay inside the reserved 1.12x0.46 area, got ${box.w}x${box.h}`);
+  }
+});
+
+test("a slide illustration keeps its aspect ratio inside its column", async () => {
+  const deck = DeckModel.create(["# T\nsub", "## Illustrated\n\nA caption."], { marked });
+  const buffer = await exportDeckToPptx({
+    deck, theme: {}, images: [null, { data: makePng(1536, 1024), altText: "wide" }],
+    outputType: "nodebuffer", onWarnings() {},
+  });
+  const zip = await JSZip.loadAsync(buffer);
+  const box = await picGeometry(zip, /^ppt\/slides\/slide\d+\.xml$/, "Slide 2 illustration");
+  assert.ok(box, "illustration should be placed");
+  assert.ok(Math.abs(box.w / box.h - 1536 / 1024) < 0.02,
+    `expected aspect 1.500, got ${(box.w / box.h).toFixed(3)}`);
 });
