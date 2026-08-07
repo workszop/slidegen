@@ -31,6 +31,12 @@
     editorWKey: "eduapp.editorW",
     exampleMd: { pl: "", en: "" },
     experimentalImages: false,
+    pptx: {
+      headingFont: "Raleway",
+      bodyFont: "Raleway",
+      monoFont: "DM Mono",
+      company: "",
+    },
     title: null,
   }, window.APP_BRAND);
 
@@ -46,10 +52,12 @@
       pasteHere: "…albo wklej tekst tutaj",
       countAuto: "auto",
       generate: "Generuj slajdy",
+      cancelGeneration: "Anuluj generowanie",
+      cancelIllustration: "Anuluj ilustrację",
       fileLoaded: "wgrano",
       detected: "wykryto",
       errFileType: "Obsługiwane formaty: .txt, .md, .pdf",
-      errTooBig: "Plik jest za duży (limit 19 MB). Skróć dokument lub podziel go na części.",
+      errTooBig: "Plik jest za duży (limit: PDF 19 MB, tekst 2 MB). Skróć dokument lub podziel go na części.",
       errNoKeyTitle: "Brak klucza API",
       errNoKeyBody: "Wklej klucz API dostawcy {provider} w ustawieniach modelu (kliknij wskaźnik modelu). Wygenerujesz go na {url}.",
       errApiTitle: "Błąd API",
@@ -89,10 +97,12 @@
       pasteHere: "…or paste text here",
       countAuto: "auto",
       generate: "Generate slides",
+      cancelGeneration: "Cancel generation",
+      cancelIllustration: "Cancel illustration",
       fileLoaded: "loaded",
       detected: "detected",
       errFileType: "Supported formats: .txt, .md, .pdf",
-      errTooBig: "File too large (19 MB limit). Trim the document or split it.",
+      errTooBig: "File too large (limits: PDF 19 MB, text 2 MB). Trim the document or split it.",
       errNoKeyTitle: "Missing API key",
       errNoKeyBody: "Paste your {provider} API key in the model settings (click the model chip). Generate one at {url}.",
       errApiTitle: "API error",
@@ -275,11 +285,14 @@
     md: "",
     slides: [],
     slideSegments: [],
+    deckModel: { slides: [], warnings: [], stats: {} },
     images: [],
     current: 0,
     generating: false,
+    generationController: null,
     slideLang: "auto",
     illustrating: null,     // index of the slide currently being illustrated, or null
+    illustrationController: null,
   };
   function setView(v) { state.view = v; render(); }
   function setDeck(md, { example = false } = {}) {
@@ -385,19 +398,27 @@
   // Parsed slide HTML is memoized per segment string: during streaming and
   // editing only the changed segment pays the marked+DOMPurify cost.
   const slideHtmlCache = new Map();
+  const SLIDE_CACHE_LIMIT = 500;
+  function slideHtml(segment) {
+    if (slideHtmlCache.has(segment)) {
+      const cached = slideHtmlCache.get(segment);
+      slideHtmlCache.delete(segment);
+      slideHtmlCache.set(segment, cached);
+      return cached;
+    }
+    const html = DOMPurify.sanitize(marked.parse(segment));
+    slideHtmlCache.set(segment, html);
+    if (slideHtmlCache.size > SLIDE_CACHE_LIMIT) {
+      slideHtmlCache.delete(slideHtmlCache.keys().next().value);
+    }
+    return html;
+  }
   function renderSlides() {
-    if (slideHtmlCache.size > 500) slideHtmlCache.clear();
     const previousSegments = state.slideSegments;
     const previousImages = state.images;
     state.slideSegments = splitSlides(stripOuterFence(state.md));
-    state.slides = state.slideSegments.map(seg => {
-      let html = slideHtmlCache.get(seg);
-      if (html === undefined) {
-        html = DOMPurify.sanitize(marked.parse(seg));
-        slideHtmlCache.set(seg, html);
-      }
-      return html;
-    });
+    state.deckModel = DeckModel.create(state.slideSegments, { marked });
+    state.slides = state.slideSegments.map(slideHtml);
     state.images = reconcileSlideImages(previousSegments, previousImages, state.slideSegments);
     state.current = Math.min(state.current, Math.max(0, state.slides.length - 1));
   }
@@ -436,9 +457,12 @@
     wsNextBtn.disabled = state.current >= n - 1;
     deckBarEl.style.width = n ? `${((state.current + 1) / n) * 100}%` : "0%";
     if (!n) { wsStageEl.innerHTML = ""; return; }
-    const isTitle = state.current === 0 && isTitleSlide(state.md);
+    const semanticSlide = state.deckModel.slides[state.current];
+    const isTitle = semanticSlide?.type === "title";
     const image = state.images[state.current];
     wsStageEl.className = "slide" + (isTitle ? " slide--title" : "") + (image ? " slide--illustrated" : "");
+    wsStageEl.dataset.slideType = semanticSlide?.type ?? "content";
+    wsStageEl.dataset.warningCount = String(semanticSlide?.warnings?.length ?? 0);
     wsStageEl.innerHTML = image
       ? `<div class="slide-layout"><div class="slide-copy">${state.slides[state.current]}</div><img class="slide-generated-image" alt=""></div>`
       : state.slides[state.current];
@@ -454,13 +478,13 @@
     if (!illustrateBtn) return;               // non-experimental brands
     const n = state.slides.length;
     const i = state.current;
-    const isTitle = i === 0 && isTitleSlide(state.md);
+    const isTitle = state.deckModel.slides[i]?.type === "title";
     const busy = state.illustrating != null;
     const hasImage = Boolean(state.images[i]);
     illustrateBtn.classList.toggle("hidden", n === 0);
-    illustrateBtn.disabled = busy || isTitle || n === 0;
+    illustrateBtn.disabled = (!busy && isTitle) || n === 0;
     illustrateBtnLabel.textContent = busy
-      ? t("genImageOne").replace("{n}", state.illustrating + 1)
+      ? t("cancelIllustration")
       : hasImage ? t("regenerateSlide") : t("illustrateSlide");
     removeIllustrationBtn.classList.toggle("hidden", !hasImage || busy);
   }
@@ -469,13 +493,16 @@
     const n = state.slides.length;
     if (!n) return;
     const i = state.current;
-    const isTitle = i === 0 && isTitleSlide(state.md);
+    const semanticSlide = state.deckModel.slides[i];
+    const isTitle = semanticSlide?.type === "title";
     const title = deckTitle(state.md);
     const eyebrow = isTitle
       ? [BRAND.presentBrand, t("presentEyebrowWord")].filter(Boolean).join(" · ")
       : [`${i + 1} / ${n}`, title].filter(Boolean).join(" · ");
     const image = state.images[i];
     stageEl.className = "slide" + (isTitle ? " slide--title" : "") + (image ? " slide--illustrated" : "");
+    stageEl.dataset.slideType = semanticSlide?.type ?? "content";
+    stageEl.dataset.warningCount = String(semanticSlide?.warnings?.length ?? 0);
     stageEl.innerHTML = `<div class="slide-eyebrow"></div>` + (image
       ? `<div class="slide-layout"><div class="slide-copy">${state.slides[i]}</div><img class="slide-generated-image" alt=""></div>`
       : state.slides[i]);
@@ -495,25 +522,19 @@
   }
 
   // ─── PPTX export (deps lazy-loaded via shared.js) ───
-  // The exporter needs the deck's effective look; read it from computed
-  // styles via a probe so any brand CSS works without extra config.
+  // Keep export colors in canonical hex form. Reading computed CSS is brittle:
+  // modern browsers may serialize derived colors as `color(srgb ...)`, and
+  // those values are not suitable PowerPoint theme inputs.
   function readDeckTheme() {
-    const probe = document.createElement("div");
-    probe.className = "slide";
-    probe.innerHTML = "<h2>x</h2><p>y</p><code>z</code>";
-    viewEls.present.appendChild(probe);
-    const cs = el => getComputedStyle(el);
-    const theme = {
-      bg: cs(viewEls.present).backgroundColor,
-      fg: cs(probe.querySelector("h2")).color,
-      bodyColor: cs(probe.querySelector("p")).color,
-      accent: cs(presentBarEl).backgroundColor,
-      headingFont: firstFont(cs(probe.querySelector("h2")).fontFamily),
-      bodyFont: firstFont(cs(probe.querySelector("p")).fontFamily),
-      monoFont: firstFont(cs(probe.querySelector("code")).fontFamily),
+    const preset = BRAND.presets[activePreset] ?? BRAND.presets[0];
+    return {
+      bg: preset?.bg ?? "#FFFFFF",
+      fg: preset?.fg ?? "#111111",
+      accent: preset?.accent ?? "#4472C4",
+      headingFont: BRAND.pptx.headingFont,
+      bodyFont: BRAND.pptx.bodyFont,
+      monoFont: BRAND.pptx.monoFont,
     };
-    probe.remove();
-    return theme;
   }
 
   async function downloadPptx() {
@@ -522,10 +543,13 @@
       await ensurePptxDeps();
       await exportDeckToPptx({
         slidesMd: splitSlides(stripOuterFence(state.md)),
+        deck: state.deckModel,
         images: state.images,
         theme: readDeckTheme(),
         logo: BRAND.logo || null,
         brandName: BRAND.presentBrand,
+        company: BRAND.pptx.company || BRAND.presentBrand,
+        language: uiLang,
         fileName: (deckTitle(state.md) || "slides") + ".pptx",
       });
     } catch (err) {
@@ -541,12 +565,25 @@
     })[char]);
   }
 
+  function collectExportCss() {
+    return [...document.styleSheets].map(sheet => {
+      try {
+        return [...sheet.cssRules].map(rule => rule.cssText).join("\n");
+      } catch {
+        // Cross-origin font stylesheets cannot be inspected. Their <link>
+        // elements are preserved separately below.
+        return "";
+      }
+    }).filter(Boolean).join("\n");
+  }
+
   function downloadHtml() {
     const title = deckTitle(state.md) || "slides";
-    const styleText = [...document.querySelectorAll("style")].map(style => style.textContent).join("\n");
+    const styleText = collectExportCss();
     const fontLinks = [...document.querySelectorAll('link[rel="stylesheet"]')]
+      .filter(link => /^https:\/\/fonts\.googleapis\.com\//.test(link.href))
       .map(link => `<link rel="stylesheet" href="${escapeHtml(link.href)}">`).join("\n");
-    const hasTitle = isTitleSlide(state.md);
+    const hasTitle = state.deckModel.slides[0]?.type === "title";
     const slides = state.slides.map((slideHtml, index) => {
       const isTitle = index === 0 && hasTitle;
       const image = state.images[index];
@@ -629,7 +666,9 @@ ${fontLinks}
       const langInfo = src.kind === "text" ? ` · ${t("detected")}: ${detectLang(src.text).toUpperCase()}` : "";
       fileChipEl.textContent = `✓ ${t("fileLoaded")}: ${src.name}${langInfo}`;
     }
-    generateBtn.disabled = !src;
+    generateBtn.disabled = !src && !state.generating;
+    generateBtn.textContent = state.generating ? t("cancelGeneration") : t("generate");
+    generateBtn.setAttribute("aria-busy", String(state.generating));
     slideLangPlBtn.setAttribute("aria-pressed", String(state.slideLang === "pl"));
     slideLangEnBtn.setAttribute("aria-pressed", String(state.slideLang === "en"));
     slideLangAutoBtn.setAttribute("aria-pressed", String(state.slideLang === "auto"));
@@ -668,14 +707,19 @@ ${fontLinks}
 
   // ─── Illustration (single slide, on demand) ─────
   async function illustrateSlide(index) {
-    if (state.illustrating != null || state.generating) return;
+    if (state.illustrating != null) {
+      state.illustrationController?.abort(new DOMException("Illustration cancelled", "AbortError"));
+      return;
+    }
+    if (state.generating) return;
     if (index < 0 || index >= state.slideSegments.length) return;
-    if (index === 0 && isTitleSlide(state.slideSegments[index])) return;
+    if (state.deckModel.slides[index]?.type === "title") return;
     const openaiKey = loadAiSettings().keys.openai?.trim();
     if (!openaiKey) return showError(t("errNoKeyTitle"), t("errNoOpenAIKey"));
 
     const previousImage = state.images[index];
     state.illustrating = index;
+    state.illustrationController = new AbortController();
     errorPanelEl.classList.add("hidden");
     genStatusEl.classList.remove("hidden");
     genStatusTextEl.textContent = t("genImageOne").replace("{n}", index + 1);
@@ -684,6 +728,7 @@ ${fontLinks}
       const image = await generateOpenAIImage({
         key: openaiKey,
         model: imageModelEl.value,
+        signal: state.illustrationController.signal,
         prompt: buildSlideImagePrompt({
           slideMd: state.slideSegments[index],
           direction: illustrationNoteEl?.value ?? "",
@@ -702,9 +747,10 @@ ${fontLinks}
       state.images[index] = previousImage;
       if (state.view === "present") renderPresent();
       else renderStage();
-      showError(t("errImageTitle"), apiErrorDetail(err));
+      if (err?.name !== "AbortError") showError(t("errImageTitle"), apiErrorDetail(err));
     } finally {
       state.illustrating = null;
+      state.illustrationController = null;
       genStatusEl.classList.add("hidden");
       renderIllustrateControls();
     }
@@ -713,6 +759,10 @@ ${fontLinks}
   // Streaming: markdown flows into the editor and preview as it arrives
   // (transport lives in shared.js; this function is only the UI reaction).
   async function generateSlides() {
+    if (state.generating) {
+      state.generationController?.abort(new DOMException("Generation cancelled", "AbortError"));
+      return;
+    }
     const ai = loadAiSettings();
     const key = ai.keys[ai.provider]?.trim();
     if (!key) {
@@ -720,13 +770,14 @@ ${fontLinks}
       return showError(t("errNoKeyTitle"),
         t("errNoKeyBody").replace("{provider}", info.label).replace("{url}", info.keyUrl.replace("https://", "")));
     }
-    if (!state.source || state.generating || state.illustrating != null) return;
+    if (!state.source || state.illustrating != null) return;
 
     state.generating = true;
+    state.generationController = new AbortController();
     errorPanelEl.classList.add("hidden");
     genStatusEl.classList.remove("hidden");
     genStatusTextEl.textContent = t("genSending");
-    generateBtn.disabled = true;
+    renderSidebar();
     state.images = [];
     let started = false, lastRender = 0;
     try {
@@ -740,6 +791,7 @@ ${fontLinks}
           countHint: countHintEl.value,
           additionalPrompt: additionalPromptEl?.value ?? "",
         }),
+        signal: state.generationController.signal,
         onChunk(text) {
           if (!started) {
             started = true;
@@ -762,11 +814,12 @@ ${fontLinks}
       if (!acc.trim()) throw new Error(t("errEmpty"));
       setDeck(stripOuterFence(acc.trim()), { example: false });
     } catch (err) {
-      showError(t("errApiTitle"), apiErrorDetail(err));
+      if (err?.name !== "AbortError") showError(t("errApiTitle"), apiErrorDetail(err));
     } finally {
       state.generating = false;
+      state.generationController = null;
       genStatusEl.classList.add("hidden");
-      generateBtn.disabled = !state.source;
+      renderSidebar();
     }
   }
 

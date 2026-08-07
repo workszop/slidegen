@@ -13,7 +13,7 @@ const H = new Function(`${catalogSrc}\n${section}; return {
   PROVIDER_INFO, DEFAULT_PROVIDER, OPENAI_IMAGE_MODELS, validateModelCatalog, normalizeAiSettings,
   buildGeminiRequest, buildOpenAIRequest, buildClaudeRequest,
   buildOpenAIImageRequest, buildSlideImagePrompt,
-  geminiChunk, openaiChunk, claudeChunk,
+  geminiChunk, openaiChunk, claudeChunk, parseSseFrames,
 };`)();
 
 // ── existing helpers keep working ──
@@ -180,6 +180,41 @@ test("chunk extractors pull text deltas and ignore other events", () => {
   assert.equal(H.openaiChunk({ type: "response.created" }), "");
   assert.equal(H.claudeChunk({ type: "content_block_delta", delta: { type: "text_delta", text: "y" } }), "y");
   assert.equal(H.claudeChunk({ type: "message_start" }), "");
+});
+
+// ── SSE frame parsing ──
+test("parseSseFrames joins multi-line data and accepts CRLF events", () => {
+  const parsed = H.parseSseFrames(
+    "event: response.output_text.delta\r\ndata: {\"type\":\"response.output_text.delta\",\r\ndata: \"delta\":\"hello\"}\r\n\r\n",
+  );
+  assert.deepEqual(parsed, {
+    events: [{
+      event: "response.output_text.delta",
+      data: "{\"type\":\"response.output_text.delta\",\n\"delta\":\"hello\"}",
+    }],
+    remainder: "",
+  });
+});
+
+test("parseSseFrames retains incomplete chunks and flushes the final event", () => {
+  const first = H.parseSseFrames("data: {\"type\":\"message\",\"text\":\"za");
+  assert.deepEqual(first.events, []);
+  const second = H.parseSseFrames(first.remainder + "żółć\"}");
+  assert.deepEqual(second.events, []);
+  const final = H.parseSseFrames(second.remainder, { final: true });
+  assert.deepEqual(final, {
+    events: [{ event: "message", data: "{\"type\":\"message\",\"text\":\"zażółć\"}" }],
+    remainder: "",
+  });
+});
+
+test("parseSseFrames ignores comments and preserves separate event names", () => {
+  const parsed = H.parseSseFrames(": heartbeat\n\nevent: error\ndata: {\"error\":{\"message\":\"overloaded\"}}\n\n");
+  assert.deepEqual(parsed.events, [{
+    event: "error",
+    data: "{\"error\":{\"message\":\"overloaded\"}}",
+  }]);
+  assert.equal(parsed.remainder, "");
 });
 
 // ── clampPanelWidth ──

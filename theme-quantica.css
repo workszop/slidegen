@@ -1,0 +1,34 @@
+/* Quantica slide identity. Load after theme-edulab.css. */
+:root {
+  --quantica-pink: #C41E54;
+  --deep-berry: #8A004C;
+  --magenta-tint: #FFE6F1;
+  --violet-primary: #7030A0;
+  --font-slide: 'Poppins', 'Inter', system-ui, sans-serif;
+  --font-slide-mono: 'Geist Mono', ui-monospace, 'SF Mono', Menlo, monospace;
+}
+
+.present-bar,
+.deck-bar { background: var(--slide-accent, var(--quantica-pink)); }
+
+.slide .slide-eyebrow {
+  font-family: var(--font-slide-mono);
+  letter-spacing: .08em;
+  color: var(--slide-accent, var(--quantica-pink));
+}
+.slide h1 { font-family: var(--font-slide); font-weight: 700; }
+.slide h2 { font-family: var(--font-slide); letter-spacing: -0.01em; }
+.slide h3 { font-family: var(--font-slide); }
+.slide li::marker { color: var(--slide-accent, var(--quantica-pink)); }
+.slide a { color: var(--quantica-pink); }
+.slide code,
+.slide pre,
+.slide th { font-family: var(--font-slide-mono); }
+.slide blockquote {
+  border: 1px solid var(--slide-accent, var(--quantica-pink));
+  background: var(--magenta-tint);
+  border-radius: var(--r-md);
+  color: var(--deep-berry);
+}
+.slide--title .slide-eyebrow { color: var(--violet-primary); }
+.slide--title h1 { color: var(--slide-accent, var(--quantica-pink)); }

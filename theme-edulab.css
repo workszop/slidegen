@@ -1,0 +1,136 @@
+/* Edulab tokens and default editorial slide treatment. */
+
+:root {
+  /* ---- Brand fonts (Raleway; bold display for titles) ---- */
+  --font-display: 'Raleway', system-ui, sans-serif;
+  --font-sans:    'Raleway', system-ui, -apple-system, sans-serif;
+  --font-mono:    'DM Mono', ui-monospace, 'SF Mono', Menlo, monospace;
+
+  /* Paper — warm cream backgrounds (the brand never sits on pure white) */
+  --paper:    #FBF7F0;
+  --paper-2:  #F4EDDF;
+  --paper-3:  #ECE1CF;
+  --surface:  #FFFFFF;
+
+  /* Ink — warm near-black text & lines */
+  --ink:      #211E1A;
+  --ink-2:    #5B554D;
+  --ink-3:    #938A7C;
+  --line:     #E7DCCB;
+  --line-2:   #D6C8B2;
+
+  /* Marigold — primary brand */
+  --marigold:      #E8920C;
+  --marigold-600:  #CE800A;
+  --marigold-soft: #FBE7C2;
+  --marigold-ink:  #8A4F00;
+
+  /* Teal — secondary brand */
+  --teal:      #0E8C7F;
+  --teal-600:  #0B7468;
+  --teal-soft: #D2EBE6;
+  --teal-ink:  #0A5A52;
+
+  /* Coral — accent (use sparingly) */
+  --coral:      #EF5B3F;
+  --coral-600:  #D44A30;
+  --coral-soft: #FBDDD4;
+  --coral-ink:  #9A2E1B;
+
+  /* Sky — supportive */
+  --sky:      #2E78C9;
+  --sky-soft: #D9E7F6;
+  --sky-ink:  #1B4E88;
+
+  /* ---- Semantic ---- */
+  --success:      #2F8F5B;  --success-soft: #D7EEDD;  --success-ink: #1C6A3E;
+  --warning:      #C9810A;  --warning-soft: #FBEAC6;  --warning-ink: #855207;
+  --danger:       #D8412A;  --danger-soft:  #FAD9D2;  --danger-ink:  #97271A;
+  --info:         #2E78C9;  --info-soft:    #D9E7F6;  --info-ink:    #1B4E88;
+
+  /* ---- Functional aliases ---- */
+  --bg:        var(--paper);
+  --fg:        var(--ink);
+  --fg-muted:  var(--ink-2);
+  --primary:   var(--marigold);
+  --on-primary:#FFFFFF;
+  --accent:    var(--marigold);
+  --border:    var(--line);
+  --chrome-surface: rgba(251,247,240,.85);
+  --dot-border: rgba(33,30,26,.15);
+  --focus-ring: 0 0 0 3px rgba(232,146,12,.38);
+
+  /* ---- Spacing (4pt base) ---- */
+  --sp-1: 4px;  --sp-2: 8px;  --sp-3: 12px; --sp-4: 16px;
+  --sp-5: 20px; --sp-6: 24px; --sp-8: 32px; --sp-10: 40px;
+  --sp-12: 48px; --sp-16: 64px; --sp-20: 80px; --sp-24: 96px;
+
+  /* ---- Radii ---- */
+  --r-xs: 6px; --r-sm: 10px; --r-md: 14px; --r-lg: 20px; --r-xl: 28px; --r-pill: 999px;
+
+  /* ---- Elevation ---- */
+  --shadow-sm: 0 1px 2px rgba(33,30,26,.06), 0 1px 1px rgba(33,30,26,.04);
+  --shadow-md: 0 4px 16px rgba(33,30,26,.08), 0 1px 3px rgba(33,30,26,.05);
+  --shadow-lg: 0 16px 40px rgba(33,30,26,.12), 0 3px 8px rgba(33,30,26,.06);
+  --shadow-marigold: 0 8px 22px rgba(232,146,12,.28);
+  --shadow-editor: -8px 0 24px rgba(33,30,26,.2);
+  --shadow-image: 0 12px 34px rgba(33,30,26,.14);
+
+  /* ---- Type scale ---- */
+  --display-font:  clamp(48px, 6vw, 72px);
+  --h1: 44px; --h2: 33px; --h3: 25px; --h4: 19px;
+  --body-lg: 18px; --body: 16px; --body-sm: 14px;
+  --caption: 13px; --overline: 12px;
+}
+.slide .slide-eyebrow {
+  font-family: var(--font-mono); font-weight: 500; font-size: .55em;
+  letter-spacing: .14em; text-transform: uppercase; color: var(--slide-accent, var(--marigold-ink));
+  margin-bottom: .9em;
+}
+.slide h1 {
+  font-family: var(--font-display); font-weight: 800;
+  font-size: 3em; line-height: 1.05; letter-spacing: -0.02em;
+  margin: 0 0 .35em;
+}
+.slide h2 {
+  font-family: var(--font-display); font-weight: 700; font-size: 2.1em;
+  line-height: 1.1; letter-spacing: -0.015em; margin: 0 0 .6em;
+}
+.slide h3 { font-family: var(--font-display); font-weight: 700; font-size: 1.35em; margin: 1em 0 .5em; }
+.slide p, .slide li { font-size: 1em; line-height: 1.55; color: var(--slide-fg-muted); }
+.slide p { margin: 0 0 .6em; }
+.slide li { margin-bottom: .45em; }
+.slide li::marker { color: var(--slide-accent, var(--marigold)); }
+.slide strong { color: var(--slide-fg, var(--ink)); font-weight: 700; }
+.slide em { color: var(--slide-fg, var(--ink)); }
+.slide a { color: var(--teal-ink); }
+/* Mono rules for presenting code — REQUIRED in every style */
+.slide code {
+  font-family: var(--font-mono); font-size: .9em; color: var(--slide-fg, var(--ink));
+  background: var(--slide-surface); padding: .1em .4em; border-radius: var(--r-xs);
+}
+.slide pre {
+  font-family: var(--font-mono);
+  background: var(--slide-surface); border: 1px solid var(--slide-surface);
+  border-radius: var(--r-md); padding: .8em; overflow-x: auto; font-size: .8em;
+  line-height: 1.5;
+}
+.slide pre code { background: none; padding: 0; font-size: 1em; }
+.slide blockquote {
+  margin: .9em 0; padding: .6em 1em;
+  border-left: .18em solid var(--slide-accent, var(--marigold)); background: var(--marigold-soft);
+  border-radius: 0 var(--r-md) var(--r-md) 0; color: var(--marigold-ink);
+}
+.slide blockquote p { color: inherit; margin: 0; }
+.slide table { border-collapse: collapse; width: 100%; font-size: .92em; }
+.slide th {
+  font-family: var(--font-mono); font-size: .6em; letter-spacing: .08em;
+  text-transform: uppercase; text-align: left; color: var(--ink-3);
+  border-bottom: 2px solid var(--line-2); padding: .5em .7em;
+}
+.slide td { border-bottom: 1px solid var(--line); padding: .55em .7em; color: var(--slide-fg-muted); }
+
+.slide--title { text-align: center; align-self: center; }
+.slide--title .slide-eyebrow { color: var(--teal-ink); }
+.slide--title h1 { color: var(--slide-fg, var(--ink)); font-size: 3.6em; }
+.slide--title p { font-size: 1.3em; color: var(--slide-fg-muted); }
