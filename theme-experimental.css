@@ -1,0 +1,14 @@
+/* Experimental controls and illustrated-slide layout. Load after theme-edulab.css. */
+.experimental-label { font-family: var(--font-mono); font-size: var(--overline); color: var(--ink-2); }
+.image-options { display: flex; flex-direction: column; gap: var(--sp-2); padding: var(--sp-3); border-radius: var(--r-sm); background: var(--paper-2); }
+.experimental-note { margin: 0; color: var(--ink-3); font-size: var(--caption); line-height: 1.45; }
+
+.slide--illustrated { width: min(1600px, 94vw); }
+.slide-layout { display: grid; grid-template-columns: minmax(0, 1.08fr) minmax(260px, .92fr); gap: 1.4em; align-items: center; }
+.slide-copy { min-width: 0; }
+.slide-generated-image { display: block; width: 100%; max-height: 52vh; object-fit: cover; border-radius: var(--r-md); box-shadow: var(--shadow-image); }
+
+@media (max-width: 768px) {
+  .slide-layout { grid-template-columns: 1fr; }
+  .slide-generated-image { max-height: 34vh; }
+}

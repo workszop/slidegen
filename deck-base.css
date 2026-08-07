@@ -1,0 +1,242 @@
+/* Shared doc2slide application chrome, workbench, and responsive layout. */
+
+*, *::before, *::after { box-sizing: border-box; }
+body {
+  margin: 0; min-height: 100vh;
+  background: var(--paper); color: var(--ink);
+  font-family: var(--font-sans); font-size: var(--body); line-height: 1.6;
+}
+button { font: inherit; cursor: pointer; }
+:focus-visible { outline: none; box-shadow: var(--focus-ring); border-radius: var(--r-xs); }
+.hidden { display: none !important; }
+kbd {
+  font-family: var(--font-mono); font-size: var(--caption);
+  background: var(--paper-3); color: var(--ink-2);
+  border: 1px solid var(--line-2); border-bottom-width: 2px;
+  border-radius: var(--r-xs); padding: 1px 6px;
+}
+
+/* ============================================================
+   Layout — chrome bar + shell
+   ============================================================ */
+.chrome {
+  position: sticky; top: 0; z-index: 20;
+  display: flex; align-items: center; gap: var(--sp-3);
+  padding: var(--sp-3) var(--sp-6);
+  background: var(--chrome-surface); backdrop-filter: blur(10px);
+  border-bottom: 1px solid var(--line);
+}
+.chrome-mark { height: 30px; width: auto; }
+.chrome .wordmark { font-family: var(--font-display); font-weight: 800; font-size: var(--h4); }
+.chrome .tag {
+  font-family: var(--font-mono); font-size: var(--overline);
+  letter-spacing: .14em; text-transform: uppercase;
+  color: var(--teal-ink); background: var(--teal-soft);
+  padding: 2px 10px; border-radius: var(--r-pill);
+}
+.chrome .spacer { flex: 1; }
+
+.lang-toggle { display: flex; flex-shrink: 0; border: 1px solid var(--line-2); border-radius: var(--r-pill); overflow: hidden; }
+.lang-toggle button {
+  border: 0; background: transparent; color: var(--ink-2);
+  font-family: var(--font-mono); font-size: var(--caption);
+  padding: 4px 12px; transition: background .2s, color .2s;
+}
+.lang-toggle button[aria-pressed="true"] { background: var(--ink); color: var(--paper); }
+
+/* ============================================================
+   Components — shared
+   ============================================================ */
+.btn {
+  display: inline-flex; align-items: center; gap: var(--sp-2);
+  border: 0; border-radius: var(--r-pill); padding: 10px 22px;
+  font-weight: 600; transition: background .2s, transform .1s, box-shadow .2s;
+}
+.btn:active { transform: scale(.96); }
+.btn-primary { background: var(--marigold); color: var(--on-primary); box-shadow: var(--shadow-marigold); }
+.btn-primary:hover { background: var(--marigold-600); }
+.btn-primary:disabled { background: var(--line-2); color: var(--ink-3); box-shadow: none; cursor: not-allowed; }
+.btn-ghost { background: transparent; color: var(--ink-2); border: 1px solid var(--line-2); }
+.btn-ghost:hover { background: var(--paper-2); color: var(--ink); }
+
+.hints { display: flex; gap: var(--sp-5); justify-content: center; margin-top: var(--sp-8); color: var(--ink-3); font-size: var(--caption); }
+.hints span { display: inline-flex; align-items: center; gap: var(--sp-2); }
+
+/* ============================================================
+   Input helpers
+   ============================================================ */
+.visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+
+.file-chip {
+  font-family: var(--font-mono); font-size: var(--caption);
+  background: var(--teal-soft); color: var(--teal-ink);
+  padding: 4px 14px; border-radius: var(--r-pill); margin-top: var(--sp-2);
+}
+
+textarea, .mono-input {
+  font-family: var(--font-mono); font-size: var(--body-sm); color: var(--ink);
+  background: var(--paper); border: 1px solid var(--line-2);
+  border-radius: var(--r-sm); padding: var(--sp-3); width: 100%;
+}
+textarea { resize: vertical; }
+
+.gen-status { max-width: 480px; margin: 0 auto var(--sp-6); text-align: center; color: var(--ink-2); font-size: var(--body-sm); }
+.gen-bar { height: 4px; border-radius: var(--r-pill); background: var(--marigold-soft); overflow: hidden; margin-bottom: var(--sp-3); }
+.gen-bar div {
+  height: 100%; width: 35%; border-radius: var(--r-pill); background: var(--marigold);
+  animation: genSlide 1.2s cubic-bezier(.2,.6,.2,1) infinite;
+}
+@keyframes genSlide { 0% { margin-left: -35%; } 100% { margin-left: 100%; } }
+
+.error-panel {
+  display: flex; align-items: center; gap: var(--sp-3); flex-wrap: wrap;
+  max-width: 640px; margin: 0 auto var(--sp-6);
+  background: var(--danger-soft); color: var(--danger-ink);
+  border: 1px solid var(--danger); border-radius: var(--r-md); padding: var(--sp-4) var(--sp-5);
+}
+.error-panel strong { font-family: var(--font-display); font-weight: 700; }
+.error-panel .btn { margin-left: auto; padding: 4px 14px; }
+
+/* ── Workspace ─────────────────────────────── */
+.side-section { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-md); padding: var(--sp-4); display: flex; flex-direction: column; gap: var(--sp-3); }
+.side-row { display: flex; gap: var(--sp-2); align-items: center; justify-content: space-between; }
+.dropzone--compact { padding: var(--sp-3); text-align: center; border: 2px dashed var(--line-2); border-radius: var(--r-sm); display: flex; flex-direction: column; gap: var(--sp-2); align-items: center; cursor: pointer; }
+.dropzone--compact.dragover { border-color: var(--marigold); background: var(--marigold-soft); }
+.dropzone--compact .dz-label { font-family: var(--font-display); font-weight: 700; font-size: var(--body-sm); }
+#pasteArea { width: 100%; box-sizing: border-box; resize: vertical; font-family: var(--font-mono); font-size: var(--caption); border: 1px solid var(--line); border-radius: var(--r-sm); padding: var(--sp-2); background: var(--paper); color: var(--ink); }
+.btn-sm { padding: 2px 10px; font-size: var(--overline); }
+.btn-block { width: 100%; justify-content: center; }
+.preset-grid { display: grid; grid-template-columns: 1fr 1fr; gap: var(--sp-2); }
+.preset { border: 2px solid var(--line); border-radius: var(--r-sm); background: var(--paper); padding: var(--sp-2); cursor: pointer; text-align: left; }
+.preset:hover { border-color: var(--line-2); }
+.preset[aria-pressed="true"] { border-color: var(--marigold); }
+.preset .dots { display: flex; gap: 4px; margin-bottom: 4px; }
+.preset .dots span { width: 12px; height: 12px; border-radius: 50%; border: 1px solid var(--dot-border); display: inline-block; }
+.preset .name { font-family: var(--font-mono); font-size: var(--overline); font-weight: 500; }
+
+/* ============================================================
+   Present view
+   ============================================================ */
+body.presenting .chrome { display: none; }
+
+#view-present { position: fixed; inset: 0; background: var(--slide-bg, var(--paper)); display: flex; flex-direction: column; }
+.present-bar {
+  position: absolute; top: 0; left: 0; height: 4px; width: 0%;
+  background: var(--slide-accent, var(--marigold)); transition: width 450ms cubic-bezier(.2,.6,.2,1); z-index: 5;
+}
+.slide-logo {
+  position: absolute; top: calc(4px + 2.5vh); right: 3vw; z-index: 4;
+  height: clamp(36px, 4vh + 1.8vw, 88px); width: auto; opacity: .9;
+}
+/* Slides anchor to a fixed top offset so headings sit at the same height
+   on every slide; only the title slide stays vertically centered. */
+.stage { flex: 1; display: grid; place-items: start center; padding: 14vh 4vw 3vh; overflow: hidden; }
+/* Fluid deck scaling: one viewport-driven base size on the slide,
+   everything inside in em — the whole slide grows/shrinks with the window. */
+.slide {
+  width: min(1600px, 90vw); max-height: 88vh; overflow: auto;
+  font-size: clamp(15px, 1.55vw + 0.9vh, 46px);
+  color: var(--slide-fg, var(--ink));
+  --slide-fg-muted: color-mix(in srgb, var(--slide-fg, var(--ink)) 72%, var(--slide-bg, var(--paper)));
+  --slide-surface: color-mix(in srgb, var(--slide-fg, var(--ink)) 8%, var(--slide-bg, var(--paper)));
+}
+.present-footer {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: var(--sp-3) var(--sp-6); color: var(--ink-3); font-size: var(--caption);
+}
+.present-counter { font-family: var(--font-mono); }
+
+/* ============================================================
+   @media
+   ============================================================ */
+@media (max-width: 768px) {
+  .hints { display: none; }
+  .stage { padding: var(--sp-6) var(--sp-4); }
+  .present-footer .hints { display: none; }
+}
+
+/* ─── Full-bleed workbench (styler recipe) ─── */
+html, body { height: 100%; }
+body { display: flex; flex-direction: column; overflow: hidden; }
+main#app { flex: 1; display: flex; min-height: 0; }
+.workbench { flex: 1; display: flex; min-height: 0; }
+.panel {
+  width: 280px; flex: none; overflow-y: auto;
+  padding: var(--sp-5); border-right: 1px solid var(--line);
+  display: flex; flex-direction: column; gap: var(--sp-5);
+  background: var(--paper);
+}
+.panel .side-section { background: none; border: 0; border-radius: 0; padding: 0; display: flex; flex-direction: column; gap: var(--sp-3); }
+.side-title {
+  margin: 0; font-family: var(--font-mono); font-weight: 500; font-size: 11px;
+  letter-spacing: .14em; text-transform: uppercase; color: var(--marigold-ink);
+}
+.stage-wrap { flex: 1; display: flex; flex-direction: column; min-width: 0; position: relative; }
+.stage-wrap .error-panel { position: absolute; top: var(--sp-3); left: 50%; transform: translateX(-50%); z-index: 40; width: max-content; max-width: min(640px, 90%); }
+.deck {
+  flex: 1; display: grid; place-items: start center; padding: 14vh 3vw 3vh; overflow: hidden;
+  position: relative; background: var(--slide-bg, var(--paper));
+}
+.deck-bar {
+  position: absolute; top: 0; left: 0; height: 4px; width: 0%;
+  background: var(--slide-accent, var(--marigold));
+  transition: width 450ms cubic-bezier(.2,.6,.2,1); z-index: 5;
+}
+.deck-logo {
+  position: absolute; top: calc(4px + 2.2vh); right: 2.5vw; z-index: 4;
+  height: clamp(30px, 3.4vh + 1.5vw, 76px); width: auto; opacity: .92;
+}
+.deck .slide {
+  width: min(1500px, 92%); max-height: 100%; overflow: auto;
+  font-size: clamp(14px, 1.35vw + 0.8vh, 40px);
+}
+.deck .slide--title { align-self: center; text-align: center; }
+/* Editing: deck letterboxes a fixed 16:9 frame that scales to fit.
+   .slide-frame is inert (display: contents) unless the editor is open. */
+.slide-frame { display: contents; }
+@media (min-width: 769px) {
+  .workbench.editing .deck { container-type: size; }
+  .workbench.editing .slide-frame {
+    display: grid; place-items: start center;
+    width: min(100cqw, 177.78cqh); aspect-ratio: 16 / 9;
+    container-type: size;
+  }
+  .workbench.editing .deck .slide {
+    font-size: clamp(14px, 1.35cqw + 0.8cqh, 40px);
+  }
+}
+.deck-footer {
+  flex: none; display: flex; align-items: center; gap: var(--sp-4);
+  padding: var(--sp-2) var(--sp-5); border-top: 1px solid var(--line);
+  color: var(--ink-3); font-size: 12px; background: var(--paper);
+}
+.deck-footer .nav-btns { display: flex; gap: var(--sp-2); }
+.deck-footer .spacer { flex: 1; }
+.deck-counter { font-family: var(--font-mono); }
+.deck-footer .hints { display: flex; gap: var(--sp-4); margin: 0; }
+.editor-panel {
+  flex: none; width: var(--editor-w, min(440px, 34vw)); border-left: 1px solid var(--line);
+  background: var(--paper-2); padding: var(--sp-3); display: flex; flex-direction: column; min-height: 0;
+}
+.editor-head { display: flex; justify-content: flex-end; margin-bottom: var(--sp-2); }
+.editor-close {
+  width: 24px; height: 24px; padding: 0; flex: none;
+  display: inline-flex; align-items: center; justify-content: center;
+  font-size: 12px; line-height: 1; border: 0; border-radius: 6px;
+  background: transparent; color: inherit; opacity: .65; cursor: pointer;
+}
+.editor-close:hover { opacity: 1; background: color-mix(in srgb, var(--border) 60%, transparent); }
+.editor-panel textarea {
+  flex: 1; resize: none; font-family: var(--font-mono); font-size: 13px; line-height: 1.55;
+  color: var(--ink); background: var(--surface); border: 1px solid var(--line-2);
+  border-radius: var(--r-sm); padding: var(--sp-3); min-width: 0;
+}
+body.presenting .workbench { display: none; }
+@media (max-width: 768px) {
+  body { overflow: auto; }
+  .workbench { flex-direction: column; }
+  .panel { width: 100%; border-right: 0; border-bottom: 1px solid var(--line); }
+  .deck { min-height: 55vh; }
+  .deck-footer .hints { display: none; }
+  .editor-panel { position: fixed; right: 0; top: 0; bottom: 0; width: min(440px, 92vw); z-index: 30; box-shadow: var(--shadow-editor); }
+}

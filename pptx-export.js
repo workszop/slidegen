@@ -1,225 +1,844 @@
 /* ============================================================
-   pptx-export — shared PPTX exporter for the eduapp deck apps.
+   pptx-export — semantic, theme-native PowerPoint renderer.
 
-   Maps the slide-markdown contract (title slide, ## slides,
-   bullets, quotes, code, tables) onto a 16:9 PowerPoint file
-   using PptxGenJS. Fonts are referenced by name, not embedded —
-   machines without the Google font installed will substitute.
-
-   UMD-ish: exposes window.exportDeckToPptx in the browser and
-   module.exports in node (used by the verification harness).
+   Content remains editable and uses PowerPoint placeholders,
+   scheme colors, theme fonts, native lists and native tables.
    ============================================================ */
 (function (root, factory) {
   if (typeof module === "object" && module.exports) {
-    module.exports = factory(require("pptxgenjs"), require("marked").marked);
+    module.exports = factory(
+      require("pptxgenjs"),
+      require("marked").marked,
+      require("jszip"),
+      require("./deck-model.js"),
+      require("node:fs/promises"),
+    );
   } else {
-    root.exportDeckToPptx = factory(root.PptxGenJS, root.marked);
+    root.exportDeckToPptx = factory(
+      root.PptxGenJS,
+      root.marked,
+      root.JSZip,
+      root.DeckModel,
+      null,
+    );
   }
-})(typeof self !== "undefined" ? self : this, function (PptxGenJS, marked) {
+})(typeof globalThis !== "undefined" ? globalThis : this, function (PptxGenJS, marked, JSZip, DeckModel, nodeFs) {
   "use strict";
 
-  const W = 10, H = 5.625;            // LAYOUT_16x9 inches
-  const LEFT = 0.6, BODY_W = W - 1.2; // content column
-  const TITLE_Y = 0.72;               // fixed heading position on every slide
-  const BODY_Y = 1.55;
+  const W = 10;
+  const H = 5.625;
+  const LEFT = 0.62;
+  const RIGHT = 0.62;
+  const TITLE_Y = 0.54;
+  const TITLE_H = 0.72;
+  const BODY_Y = 1.42;
+  const BODY_BOTTOM = 5.16;
+  const BODY_H = BODY_BOTTOM - BODY_Y;
+  const BODY_W = W - LEFT - RIGHT;
+  const PAGE_CAPACITY = 11.5;
+  const MAX_PARAGRAPH_CHARS = 620;
+  const MAX_LIST_ITEMS = 7;
+  const MAX_CODE_LINES = 12;
+  const MAX_TABLE_ROWS = 8;
 
   // ─── Color helpers ──────────────────────────────
-  function hex(c) {
-    if (!c) return "000000";
-    c = String(c).trim();
-    if (c.startsWith("#")) {
-      let h = c.slice(1);
-      if (h.length === 3) h = [...h].map(x => x + x).join("");
-      return h.slice(0, 6).toUpperCase();
+  function hex(color, fallback) {
+    const value = String(color ?? "").trim();
+    if (/^#[0-9a-f]{3}$/i.test(value)) {
+      return value.slice(1).split("").map(char => char + char).join("").toUpperCase();
     }
-    const m = c.match(/rgba?\(([^)]+)\)/);
-    if (!m) return "000000";
-    return m[1].split(",").slice(0, 3)
-      .map(n => Math.round(Number(n)).toString(16).padStart(2, "0"))
-      .join("").toUpperCase();
-  }
-  function mix(fg, bg, ratio) {
-    const p = h => [0, 2, 4].map(i => parseInt(h.slice(i, i + 2), 16));
-    const [f, b] = [p(fg), p(bg)];
-    return f.map((v, i) => Math.round(v * ratio + b[i] * (1 - ratio))
-      .toString(16).padStart(2, "0")).join("").toUpperCase();
+    if (/^#[0-9a-f]{6,8}$/i.test(value)) return value.slice(1, 7).toUpperCase();
+    const rgb = value.match(/^rgba?\(\s*([\d.]+)[,\s]+([\d.]+)[,\s]+([\d.]+)/i);
+    if (rgb) {
+      return rgb.slice(1, 4).map(channel =>
+        Math.max(0, Math.min(255, Math.round(Number(channel))))
+          .toString(16).padStart(2, "0")).join("").toUpperCase();
+    }
+    const srgb = value.match(/^color\(srgb\s+([\d.]+)\s+([\d.]+)\s+([\d.]+)/i);
+    if (srgb) {
+      return srgb.slice(1, 4).map(channel =>
+        Math.max(0, Math.min(255, Math.round(Number(channel) * 255)))
+          .toString(16).padStart(2, "0")).join("").toUpperCase();
+    }
+    return fallback;
   }
 
-  // ─── Inline markdown tokens → pptx text runs ────
-  function inlineRuns(tokens, base, th) {
-    const runs = [];
-    (tokens ?? []).forEach(tok => {
-      const o = Object.assign({}, base);
-      switch (tok.type) {
-        case "strong": o.bold = true; runs.push(...inlineRuns(tok.tokens, o, th)); return;
-        case "em": o.italic = true; runs.push(...inlineRuns(tok.tokens, o, th)); return;
-        case "codespan":
-          o.fontFace = th.monoFont;
-          runs.push({ text: tok.text, options: o }); return;
-        case "link":
-          o.hyperlink = { url: tok.href }; // inherited by child runs via the base copy
-          runs.push(...inlineRuns(tok.tokens, o, th));
-          return;
-        case "br": runs.push({ text: "", options: Object.assign({}, base, { breakLine: true }) }); return;
-        default:
-          if (tok.tokens?.length) runs.push(...inlineRuns(tok.tokens, o, th));
-          else if (tok.text) runs.push({ text: tok.text, options: o });
+  function mix(foreground, background, ratio) {
+    const channels = value => [0, 2, 4].map(index => parseInt(value.slice(index, index + 2), 16));
+    const fg = channels(foreground);
+    const bg = channels(background);
+    return fg.map((channel, index) =>
+      Math.round(channel * ratio + bg[index] * (1 - ratio))
+        .toString(16).padStart(2, "0")).join("").toUpperCase();
+  }
+
+  function escapeXml(value) {
+    return String(value ?? "")
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&apos;");
+  }
+
+  // ─── Deck normalization and pagination ──────────
+  function resolveDeck(opts) {
+    if (opts.deck?.slides && Array.isArray(opts.deck.slides)) return opts.deck;
+    if (!DeckModel?.create) throw new Error("DeckModel is required when opts.deck is not supplied");
+    return DeckModel.create(opts.slidesMd ?? [], { marked });
+  }
+
+  function runText(runs) {
+    return (runs ?? []).map(run => {
+      if (run.type === "break") return "\n";
+      if (run.type === "image") return run.alt ?? "";
+      return run.text ?? "";
+    }).join("");
+  }
+
+  function splitRuns(runs, maxChars) {
+    const groups = [];
+    let current = [];
+    let length = 0;
+    (runs ?? []).forEach(run => {
+      if (run.type === "break") {
+        current.push(run);
+        length += 1;
+        return;
+      }
+      const text = String(run.type === "image" ? (run.alt ?? "") : (run.text ?? ""));
+      let offset = 0;
+      while (offset < text.length) {
+        const room = Math.max(1, maxChars - length);
+        let end = Math.min(text.length, offset + room);
+        if (end < text.length) {
+          const boundary = text.lastIndexOf(" ", end);
+          if (boundary > offset + Math.floor(room * 0.55)) end = boundary + 1;
+        }
+        current.push({ ...run, type: "text", text: text.slice(offset, end) });
+        length += end - offset;
+        offset = end;
+        if (length >= maxChars && offset < text.length) {
+          groups.push(current);
+          current = [];
+          length = 0;
+        }
       }
     });
-    return runs;
+    if (current.length || !groups.length) groups.push(current);
+    return groups;
   }
-  const plain = tokens => (tokens ?? []).map(t => t.tokens?.length ? plain(t.tokens) : (t.text ?? "")).join("");
 
-  // ─── Main export ────────────────────────────────
-  // opts: { slidesMd: string[], theme: {bg, fg, bodyColor?, accent,
-  //         headingFont, bodyFont, monoFont}, logo?: dataURI,
-  //         brandName?: string, images?: (dataURI|undefined)[], fileName: string }
-  return async function exportDeckToPptx(opts) {
-    const t = opts.theme;
-    const th = {
-      bg: hex(t.bg), fg: hex(t.fg), accent: hex(t.accent),
-      headingFont: t.headingFont, bodyFont: t.bodyFont, monoFont: t.monoFont,
+  function blockUnits(block) {
+    switch (block?.type) {
+      case "heading": return 1.5;
+      case "paragraph": return Math.max(1.25, Math.ceil(runText(block.runs).length / 135) * 0.9);
+      case "list": return Math.max(1.5, listLineCount(block) * 0.95);
+      case "blockquote": return Math.max(2, Math.ceil(blockText(block).length / 120) * 0.9 + 0.8);
+      case "code": return Math.max(2, String(block.text ?? "").split("\n").length * 0.72 + 0.7);
+      case "table": return Math.max(2.5, ((block.rows?.length ?? 0) + 1) * 0.82);
+      case "divider": return 0.5;
+      case "unsupported": return Math.max(1.25, Math.ceil(String(block.raw ?? "").length / 135));
+      default: return 0;
+    }
+  }
+
+  function listLineCount(block) {
+    return (block.items ?? []).reduce((count, item) => {
+      const nested = (item.blocks ?? []).filter(child => child.type === "list")
+        .reduce((sum, child) => sum + listLineCount(child), 0);
+      return count + 1 + nested;
+    }, 0);
+  }
+
+  function blockText(block) {
+    if (block?.runs) return runText(block.runs);
+    if (block?.type === "blockquote") return (block.blocks ?? []).map(blockText).join("\n");
+    return String(block?.raw ?? block?.text ?? "");
+  }
+
+  function splitBlock(block) {
+    if (!block) return [];
+    if (block.type === "paragraph" && runText(block.runs).length > MAX_PARAGRAPH_CHARS) {
+      return splitRuns(block.runs, MAX_PARAGRAPH_CHARS)
+        .map((runs, index) => ({ ...block, runs, continuation: index > 0 }));
+    }
+    if (block.type === "code") {
+      const lines = String(block.text ?? "").split("\n");
+      if (lines.length > MAX_CODE_LINES) {
+        const pieces = [];
+        for (let index = 0; index < lines.length; index += MAX_CODE_LINES) {
+          pieces.push({
+            ...block,
+            text: lines.slice(index, index + MAX_CODE_LINES).join("\n"),
+            continuation: index > 0,
+          });
+        }
+        return pieces;
+      }
+    }
+    if (block.type === "table" && (block.rows?.length ?? 0) > MAX_TABLE_ROWS) {
+      const pieces = [];
+      for (let index = 0; index < block.rows.length; index += MAX_TABLE_ROWS) {
+        pieces.push({
+          ...block,
+          rows: block.rows.slice(index, index + MAX_TABLE_ROWS),
+          continuation: index > 0,
+        });
+      }
+      return pieces;
+    }
+    if (block.type === "list" && (block.items?.length ?? 0) > MAX_LIST_ITEMS) {
+      const pieces = [];
+      for (let index = 0; index < block.items.length; index += MAX_LIST_ITEMS) {
+        pieces.push({
+          ...block,
+          items: block.items.slice(index, index + MAX_LIST_ITEMS),
+          start: (block.start ?? 1) + index,
+          continuation: index > 0,
+        });
+      }
+      return pieces;
+    }
+    return [block];
+  }
+
+  function paginate(blocks) {
+    const renderable = (blocks ?? [])
+      .filter(block => !["space", "definition"].includes(block.type))
+      .flatMap(splitBlock);
+    if (!renderable.length) return [[]];
+    const pages = [];
+    let page = [];
+    let used = 0;
+    renderable.forEach(block => {
+      const units = Math.min(PAGE_CAPACITY, blockUnits(block));
+      if (page.length && used + units > PAGE_CAPACITY) {
+        pages.push(page);
+        page = [];
+        used = 0;
+      }
+      page.push(block);
+      used += units;
+    });
+    if (page.length) pages.push(page);
+    return pages;
+  }
+
+  function preflight(deck, pagesBySlide) {
+    const warnings = [...(deck.warnings ?? [])];
+    pagesBySlide.forEach((pages, index) => {
+      const titleContinuation = deck.slides[index]?.type === "title"
+        && pages.some(page => page.length);
+      if (pages.length > 1 || titleContinuation) {
+        const outputSlides = pages.length + (titleContinuation ? 1 : 0);
+        warnings.push({
+          code: "pptx_continuation_created",
+          slide: index,
+          message: `Slide ${index + 1} required ${outputSlides} PowerPoint slides; continuation slides were created`,
+        });
+      }
+    });
+    return warnings;
+  }
+
+  // ─── Theme-native masters ───────────────────────
+  function masterDecoration(SC, logo) {
+    const objects = [{
+      rect: {
+        x: 0, y: 0, w: W, h: 0.055,
+        fill: { color: SC.accent1 },
+        line: { color: SC.accent1, transparency: 100 },
+        objectName: "Brand accent",
+      },
+    }];
+    if (logo) {
+      const image = typeof logo === "string" ? { data: logo } : logo;
+      objects.push({
+        image: {
+          ...image,
+          x: W - 1.66, y: 0.18, w: 1.12, h: 0.46,
+          sizing: { type: "contain", w: 1.12, h: 0.46 },
+          altText: image.altText ?? "Brand logo",
+          objectName: "Brand logo",
+        },
+      });
+    }
+    return objects;
+  }
+
+  function placeholder(name, type, x, y, w, h, options = {}) {
+    return {
+      placeholder: {
+        text: "",
+        options: { name, type, x, y, w, h, margin: 0, ...options },
+      },
     };
-    th.body = t.bodyColor ? hex(t.bodyColor) : mix(th.fg, th.bg, 0.74);
-    th.faint = mix(th.fg, th.bg, 0.45);
-    th.line = mix(th.fg, th.bg, 0.16);
-    th.wash = mix(th.fg, th.bg, 0.07);
-    th.accentSoft = mix(th.accent, th.bg, 0.18);
+  }
+
+  function defineMasters(pptx, SC, logo) {
+    const common = {
+      background: { color: SC.background1 },
+      slideNumber: {
+        x: 9.2, y: 5.25, w: 0.32, h: 0.18,
+        fontSize: 9, color: SC.text1, transparency: 40,
+        align: "right", margin: 0,
+      },
+    };
+    const title = options => placeholder(
+      "title", "title", LEFT, TITLE_Y, BODY_W, TITLE_H,
+      { fontSize: 27, bold: true, color: SC.text1, ...options },
+    );
+    const body = (name, x, y, w, h, options = {}) => placeholder(
+      name, "body", x, y, w, h,
+      { fontSize: 15, color: SC.text1, valign: "top", ...options },
+    );
+
+    pptx.defineSlideMaster({
+      title: "TITLE",
+      ...common,
+      objects: [
+        ...masterDecoration(SC, logo),
+        title({ x: 0.8, y: 1.65, w: 8.4, h: 1.25, fontSize: 40, align: "center", valign: "middle" }),
+        body("subtitle", 1.15, 3.08, 7.7, 0.85, { fontSize: 18, align: "center" }),
+      ],
+    });
+    pptx.defineSlideMaster({
+      title: "TITLE_BODY",
+      ...common,
+      objects: [
+        ...masterDecoration(SC, logo),
+        title(),
+        body("body", LEFT, BODY_Y, BODY_W, BODY_H),
+      ],
+    });
+    pptx.defineSlideMaster({
+      title: "TITLE_TWO_COLUMN",
+      ...common,
+      objects: [
+        ...masterDecoration(SC, logo),
+        title(),
+        body("body_left", LEFT, BODY_Y, 4.18, BODY_H),
+        body("body_right", 5.2, BODY_Y, 4.18, BODY_H),
+      ],
+    });
+    pptx.defineSlideMaster({
+      title: "TITLE_TABLE",
+      ...common,
+      objects: [
+        ...masterDecoration(SC, logo),
+        title(),
+        placeholder("table", "table", LEFT, BODY_Y, BODY_W, BODY_H),
+      ],
+    });
+    pptx.defineSlideMaster({
+      title: "TITLE_IMAGE",
+      ...common,
+      objects: [
+        ...masterDecoration(SC, logo),
+        title(),
+        body("body", LEFT, BODY_Y, 5.05, BODY_H),
+        placeholder("image", "image", 6.04, BODY_Y, 3.34, BODY_H),
+      ],
+    });
+    pptx.defineSlideMaster({
+      title: "SECTION",
+      ...common,
+      objects: [
+        ...masterDecoration(SC, logo),
+        title({ x: 0.95, y: 1.9, w: 8.1, h: 1.1, fontSize: 36, align: "center", valign: "middle" }),
+        body("body", 1.35, 3.12, 7.3, 0.72, { fontSize: 17, align: "center" }),
+      ],
+    });
+  }
+
+  // ─── Text, list, table and block rendering ──────
+  function toTextRuns(runs, SC, theme, base = {}) {
+    const output = [];
+    (runs ?? []).forEach(run => {
+      if (run.type === "break") {
+        output.push({ text: "", options: { ...base, breakLine: true } });
+        return;
+      }
+      const text = run.type === "image" ? (run.alt ?? "") : String(run.text ?? "");
+      if (!text) return;
+      const options = {
+        color: SC.text1,
+        ...base,
+        bold: Boolean(run.bold || base.bold),
+        italic: Boolean(run.italic || base.italic),
+        strike: Boolean(run.strike || base.strike),
+      };
+      if (run.code) options.fontFace = theme.monoFont;
+      if (run.href) options.hyperlink = { url: run.href, tooltip: run.title ?? undefined };
+      output.push({ text, options });
+    });
+    return output.length ? output : [{ text: " ", options: { color: SC.text1, ...base } }];
+  }
+
+  function listRuns(block, SC, theme, depth = 0, output = [], sequenceStart) {
+    const start = sequenceStart ?? block.start ?? 1;
+    (block.items ?? []).forEach((item, index) => {
+      const runs = toTextRuns(item.runs, SC, theme, { fontSize: 14 });
+      runs[0].options = {
+        ...runs[0].options,
+        indentLevel: Math.min(depth, 8),
+        bullet: block.ordered
+          ? { type: "number", numberType: "arabicPeriod", numberStartAt: start + index, indent: 16 + depth * 8 }
+          : { characterCode: "2022", indent: 16 + depth * 8 },
+      };
+      runs[runs.length - 1].options = { ...runs[runs.length - 1].options, breakLine: true };
+      output.push(...runs);
+      (item.blocks ?? []).filter(child => child.type === "list")
+        .forEach(child => listRuns(child, SC, theme, depth + 1, output));
+    });
+    return output;
+  }
+
+  function quoteRuns(block, SC, theme) {
+    const runs = [];
+    (block.blocks ?? []).forEach((child, index) => {
+      if (child.type === "list") runs.push(...listRuns(child, SC, theme));
+      else runs.push(...toTextRuns(child.runs ?? [{ type: "text", text: blockText(child) }], SC, theme, {
+        fontSize: 14, italic: true,
+      }));
+      if (index < block.blocks.length - 1 && runs.length) {
+        runs[runs.length - 1].options = { ...runs[runs.length - 1].options, breakLine: true };
+      }
+    });
+    return runs.length ? runs : toTextRuns([{ type: "text", text: blockText(block) }], SC, theme, {
+      fontSize: 14, italic: true,
+    });
+  }
+
+  function tableCell(cell, SC, theme, align, header) {
+    return {
+      text: toTextRuns(cell?.runs, SC, theme, {
+        fontSize: header ? 11 : 12.5,
+        bold: header,
+        color: header ? SC.background1 : SC.text1,
+      }),
+      options: {
+        align: align || "left",
+        valign: "middle",
+        fill: { color: header ? SC.accent1 : SC.background1 },
+        color: header ? SC.background1 : SC.text1,
+        margin: 4,
+      },
+    };
+  }
+
+  function renderBlock(slide, block, box, context) {
+    const { SC, theme, index } = context;
+    const height = Math.max(0.18, box.h);
+    const common = {
+      x: box.x, y: box.y, w: box.w, h: height,
+      margin: 0, fit: "shrink", breakLine: false,
+    };
+    switch (block.type) {
+      case "heading":
+        slide.addText(toTextRuns(block.runs, SC, theme, {
+          fontSize: block.level <= 3 ? 18 : 16,
+          bold: true,
+          color: SC.text1,
+        }), { ...common, objectName: `Secondary heading ${index}` });
+        break;
+      case "paragraph":
+        slide.addText(toTextRuns(block.runs, SC, theme, { fontSize: 15, color: SC.text1 }), {
+          ...common, objectName: `Paragraph ${index}`,
+        });
+        break;
+      case "list":
+        slide.addText(listRuns(block, SC, theme), {
+          ...common, paraSpaceAfterPt: 7, breakLine: false, objectName: `List ${index}`,
+        });
+        break;
+      case "blockquote":
+        slide.addShape(PptxGenJS.ShapeType?.rect ?? "rect", {
+          ...common,
+          fill: { color: SC.accent1, transparency: 84 },
+          line: { color: SC.accent1, width: 1.25 },
+          objectName: `Quote background ${index}`,
+        });
+        slide.addText(quoteRuns(block, SC, theme), {
+          x: box.x + 0.18, y: box.y + 0.12, w: box.w - 0.36, h: Math.max(0.15, height - 0.24),
+          margin: 0, fit: "shrink", objectName: `Quote text ${index}`,
+        });
+        break;
+      case "code": {
+        slide.addShape(PptxGenJS.ShapeType?.rect ?? "rect", {
+          ...common,
+          fill: { color: SC.background2 },
+          line: { color: SC.text1, transparency: 78, width: 0.75 },
+          objectName: `Code background ${index}`,
+        });
+        const lines = String(block.text ?? "").split("\n");
+        const runs = lines.map((line, lineIndex) => ({
+          text: line || " ",
+          options: {
+            fontFace: theme.monoFont,
+            fontSize: 11.5,
+            color: SC.text1,
+            breakLine: lineIndex < lines.length - 1,
+          },
+        }));
+        slide.addText(runs, {
+          x: box.x + 0.16, y: box.y + 0.12, w: box.w - 0.32, h: Math.max(0.15, height - 0.24),
+          margin: 0, fit: "shrink", objectName: `Code text ${index}`,
+        });
+        break;
+      }
+      case "table": {
+        const align = block.align ?? [];
+        const rows = [
+          (block.header ?? []).map((cell, cellIndex) => tableCell(cell, SC, theme, align[cellIndex], true)),
+          ...(block.rows ?? []).map(row =>
+            row.map((cell, cellIndex) => tableCell(cell, SC, theme, align[cellIndex], false))),
+        ];
+        slide.addTable(rows, {
+          ...common,
+          ...(context.tablePlaceholder ? { placeholder: "table" } : {}),
+          border: { type: "solid", pt: 0.65, color: SC.text1, transparency: 72 },
+          fill: { color: SC.background1 },
+          color: SC.text1,
+          valign: "middle",
+          margin: 4,
+          autoFit: false,
+          objectName: `Table ${index}`,
+        });
+        break;
+      }
+      case "divider":
+        slide.addShape(PptxGenJS.ShapeType?.line ?? "line", {
+          x: box.x, y: box.y + 0.1, w: box.w, h: 0,
+          line: { color: SC.accent1, transparency: 35, width: 1 },
+          objectName: `Divider ${index}`,
+        });
+        break;
+      case "unsupported":
+        slide.addText(toTextRuns([{
+          type: "text",
+          text: String(block.raw || `[Unsupported ${block.tokenType || "content"}]`),
+        }], SC, theme, { fontSize: 12 }), {
+          ...common, objectName: `Unsupported content ${index}`,
+        });
+        break;
+      default:
+        if (blockText(block)) {
+          slide.addText(toTextRuns([{ type: "text", text: blockText(block) }], SC, theme, {
+            fontSize: 14,
+          }), { ...common, objectName: `Content ${index}` });
+        }
+    }
+  }
+
+  function renderBlockColumn(slide, blocks, box, context) {
+    const totalUnits = Math.max(1, blocks.reduce((sum, block) => sum + blockUnits(block), 0));
+    let y = box.y;
+    blocks.forEach((block, index) => {
+      const proportional = box.h * (blockUnits(block) / totalUnits);
+      const h = Math.max(0.18, proportional - (index < blocks.length - 1 ? 0.1 : 0));
+      renderBlock(slide, block, { x: box.x, y, w: box.w, h }, { ...context, index: index + 1 });
+      y += proportional;
+    });
+  }
+
+  function shouldUseTwoColumns(blocks) {
+    return blocks.length >= 5
+      && blocks.every(block => ["heading", "paragraph", "list", "divider"].includes(block.type))
+      && blocks.reduce((sum, block) => sum + blockUnits(block), 0) <= PAGE_CAPACITY;
+  }
+
+  function splitColumns(blocks) {
+    const target = blocks.reduce((sum, block) => sum + blockUnits(block), 0) / 2;
+    let accumulated = 0;
+    let splitAt = 1;
+    for (let index = 0; index < blocks.length - 1; index += 1) {
+      accumulated += blockUnits(blocks[index]);
+      splitAt = index + 1;
+      if (accumulated >= target) break;
+    }
+    return [blocks.slice(0, splitAt), blocks.slice(splitAt)];
+  }
+
+  function addTitle(slide, runs, SC, theme, name = "title") {
+    slide.addText(toTextRuns(runs, SC, theme, {
+      fontSize: 27, bold: true, color: SC.text1,
+    }), { placeholder: name, fit: "shrink", margin: 0, objectName: "Slide title" });
+  }
+
+  function continuedTitle(runs, language) {
+    const suffix = language === "pl" ? " (ciąg dalszy)" : " (continued)";
+    const result = (runs ?? []).map(run => ({ ...run }));
+    const lastText = [...result].reverse().find(run => run.type === "text");
+    if (lastText) lastText.text = `${lastText.text}${suffix}`;
+    else result.push({ type: "text", text: suffix.trim() });
+    return result;
+  }
+
+  function normalizeImage(image, slideIndex) {
+    if (!image) return null;
+    if (typeof image === "string") {
+      return { data: image, altText: `Illustration for slide ${slideIndex + 1}` };
+    }
+    return {
+      ...image,
+      altText: image.altText || image.alt || `Illustration for slide ${slideIndex + 1}`,
+    };
+  }
+
+  // ─── OOXML theme post-processing and output ─────
+  function replaceThemeColor(xml, tag, color) {
+    const pattern = new RegExp(`<a:${tag}>[\\s\\S]*?<\\/a:${tag}>`);
+    return xml.replace(pattern, `<a:${tag}><a:srgbClr val="${color}"/></a:${tag}>`);
+  }
+
+  function repairPlaceholderTypes(xml) {
+    // PptxGenJS 4.0.1 emits pic/tbl placeholders without their type
+    // attribute. Keep the documented placeholder API above and repair the
+    // resulting OOXML until the upstream serializer handles these types.
+    const placeholderType = /<p:cSld name="TITLE_IMAGE">/.test(xml)
+      ? "pic"
+      : (/<p:cSld name="TITLE_TABLE">/.test(xml) ? "tbl" : null);
+    if (!placeholderType) return xml;
+    return xml.replace(/<p:ph[\s\S]*?\/>/g, match =>
+      /\stype=/.test(match) ? match : match.replace("<p:ph", `<p:ph type="${placeholderType}"`));
+  }
+
+  async function patchPackage(bytes, palette, metadata, outputType) {
+    const zip = await JSZip.loadAsync(bytes);
+    const themeFile = zip.file("ppt/theme/theme1.xml");
+    if (!themeFile) throw new Error("Generated presentation is missing ppt/theme/theme1.xml");
+    let themeXml = await themeFile.async("string");
+    const colors = {
+      dk1: palette.fg,
+      lt1: palette.bg,
+      dk2: palette.body,
+      lt2: palette.wash,
+      accent1: palette.accent,
+      accent2: mix(palette.accent, palette.fg, 0.55),
+      accent3: mix(palette.accent, palette.bg, 0.58),
+      accent4: mix(palette.fg, palette.bg, 0.58),
+      accent5: mix(palette.accent, palette.bg, 0.36),
+      accent6: mix(palette.fg, palette.bg, 0.36),
+      hlink: palette.accent,
+      folHlink: mix(palette.accent, palette.fg, 0.65),
+    };
+    Object.entries(colors).forEach(([tag, color]) => {
+      themeXml = replaceThemeColor(themeXml, tag, color);
+    });
+    themeXml = themeXml
+      .replace(/<a:clrScheme name="[^"]*">/, `<a:clrScheme name="${escapeXml(metadata.themeName)}">`)
+      .replace(/<a:fontScheme name="[^"]*">/, `<a:fontScheme name="${escapeXml(metadata.themeName)}">`);
+    zip.file("ppt/theme/theme1.xml", themeXml);
+
+    await Promise.all(Object.keys(zip.files)
+      .filter(path => /^ppt\/slideLayouts\/slideLayout\d+\.xml$/.test(path))
+      .map(async path => {
+        const file = zip.file(path);
+        const xml = await file.async("string");
+        zip.file(path, repairPlaceholderTypes(xml));
+      }));
+
+    if (metadata.language) {
+      const coreFile = zip.file("docProps/core.xml");
+      if (coreFile) {
+        let coreXml = await coreFile.async("string");
+        if (/<dc:language>[\s\S]*?<\/dc:language>/.test(coreXml)) {
+          coreXml = coreXml.replace(
+            /<dc:language>[\s\S]*?<\/dc:language>/,
+            `<dc:language>${escapeXml(metadata.language)}</dc:language>`,
+          );
+        } else {
+          coreXml = coreXml.replace(
+            /<\/cp:coreProperties>/,
+            `<dc:language>${escapeXml(metadata.language)}</dc:language></cp:coreProperties>`,
+          );
+        }
+        zip.file("docProps/core.xml", coreXml);
+      }
+    }
+    return zip.generateAsync({ type: outputType, compression: "DEFLATE" });
+  }
+
+  async function outputPresentation(pptx, opts, palette, metadata) {
+    const generated = await pptx.write({ outputType: "uint8array", compression: true });
+    const isBrowser = typeof window !== "undefined" && typeof document !== "undefined";
+    const requestedType = opts.outputType || (isBrowser ? "blob" : "nodebuffer");
+    const data = await patchPackage(generated, palette, metadata, requestedType);
+    if (opts.outputType) return data;
+    const fileName = opts.fileName || "presentation.pptx";
+    if (!isBrowser) {
+      if (!nodeFs?.writeFile) throw new Error("Node file output is unavailable");
+      await nodeFs.writeFile(fileName, data);
+      return fileName;
+    }
+    const blob = data instanceof Blob ? data : new Blob([data], {
+      type: "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+    });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = fileName;
+    anchor.style.display = "none";
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+    return fileName;
+  }
+
+  // ─── Public API ─────────────────────────────────
+  return async function exportDeckToPptx(opts = {}) {
+    if (!PptxGenJS || !JSZip) throw new Error("PptxGenJS and JSZip are required for PowerPoint export");
+    const deck = resolveDeck(opts);
+    const inputTheme = opts.theme ?? {};
+    const palette = {
+      bg: hex(inputTheme.bg, "FFFFFF"),
+      fg: hex(inputTheme.fg, "172033"),
+      accent: hex(inputTheme.accent, "356AE6"),
+    };
+    palette.body = mix(palette.fg, palette.bg, 0.76);
+    palette.wash = mix(palette.fg, palette.bg, 0.08);
+    const theme = {
+      headingFont: inputTheme.headingFont || "Aptos Display",
+      bodyFont: inputTheme.bodyFont || "Aptos",
+      monoFont: inputTheme.monoFont || "Aptos Mono",
+    };
 
     const pptx = new PptxGenJS();
     pptx.layout = "LAYOUT_16x9";
+    pptx.theme = {
+      headFontFace: theme.headingFont,
+      bodyFontFace: theme.bodyFont,
+    };
+    const titleText = runText(deck.slides?.[0]?.title) || opts.brandName || "Presentation";
+    pptx.author = opts.brandName || opts.company || "Doc2Slide";
+    pptx.company = opts.company || opts.brandName || "";
+    pptx.subject = titleText;
+    pptx.title = titleText;
+    pptx.revision = "1";
+    const language = opts.language || "en";
 
-    const masterObjects = [
-      { rect: { x: 0, y: 0, w: W, h: 0.055, fill: { color: th.accent } } },
-    ];
-    if (opts.logo) {
-      masterObjects.push({
-        image: { data: opts.logo, x: W - 1.75, y: 0.22, w: 1.3, h: 0.55, sizing: { type: "contain", w: 1.3, h: 0.55 } },
-      });
+    const SC = pptx.SchemeColor;
+    defineMasters(pptx, SC, opts.logo);
+
+    const pagesBySlide = deck.slides.map(slide => paginate(slide.blocks));
+    const warnings = preflight(deck, pagesBySlide);
+    if (warnings.length) {
+      if (typeof opts.onWarnings === "function") opts.onWarnings(warnings);
+      else if (typeof console !== "undefined" && console.warn) {
+        console.warn(`PowerPoint export preflight produced ${warnings.length} warning(s)`, warnings);
+      }
     }
-    pptx.defineSlideMaster({ title: "DECK", background: { color: th.bg }, objects: masterObjects });
 
-    const baseRun = { fontFace: th.bodyFont, color: th.body, fontSize: 15 };
+    deck.slides.forEach((sourceSlide, sourceIndex) => {
+      const pages = pagesBySlide[sourceIndex];
+      const illustration = normalizeImage(opts.images?.[sourceIndex], sourceIndex);
 
-    opts.slidesMd.forEach((md, idx) => {
-      const slide = pptx.addSlide({ masterName: "DECK" });
-      const tokens = marked.lexer(md);
-      const illustration = opts.images?.[idx];
-      const bodyW = illustration ? 5.25 : BODY_W;
-
-      // Title slide: first `#` heading + intro paragraph, centered.
-      const head = idx === 0 ? tokens.find(tok => tok.type === "heading" && tok.depth === 1) : null;
-      if (head) {
-        const para = tokens.find(tok => tok.type === "paragraph");
-        if (opts.brandName) {
-          slide.addText(opts.brandName.toUpperCase(), {
-            x: 0.5, y: H / 2 - 1.7, w: W - 1, h: 0.4, align: "center",
-            fontFace: th.monoFont, fontSize: 12, charSpacing: 4, color: th.accent,
-          });
-        }
-        slide.addText(inlineRuns(head.tokens, { fontFace: th.headingFont, fontSize: 40, bold: true, color: th.fg }, th), {
-          x: 0.5, y: H / 2 - 1.25, w: W - 1, h: 1.5, align: "center", valign: "middle", fit: "shrink",
+      if (sourceSlide.type === "title") {
+        const titleSlide = pptx.addSlide({ masterName: "TITLE" });
+        addTitle(titleSlide, sourceSlide.title, SC, theme);
+        titleSlide.addText(toTextRuns(sourceSlide.subtitle, SC, theme, {
+          fontSize: 18, color: SC.text1,
+        }), {
+          placeholder: "subtitle", fit: "shrink", margin: 0,
+          objectName: "Slide subtitle",
         });
-        if (para) {
-          slide.addText(inlineRuns(para.tokens, { fontFace: th.bodyFont, fontSize: 18, color: th.body }, th), {
-            x: 1, y: H / 2 + 0.35, w: W - 2, h: 0.7, align: "center", fit: "shrink",
+        if (opts.brandName) {
+          titleSlide.addText(opts.brandName.toUpperCase(), {
+            x: 2, y: 1.25, w: 6, h: 0.26,
+            align: "center", charSpacing: 3, fontSize: 10,
+            color: SC.accent1, margin: 0,
+            objectName: "Brand name",
           });
         }
+        if (sourceSlide.notes?.length) titleSlide.addNotes(sourceSlide.notes.join("\n\n"));
+        pages.filter(page => page.length).forEach((page, pageIndex) => {
+          const continuation = pptx.addSlide({ masterName: "TITLE_BODY" });
+          addTitle(continuation, continuedTitle(sourceSlide.title, language), SC, theme);
+          continuation.addText(" ", { placeholder: "body", objectName: "Body placeholder" });
+          renderBlockColumn(continuation, page, {
+            x: LEFT, y: BODY_Y, w: BODY_W, h: BODY_H,
+          }, { SC, theme, pageIndex });
+        });
         return;
       }
 
-      if (illustration) {
-        slide.addImage({
-          data: illustration,
-          x: 6.25, y: 1.42, w: 3.15, h: 3.55,
-          sizing: { type: "contain", w: 3.15, h: 3.55 },
-        });
-      }
-
-      let y = BODY_Y;
-      const room = () => Math.max(H - 0.45 - y, 0.4);
-      const headingRuns = (tok, size) =>
-        inlineRuns(tok.tokens, { fontFace: th.headingFont, fontSize: size, bold: true, color: th.fg }, th);
-
-      tokens.forEach(tok => {
-        if (y >= H - 0.7 && tok.type !== "space") return; // overflow guard
-        switch (tok.type) {
-          case "heading": {
-            if (tok.depth <= 2) {
-              slide.addText(headingRuns(tok, 27), { x: LEFT, y: TITLE_Y, w: bodyW, h: 0.62, fit: "shrink" });
-            } else {
-              slide.addText(headingRuns(tok, 17), { x: LEFT, y, w: bodyW, h: 0.38, fit: "shrink" });
-              y += 0.46;
-            }
-            break;
-          }
-          case "list": {
-            const runs = [];
-            tok.items.forEach(item => {
-              const itemRuns = inlineRuns(item.tokens?.[0]?.tokens ?? [], baseRun, th);
-              itemRuns.forEach((r, i) => {
-                if (i === 0) r.options = Object.assign({}, r.options, { bullet: { code: "2022" }, indentLevel: 0 });
-                if (i === itemRuns.length - 1) r.options = Object.assign({}, r.options, { breakLine: true });
-              });
-              runs.push(...itemRuns);
-            });
-            const hEst = Math.min(tok.items.length * 0.42, room());
-            slide.addText(runs, { x: LEFT + 0.1, y, w: bodyW - 0.1, h: hEst, fit: "shrink", paraSpaceAfter: 8 });
-            y += hEst + 0.12;
-            break;
-          }
-          case "paragraph": {
-            const lines = Math.max(1, Math.ceil(plain(tok.tokens).length / 95));
-            const hEst = Math.min(lines * 0.3 + 0.08, room());
-            slide.addText(inlineRuns(tok.tokens, baseRun, th), { x: LEFT, y, w: bodyW, h: hEst, fit: "shrink" });
-            y += hEst + 0.12;
-            break;
-          }
-          case "blockquote": {
-            const text = plain(tok.tokens);
-            const lines = Math.max(1, Math.ceil(text.length / 85));
-            const hEst = Math.min(lines * 0.32 + 0.28, room());
-            slide.addText(text, {
-              x: LEFT, y, w: bodyW, h: hEst, fit: "shrink",
-              fontFace: th.bodyFont, fontSize: 15, italic: true, color: th.fg,
-              fill: { color: th.accentSoft }, margin: 10,
-            });
-            y += hEst + 0.16;
-            break;
-          }
-          case "code": {
-            const lines = tok.text.split("\n");
-            const runs = lines.map((line, i) => ({
-              text: line || " ",
-              options: { fontFace: th.monoFont, fontSize: 12, color: th.fg, breakLine: i < lines.length - 1 },
-            }));
-            const hEst = Math.min(lines.length * 0.24 + 0.3, room());
-            slide.addText(runs, { x: LEFT, y, w: bodyW, h: hEst, fill: { color: th.wash }, margin: 10, fit: "shrink" });
-            y += hEst + 0.16;
-            break;
-          }
-          case "table": {
-            const header = tok.header.map(c => ({
-              text: plain(c.tokens).toUpperCase(),
-              options: { fontFace: th.monoFont, fontSize: 10, color: th.faint, bold: true },
-            }));
-            const rows = tok.rows.map(row => row.map(c => ({
-              text: plain(c.tokens),
-              options: { fontFace: th.bodyFont, fontSize: 13, color: th.body },
-            })));
-            slide.addTable([header, ...rows], {
-              x: LEFT, y, w: bodyW,
-              border: { type: "solid", pt: 0.75, color: th.line },
-              fill: { color: th.bg }, valign: "middle", margin: 4,
-            });
-            y += Math.min((tok.rows.length + 1) * 0.34 + 0.1, room());
-            break;
-          }
-          default: break; // space, hr, html — skip
+      pages.forEach((page, pageIndex) => {
+        const isFirst = pageIndex === 0;
+        let masterName = sourceSlide.type === "section" && isFirst
+          ? "SECTION"
+          : (illustration && isFirst ? "TITLE_IMAGE" : "TITLE_BODY");
+        if (masterName === "TITLE_BODY" && page.length === 1 && page[0].type === "table") {
+          masterName = "TITLE_TABLE";
         }
+        if (masterName === "TITLE_BODY" && shouldUseTwoColumns(page)) masterName = "TITLE_TWO_COLUMN";
+        const slide = pptx.addSlide({ masterName });
+        addTitle(
+          slide,
+          pageIndex ? continuedTitle(sourceSlide.title, language) : sourceSlide.title,
+          SC,
+          theme,
+        );
+        if (sourceSlide.notes?.length && isFirst) slide.addNotes(sourceSlide.notes.join("\n\n"));
+
+        if (masterName === "SECTION") {
+          slide.addText(toTextRuns(sourceSlide.subtitle, SC, theme, {
+            fontSize: 17, color: SC.text1,
+          }), { placeholder: "body", fit: "shrink", margin: 0, objectName: "Section subtitle" });
+          if (page.length) {
+            renderBlockColumn(slide, page, {
+              x: 1.35, y: 3.12, w: 7.3, h: 1.45,
+            }, { SC, theme, pageIndex });
+          }
+          return;
+        }
+
+        if (masterName === "TITLE_IMAGE") {
+          slide.addText(" ", { placeholder: "body", objectName: "Body placeholder" });
+          slide.addImage({
+            ...illustration,
+            placeholder: "image",
+            sizing: { type: "contain", w: 3.34, h: BODY_H },
+            objectName: `Slide ${sourceIndex + 1} illustration`,
+          });
+          renderBlockColumn(slide, page, {
+            x: LEFT, y: BODY_Y, w: 5.05, h: BODY_H,
+          }, { SC, theme, pageIndex });
+          return;
+        }
+
+        if (masterName === "TITLE_TABLE") {
+          renderBlockColumn(slide, page, {
+            x: LEFT, y: BODY_Y, w: BODY_W, h: BODY_H,
+          }, { SC, theme, pageIndex, tablePlaceholder: true });
+          return;
+        }
+
+        if (masterName === "TITLE_TWO_COLUMN") {
+          slide.addText(" ", { placeholder: "body_left", objectName: "Left body placeholder" });
+          slide.addText(" ", { placeholder: "body_right", objectName: "Right body placeholder" });
+          const [left, right] = splitColumns(page);
+          renderBlockColumn(slide, left, {
+            x: LEFT, y: BODY_Y, w: 4.18, h: BODY_H,
+          }, { SC, theme, pageIndex });
+          renderBlockColumn(slide, right, {
+            x: 5.2, y: BODY_Y, w: 4.18, h: BODY_H,
+          }, { SC, theme, pageIndex });
+          return;
+        }
+
+        slide.addText(" ", { placeholder: "body", objectName: "Body placeholder" });
+        renderBlockColumn(slide, page, {
+          x: LEFT, y: BODY_Y, w: BODY_W, h: BODY_H,
+        }, { SC, theme, pageIndex });
       });
     });
 
-    return pptx.writeFile({ fileName: opts.fileName });
+    return outputPresentation(pptx, opts, palette, {
+      language,
+      themeName: opts.brandName || opts.company || "Custom",
+    });
   };
 });

@@ -287,6 +287,44 @@ function claudeChunk(data) {
   return data.type === "content_block_delta" && data.delta?.type === "text_delta"
     ? (data.delta.text ?? "") : "";
 }
+
+// Parse complete Server-Sent Events from a buffer. The caller retains the
+// remainder and passes it back with the next decoded network chunk. SSE allows
+// an event payload to span several `data:` lines; those lines are joined with
+// newlines as required by the format.
+function parseSseFrames(input, { final = false } = {}) {
+  const events = [];
+  const buffer = String(input ?? "");
+  const separator = /\r?\n\r?\n/g;
+  let end = 0;
+  let match;
+
+  const addFrame = frame => {
+    const dataLines = [];
+    let event = "message";
+    for (const line of frame.split(/\r?\n/)) {
+      if (!line || line.startsWith(":")) continue;
+      const colon = line.indexOf(":");
+      const field = colon < 0 ? line : line.slice(0, colon);
+      let value = colon < 0 ? "" : line.slice(colon + 1);
+      if (value.startsWith(" ")) value = value.slice(1);
+      if (field === "event") event = value || "message";
+      if (field === "data") dataLines.push(value);
+    }
+    if (dataLines.length) events.push({ event, data: dataLines.join("\n") });
+  };
+
+  while ((match = separator.exec(buffer))) {
+    addFrame(buffer.slice(end, match.index));
+    end = match.index + match[0].length;
+  }
+  const remainder = buffer.slice(end);
+  if (final && remainder) {
+    addFrame(remainder);
+    return { events, remainder: "" };
+  }
+  return { events, remainder };
+}
 /* pure-helpers:end */
 
 // ─── Cross-app constants (the localStorage names are a contract:
@@ -295,6 +333,10 @@ const LS_LANG = "eduapp_lang", LS_KEY = "eduapp_gemini_key", LS_MODEL = "eduapp_
 const LS_AI = "eduapp_ai";
 const MAX_INLINE_MB = 19;
 const MAX_INLINE_BYTES = MAX_INLINE_MB * 1024 * 1024;
+const MAX_TEXT_MB = 2;
+const MAX_TEXT_BYTES = MAX_TEXT_MB * 1024 * 1024;
+const DEFAULT_STREAM_TIMEOUT_MS = 180_000;
+const DEFAULT_IMAGE_TIMEOUT_MS = 180_000;
 
 // Current AI settings; folds legacy eduapp_gemini_key / eduapp_model in on first run.
 function loadAiSettings() {
@@ -307,60 +349,55 @@ function saveAiSettings(settings) {
   localStorage.setItem(LS_AI, JSON.stringify(settings));
 }
 
-async function generateOpenAIImage({ key, model, prompt, onPartial }) {
+async function generateOpenAIImage({ key, model, prompt, onPartial, signal, timeoutMs = DEFAULT_IMAGE_TIMEOUT_MS }) {
   const req = buildOpenAIImageRequest({ key, model, prompt });
-  let res;
+  const request = createRequestSignal(signal, timeoutMs);
   try {
-    res = await fetch(req.url, {
+    const res = await fetch(req.url, {
       method: "POST",
       headers: req.headers,
       body: JSON.stringify(req.body),
+      signal: request.signal,
     });
-  } catch (cause) {
-    throw makeNetworkError(req.url, cause);
-  }
-  if (!res.ok) {
-    let message = res.statusText;
-    try {
-      const payload = await res.json();
-      message = payload?.error?.message ?? payload?.message ?? message;
-    } catch { /* keep HTTP status text */ }
-    throw new Error(`${res.status}: ${message}`);
-  }
-  if (!res.body) throw new Error("OpenAI returned no image stream");
-  const reader = res.body.getReader();
-  const decoder = new TextDecoder();
-  let buffer = "", latestBase64 = "";
-  try {
-    for (;;) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      buffer += decoder.decode(value, { stream: true });
-      const lines = buffer.split("\n");
-      buffer = lines.pop();
-      for (const line of lines) {
-        if (!line.startsWith("data:")) continue;
-        const raw = line.slice(5).trim();
+    if (!res.ok) throw await responseError(res);
+    if (!res.body) throw makeResponseError("OpenAI returned no image stream");
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = "", latestBase64 = "";
+    const handleFrames = frames => {
+      for (const frame of frames) {
+        const raw = frame.data.trim();
         if (!raw || raw === "[DONE]") continue;
         let event;
         try { event = JSON.parse(raw); } catch { continue; }
-        if (event.type === "error" || event.error) {
-          const streamError = new Error(event.error?.message ?? event.message ?? "OpenAI image stream failed");
-          streamError.code = "api_error";
-          throw streamError;
-        }
+        const message = providerErrorMessage(event, frame.event);
+        if (message) throw makeProviderError(message);
         if (["image_generation.partial_image", "image_generation.completed"].includes(event.type) && event.b64_json) {
           latestBase64 = event.b64_json;
           onPartial?.(`data:image/jpeg;base64,${latestBase64}`, event.type === "image_generation.completed");
         }
       }
+    };
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      const parsed = parseSseFrames(buffer);
+      buffer = parsed.remainder;
+      handleFrames(parsed.events);
     }
+    buffer += decoder.decode();
+    handleFrames(parseSseFrames(buffer, { final: true }).events);
+    if (!latestBase64) throw new Error("OpenAI returned no image data");
+    return `data:image/jpeg;base64,${latestBase64}`;
   } catch (cause) {
-    if (cause?.code === "api_error") throw cause;
-    throw makeNetworkError(req.url, cause);
+    if (cause?.isResponseError || cause?.code === "api_error" || cause?.code === "timeout") throw cause;
+    if (request.signal.aborted) throw transportError(req.url, cause, request.signal);
+    if (isAbortError(cause)) throw cause;
+    throw transportError(req.url, cause, request.signal);
+  } finally {
+    request.cleanup();
   }
-  if (!latestBase64) throw new Error("OpenAI returned no image data");
-  return `data:image/jpeg;base64,${latestBase64}`;
 }
 
 function makeNetworkError(url, cause) {
@@ -370,30 +407,80 @@ function makeNetworkError(url, cause) {
   return err;
 }
 
-async function fetchWithNetworkRetry(url, options) {
+function makeTimeoutError(timeoutMs) {
+  const err = new Error(`Request timed out after ${Math.ceil(timeoutMs / 1000)} seconds`);
+  err.code = "timeout";
+  return err;
+}
+
+function isAbortError(cause) {
+  return cause?.name === "AbortError" || cause?.name === "TimeoutError";
+}
+
+function transportError(url, cause, signal) {
+  if (signal?.aborted) return signal.reason ?? cause;
+  if (isAbortError(cause)) return cause;
+  return makeNetworkError(url, cause);
+}
+
+// A distinct controller lets callers cancel while also giving a stalled
+// browser request a bounded lifetime. POST requests are deliberately not
+// retried: a provider may have accepted and billed the first request.
+function createRequestSignal(externalSignal, timeoutMs) {
+  const controller = new AbortController();
+  const safeTimeout = Number.isFinite(timeoutMs) && timeoutMs > 0 ? timeoutMs : DEFAULT_STREAM_TIMEOUT_MS;
+  const forwardAbort = () => controller.abort(externalSignal.reason);
+  if (externalSignal?.aborted) forwardAbort();
+  else externalSignal?.addEventListener("abort", forwardAbort, { once: true });
+  const timeoutId = setTimeout(() => controller.abort(makeTimeoutError(safeTimeout)), safeTimeout);
+  return {
+    signal: controller.signal,
+    cleanup() {
+      clearTimeout(timeoutId);
+      externalSignal?.removeEventListener("abort", forwardAbort);
+    },
+  };
+}
+
+async function responseError(res) {
+  let message = res.statusText;
   try {
-    return await fetch(url, options);
-  } catch {
-    // A single short retry handles transient DNS/connection failures without
-    // hiding persistent browser, extension, or firewall blocks.
-    await new Promise(resolve => setTimeout(resolve, 500));
-    try {
-      return await fetch(url, options);
-    } catch (cause) {
-      throw makeNetworkError(url, cause);
-    }
+    const payload = JSON.parse(await res.text());
+    message = payload?.error?.message ?? payload?.message ?? message;
+  } catch { /* keep HTTP status text */ }
+  return makeResponseError(`${res.status}: ${message}`);
+}
+
+function makeResponseError(message) {
+  const err = new Error(message);
+  err.isResponseError = true;
+  return err;
+}
+
+function makeProviderError(message) {
+  const err = new Error(message || "stream error");
+  err.code = "api_error";
+  return err;
+}
+
+function providerErrorMessage(data, eventName = "") {
+  if (eventName === "error" || data?.type === "error" || data?.type === "response.failed" || data?.error) {
+    return data?.error?.message ?? data?.response?.error?.message ?? data?.message ?? "stream error";
   }
+  return "";
 }
 
 // ─── File intake ────────────────────────────────
 // Resolves {name, kind:"text"|"pdf", text?|base64?}; rejects Error("type"|"size"|"read").
 function readSourceFile(file) {
   return new Promise((resolve, reject) => {
-    const name = file.name;
-    const isPdf = /\.pdf$/i.test(name) || file.type === "application/pdf";
-    const isText = /\.(txt|md|markdown)$/i.test(name) || file.type.startsWith("text/");
+    const name = file.name ?? "document";
+    const fileType = file.type ?? "";
+    const isPdf = /\.pdf$/i.test(name) || fileType === "application/pdf";
+    const isText = /\.(txt|md|markdown)$/i.test(name) || fileType.startsWith("text/");
     if (!isPdf && !isText) return reject(new Error("type"));
     if (isPdf && file.size > MAX_INLINE_BYTES) return reject(new Error("size"));
+    if (isText && file.size > MAX_TEXT_BYTES) return reject(new Error("size"));
     const reader = new FileReader();
     reader.onerror = () => reject(new Error("read"));
     if (isPdf) {
@@ -410,42 +497,48 @@ function readSourceFile(file) {
 // Generic SSE POST: builds nothing itself — request comes from a build*Request
 // helper, per-event text extraction from a *Chunk helper. onChunk(accumulated)
 // fires per chunk (throttling is the caller's job). Returns the full text.
-async function streamSseRequest({ url, headers, body }, extractChunk, onChunk) {
-  const res = await fetchWithNetworkRetry(url, { method: "POST", headers, body: JSON.stringify(body) });
-  if (!res.ok) {
-    let msg;
-    try {
-      const e = JSON.parse(await res.text());
-      msg = e?.error?.message ?? e?.message;
-    } catch { /* non-JSON error body */ }
-    throw new Error(`${res.status}: ${msg ?? res.statusText}`);
-  }
-  const reader = res.body.getReader();
-  const decoder = new TextDecoder();
-  let buf = "", acc = "";
-  for (;;) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    buf += decoder.decode(value, { stream: true });
-    const lines = buf.split("\n");
-    buf = lines.pop();
-    for (const line of lines) {
-      if (!line.startsWith("data:")) continue;
-      const payload = line.slice(5).trim();
-      if (!payload || payload === "[DONE]") continue;
-      let data;
-      try { data = JSON.parse(payload); } catch { continue; }
-      // Mid-stream provider errors (e.g. Claude overloaded) arrive as data events.
-      if (data.type === "error" || data.type === "response.failed" || (data.error && !data.candidates)) {
-        throw new Error(data.error?.message ?? data.response?.error?.message ?? data.message ?? "stream error");
+async function streamSseRequest({ url, headers, body }, extractChunk, onChunk, { signal, timeoutMs = DEFAULT_STREAM_TIMEOUT_MS } = {}) {
+  const request = createRequestSignal(signal, timeoutMs);
+  try {
+    const res = await fetch(url, { method: "POST", headers, body: JSON.stringify(body), signal: request.signal });
+    if (!res.ok) throw await responseError(res);
+    if (!res.body) throw makeResponseError("Provider returned no response stream");
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let buf = "", acc = "";
+    const handleFrames = frames => {
+      for (const frame of frames) {
+        const payload = frame.data.trim();
+        if (!payload || payload === "[DONE]") continue;
+        let data;
+        try { data = JSON.parse(payload); } catch { continue; }
+        const message = providerErrorMessage(data, frame.event);
+        if (message) throw makeProviderError(message);
+        const chunk = extractChunk(data);
+        if (!chunk) continue;
+        acc += chunk;
+        onChunk?.(acc);
       }
-      const chunk = extractChunk(data);
-      if (!chunk) continue;
-      acc += chunk;
-      onChunk?.(acc);
+    };
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buf += decoder.decode(value, { stream: true });
+      const parsed = parseSseFrames(buf);
+      buf = parsed.remainder;
+      handleFrames(parsed.events);
     }
+    buf += decoder.decode();
+    handleFrames(parseSseFrames(buf, { final: true }).events);
+    return acc;
+  } catch (cause) {
+    if (cause?.isResponseError || cause?.code === "api_error" || cause?.code === "timeout") throw cause;
+    if (request.signal.aborted) throw transportError(url, cause, request.signal);
+    if (isAbortError(cause)) throw cause;
+    throw transportError(url, cause, request.signal);
+  } finally {
+    request.cleanup();
   }
-  return acc;
 }
 
 const PROVIDER_STREAMS = {
@@ -455,9 +548,9 @@ const PROVIDER_STREAMS = {
 };
 
 // Streams slide markdown from whichever provider the settings select.
-function streamSlides({ provider, model, key, source, prompt, onChunk }) {
+function streamSlides({ provider, model, key, source, prompt, onChunk, signal, timeoutMs }) {
   const [build, extract] = PROVIDER_STREAMS[provider] ?? PROVIDER_STREAMS[DEFAULT_PROVIDER];
-  return streamSseRequest(build({ key, model, source, prompt }), extract, onChunk);
+  return streamSseRequest(build({ key, model, source, prompt }), extract, onChunk, { signal, timeoutMs });
 }
 
 // ─── AI model selector (chip + <dialog>) ─────────
@@ -682,6 +775,8 @@ function mountPanelResizer({ panel, storageKey, min = 280, maxFraction = 0.6 }) 
 // ─── Lazy PPTX dependencies ─────────────────────
 const PPTX_CDN = "https://cdn.jsdelivr.net/npm/pptxgenjs@4.0.1/dist/pptxgen.bundle.js";
 const PPTX_SRI = "sha384-qb0Xhi7LLYpvW1HCK6oMrmDLSY9sy7vwm6ZlV6KjtrlL9yg30+YN4neTwnmX+Kp8";
+const JSZIP_CDN = "https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js";
+const JSZIP_SRI = "sha384-+mbV2IY1Zk/X1p/nWllGySJSUN8uMs+gUAN10Or95UBH0fpj6GfKgPmgC5EXieXG";
 
 function loadScript(src, integrity) {
   return new Promise((resolve, reject) => {
@@ -696,5 +791,6 @@ function loadScript(src, integrity) {
 
 async function ensurePptxDeps(exporterSrc = "pptx-export.js") {
   if (typeof PptxGenJS === "undefined") await loadScript(PPTX_CDN, PPTX_SRI);
+  if (typeof JSZip === "undefined") await loadScript(JSZIP_CDN, JSZIP_SRI);
   if (typeof exportDeckToPptx === "undefined") await loadScript(exporterSrc);
 }

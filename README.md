@@ -1,85 +1,112 @@
 # doc2slide
 
-Slide generator from txt, markdown or pdf — a zero-build presentation style
-studio in the **edulab** look, plus two deck-first workspaces (edulab and
-Quantica Lab) that turn any document into a branded slide deck with your
-choice of AI provider.
+A zero-build browser app that turns Markdown, text, or PDF documents into
+editable slide decks. It includes a style studio and three deck-first
+workspaces for edulab, Quantica Lab, and experimental AI illustrations.
 
-**Live apps:**
+## Live apps
 
-- doc2slide — studio stylów: https://workszop.github.io/slidegen/
-- doc2slide — edulab: https://workszop.github.io/slidegen/edu.html
-- doc2slide — Quantica Lab: https://workszop.github.io/slidegen/quantica.html
-- doc2slide · lab — edulab with experimental OpenAI illustrations:
-  https://workszop.github.io/slidegen/experimental.html
+- Style studio: https://workszop.github.io/slidegen/
+- edulab: https://workszop.github.io/slidegen/edu.html
+- Quantica Lab: https://workszop.github.io/slidegen/quantica.html
+- Experimental edulab: https://workszop.github.io/slidegen/experimental.html
 
 ## Features
 
-- **4 templates** — Papier, Atrament, Żurnal, Pastel; every derived tone
-  (quotes, hairlines, code blocks) recalculates automatically from your colors
-- **Any Google Font** — separate heading/body choosers previewing each font in
-  its own typeface; type any name from fonts.google.com
-- **Logo upload** — appears top-right on every slide (default: the edulab
-  rocking horse, auto-inverting on dark backgrounds)
-- **Full-bleed workbench layout, shared by all three apps** — the style
-  studio (`index.html`) and both deck-first workspaces (`edu.html` /
-  `quantica.html`) fill the viewport edge-to-edge with the same recipe: a
-  panel on the left, the live deck filling the stage, and an editor panel
-  that opens to the right of the deck. No bordered card, no page margins —
-  the deck itself is the page. Below 768px the layout stacks (panel on top,
-  deck below with a tall minimum height) and the editor opens as an overlay
-  instead of a side panel.
-- **Deck-first workspace (edu.html / quantica.html)** — each app opens
-  straight into an example deck about itself, no upload required first. The
-  panel holds everything: **Document** (drop/paste a `.txt`, `.md`, or
-  `.pdf`), **Generate** (AI model chip + slide count/language), **Style**
-  (four brand-locked presets), and **Actions** (edit, present, download). The
-  deck shows prev/next navigation, a slide counter, and a progress bar that
-  tracks the current slide; the editor panel opens to the right of the deck —
-  toggle it manually or let it auto-open as slides stream in during
-  generation.
-- **Document → slides via your choice of AI** — pick the provider and model
-  (Gemini, OpenAI, or Claude) from the model chip in the **Generate** section;
-  your API key is stored only in your browser and sent only to the selected
-  provider; slides stream in live, replacing the example deck. Slide language
-  is PL / EN / Auto (default) — Auto asks the model to match the language of
-  the source document, so an English source produces an English deck and a
-  Polish source produces a Polish deck.
-- **4 brand style presets per app** — one click restyles the whole deck
-  (stage, present mode, and `.pptx` export); the choice persists per app and
-  survives reload.
-- **Export** — download the deck as a standalone `.html` presentation or an
-  editable `.pptx` in the current look
-- Bilingual UI (PL default / EN), keyboard navigation, fullscreen presenting,
-  settings persisted in localStorage
-- **Experimental illustrated deck** (`experimental.html`) — keeps the edulab
-  look, accepts additional user instructions on top of the built-in slide
-  prompt, and can generate one landscape illustration per content slide with
-  an OpenAI GPT Image model. Generated images appear in the live deck,
-  presentation mode, and `.pptx` export.
+- Four editable style presets in each app.
+- Google Fonts and optional logo upload.
+- Responsive, full-viewport workbench and presentation mode.
+- Gemini, OpenAI, and Claude slide generation with streamed preview.
+- PL, EN, and automatic source-language output.
+- Standalone HTML and editable PowerPoint export.
+- Optional OpenAI illustrations in the experimental workspace.
+- Keyboard navigation, progress indicators, and bilingual UI.
+
+API keys keep the existing browser-local storage behavior. They are sent only
+to the selected provider.
+
+## Slide Markdown
+
+Slides are separated by a line containing only `---`. Separators inside fenced
+code blocks are ignored.
+
+```markdown
+# Deck title
+A short introduction.
+
+---
+
+## Slide heading
+
+- A bullet with **bold** and `code`
+- A [link](https://example.com)
+
+<!-- notes:
+Explain the source and the main conclusion.
+-->
+```
+
+Supported semantic content includes headings, paragraphs, inline formatting,
+ordered and nested lists, blockquotes, code blocks, tables, links, images, and
+speaker notes. A Markdown file already using this format can be presented
+without an API key.
+
+## PowerPoint export
+
+The exporter maps Markdown to editable, native PowerPoint content:
+
+- title, title-and-body, two-column, title-and-table, title-and-image, and
+  section layouts;
+- real PowerPoint title, body, table, and image placeholders;
+- native numbered and bulleted lists;
+- editable tables, quote callouts, and code text boxes;
+- speaker notes, object names, alt text, and presentation metadata.
+
+Colors use PowerPoint scheme roles such as Text, Background, and Accent rather
+than fixed per-object colors. Heading and body typography inherit from the
+PowerPoint theme. This keeps the initial web preset while allowing a custom
+PowerPoint theme to restyle the deck later through Slide Master or Design
+Themes. The explicit monospaced code font and raster assets are intentional
+exceptions.
+
+Long content is retained. The exporter uses continuation slides and content
+preflight instead of silently dropping blocks; unusually dense blocks may
+still be reduced to fit.
+
+## Architecture
+
+- `index.html` is the style studio.
+- `edu.html`, `quantica.html`, and `experimental.html` are thin brand shells.
+- `app.js` contains the shared deck-first controller.
+- `shared.js` contains provider, streaming, file, and shared UI helpers.
+- `deck-model.js` is the semantic Markdown model used by HTML and PowerPoint.
+- `deck-base.css` contains the shared deck layout.
+- `theme-*.css` contains brand and experimental visual tokens.
+- `pptx-export.js` contains the PowerPoint renderer and theme post-processing.
+
+There is no production build step. Local CSS is inlined when downloading a
+standalone HTML deck.
+
+## Development
+
+Requirements: a current Node.js release for checks and a browser for the app.
+
+```bash
+npm install
+npm run check
+npm test
+python3 -m http.server 8000
+```
+
+Then open `http://localhost:8000/`. The apps also work from `file://`, except
+for browser capabilities that require an HTTP origin.
+
+Text uploads are limited to 2 MB and PDF uploads to 19 MB. AI POST requests are
+not retried automatically because the provider may already have accepted and
+billed the original request.
 
 ## Updating AI models
 
 The provider and model catalogue lives in `ai-models.js`. Update model IDs
-there; the selector in all three apps uses the same list. On startup,
-`shared.js` validates required providers, non-empty unique model IDs, and
-HTTPS key URLs. Custom model IDs entered by users remain supported.
-
-## Slide markdown format
-
-```markdown
-# Deck title
-One intro line.
----
-## Slide heading
-- bullets, **bold**, `code`, tables, > quotes
-```
-
-Slides are separated by a line containing only `---` (ignored inside code
-fences). A `.md` file in this format presents directly — no API key needed.
-
-## Development
-
-No build step — `index.html` + `pptx-export.js` are the whole app. Open the
-file locally or serve statically. `?preset=1..4` preselects a template,
-`?lang=en` forces the UI language.
+there. On startup, `shared.js` validates required providers, unique model IDs,
+and HTTPS key URLs. Custom model IDs remain supported.

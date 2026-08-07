@@ -442,6 +442,7 @@ body.presenting .deck-footer { border-top: 0; position: absolute; bottom: 0; lef
         integrity="sha384-Ic7KEGROu37YaruU6NyiYeib7UhjFyDZQ5fzBAji965L75T/4LGk5nzwMEjNGexs" crossorigin="anonymous"></script>
 <script src="ai-models.js"></script>
 <script src="shared.js"></script>
+<script src="deck-model.js"></script>
 <script src="edulab-logo.js"></script>
 <script src="favicon.js"></script>
 <script>
@@ -550,13 +551,14 @@ const T = {
     aiSectionTitle: "Model AI",
     slideLangLabel: "Język slajdów",
     generate: "Generuj slajdy",
+    cancelGeneration: "Anuluj generowanie",
     fileLoaded: "wgrano",
     genSending: "Wysyłam dokument…",
     genWaiting: "Generuję slajdy…",
     genDone: "Gotowe - slajdy wygenerowane.",
     errNoKey: "Wklej klucz API dostawcy {provider} w ustawieniach modelu (kliknij wskaźnik). Wygenerujesz go na {url}.",
     errFileType: "Obsługiwane formaty: .txt, .md, .pdf",
-    errTooBig: "Plik jest za duży (limit 19 MB).",
+    errTooBig: "Plik jest za duży (limit: PDF 19 MB, tekst 2 MB).",
     errEmpty: "Model zwrócił pustą odpowiedź. Spróbuj ponownie.",
     errNetwork: "Nie udało się połączyć z {host}. Sprawdź połączenie, rozszerzenia przeglądarki lub zaporę sieciową i spróbuj ponownie.",
   },
@@ -586,13 +588,14 @@ const T = {
     aiSectionTitle: "AI model",
     slideLangLabel: "Slide language",
     generate: "Generate slides",
+    cancelGeneration: "Cancel generation",
     fileLoaded: "loaded",
     genSending: "Sending the document…",
     genWaiting: "Generating slides…",
     genDone: "Done - slides generated.",
     errNoKey: "Paste your {provider} API key in the model settings (click the chip). Generate one at {url}.",
     errFileType: "Supported formats: .txt, .md, .pdf",
-    errTooBig: "File too large (19 MB limit).",
+    errTooBig: "File too large (limits: PDF 19 MB, text 2 MB).",
     errEmpty: "The model returned an empty response. Try again.",
     errNetwork: "Could not connect to {host}. Check your connection, browser extensions, or network firewall and try again.",
   },
@@ -604,10 +607,12 @@ function t(key) { return T[uiLang][key] ?? key; }
 const state = {
   md: SAMPLE_MD,
   slides: [],
+  deckModel: { slides: [], warnings: [], stats: {} },
   current: 0,
   source: null,       // {name, kind:"text"|"pdf", text?, base64?} — for the AI request
   slideLang: "auto",
   generating: false,
+  generationController: null,
   config: {           // the user's style playground settings
     preset: 0,
     heading: null,    // Google Font name overrides (null = preset's font)
@@ -686,16 +691,25 @@ function applyStyle() {
 // Parsed slide HTML is memoized per segment string: during streaming and
 // editing only the changed segment pays the marked+DOMPurify cost.
 const slideHtmlCache = new Map();
+const SLIDE_CACHE_LIMIT = 500;
+function slideHtml(segment) {
+  if (slideHtmlCache.has(segment)) {
+    const cached = slideHtmlCache.get(segment);
+    slideHtmlCache.delete(segment);
+    slideHtmlCache.set(segment, cached);
+    return cached;
+  }
+  const html = DOMPurify.sanitize(marked.parse(segment));
+  slideHtmlCache.set(segment, html);
+  if (slideHtmlCache.size > SLIDE_CACHE_LIMIT) {
+    slideHtmlCache.delete(slideHtmlCache.keys().next().value);
+  }
+  return html;
+}
 function renderSlides() {
-  if (slideHtmlCache.size > 500) slideHtmlCache.clear();
-  state.slides = splitSlides(state.md).map(seg => {
-    let html = slideHtmlCache.get(seg);
-    if (html === undefined) {
-      html = DOMPurify.sanitize(marked.parse(seg));
-      slideHtmlCache.set(seg, html);
-    }
-    return html;
-  });
+  const segments = splitSlides(stripOuterFence(state.md));
+  state.deckModel = DeckModel.create(segments, { marked });
+  state.slides = segments.map(slideHtml);
   state.current = Math.min(state.current, state.slides.length - 1);
   showSlide(state.current);
 }
@@ -703,7 +717,10 @@ function renderSlides() {
 function showSlide(i) {
   const n = state.slides.length;
   state.current = Math.max(0, Math.min(i, n - 1));
-  stageEl.className = "slide" + (state.current === 0 ? " slide--title" : "");
+  const semanticSlide = state.deckModel.slides[state.current];
+  stageEl.className = "slide" + (semanticSlide?.type === "title" ? " slide--title" : "");
+  stageEl.dataset.slideType = semanticSlide?.type ?? "content";
+  stageEl.dataset.warningCount = String(semanticSlide?.warnings?.length ?? 0);
   stageEl.innerHTML = state.slides[state.current];
   deckBarEl.style.width = `${((state.current + 1) / n) * 100}%`;
   deckCounterEl.textContent = `${state.current + 1} / ${n}`;
@@ -874,7 +891,9 @@ function note(el, msg, isError) {
   el.classList.toggle("error", Boolean(isError));
 }
 function reflectSource() {
-  generateBtnEl.disabled = !state.source || state.generating;
+  generateBtnEl.disabled = !state.source && !state.generating;
+  generateBtnEl.textContent = state.generating ? t("cancelGeneration") : t("generate");
+  generateBtnEl.setAttribute("aria-busy", String(state.generating));
   note(fileNoteEl, state.source ? `✓ ${t("fileLoaded")}: ${state.source.name}` : "");
   slideLangPlBtn.setAttribute("aria-pressed", String(state.slideLang === "pl"));
   slideLangEnBtn.setAttribute("aria-pressed", String(state.slideLang === "en"));
@@ -909,6 +928,10 @@ slideLangAutoBtn.addEventListener("click", () => { state.slideLang = "auto"; ref
 // Streaming: slides appear in the styled deck as the AI writes them
 // (transport lives in ../shared.js; this function is only the UI reaction).
 async function generateSlidesFromSource() {
+  if (state.generating) {
+    state.generationController?.abort(new DOMException("Generation cancelled", "AbortError"));
+    return;
+  }
   const ai = loadAiSettings();
   const key = ai.keys[ai.provider]?.trim();
   if (!key) {
@@ -916,9 +939,10 @@ async function generateSlidesFromSource() {
     return note(genNoteEl,
       t("errNoKey").replace("{provider}", info.label).replace("{url}", info.keyUrl.replace("https://", "")), true);
   }
-  if (!state.source || state.generating) return;
+  if (!state.source) return;
 
   state.generating = true;
+  state.generationController = new AbortController();
   reflectSource();
   note(genNoteEl, t("genSending"));
   let lastRender = 0;
@@ -929,6 +953,7 @@ async function generateSlidesFromSource() {
       key,
       source: state.source,
       prompt: buildPrompt({ lang: state.slideLang }),
+      signal: state.generationController.signal,
       onChunk(text) {
         const now = Date.now();
         if (now - lastRender > 400) {
@@ -942,12 +967,17 @@ async function generateSlidesFromSource() {
     setMd(stripOuterFence(acc.trim()));
     note(genNoteEl, t("genDone"));
   } catch (err) {
-    const detail = err?.code === "network_error"
-      ? t("errNetwork").replace("{host}", err.host || "API")
-      : String(err.message ?? err);
-    note(genNoteEl, detail, true);
+    if (err?.name !== "AbortError") {
+      const detail = err?.code === "network_error"
+        ? t("errNetwork").replace("{host}", err.host || "API")
+        : String(err.message ?? err);
+      note(genNoteEl, detail, true);
+    } else {
+      note(genNoteEl, "");
+    }
   } finally {
     state.generating = false;
+    state.generationController = null;
     reflectSource();
   }
 }
@@ -962,10 +992,12 @@ $("pptxBtn").addEventListener("click", async () => {
     const e = effective();
     const monoFont = firstFont(getComputedStyle(document.documentElement).getPropertyValue("--font-mono"));
     await exportDeckToPptx({
-      slidesMd: splitSlides(state.md),
+      slidesMd: splitSlides(stripOuterFence(state.md)),
+      deck: state.deckModel,
       theme: { bg: e.bg, fg: e.fg, accent: e.accent,
                headingFont: e.heading, bodyFont: e.body, monoFont },
       logo: e.logo || null,
+      language: uiLang,
       fileName: (deckTitle(state.md) || "slides") + ".pptx",
     });
     note(genNoteEl, "");
