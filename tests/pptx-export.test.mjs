@@ -342,6 +342,9 @@ async function qaPackage() {
   ], { marked });
   const buffer = await exportDeckToPptx({
     deck, theme: {}, logo: PIXEL_PNG,
+    // brandName renders the title-slide eyebrow; without it this fixture
+    // silently stopped covering that shape.
+    brandName: "Test Brand",
     images: [null, null, null, null, { data: PIXEL_PNG, altText: "pic" }, null],
     outputType: "nodebuffer", onWarnings() {},
   });
@@ -392,27 +395,41 @@ test("layouts define no placeholder their slides leave unfilled", async () => {
   }
 });
 
-test("body content is anchored to the top of its slot, title slides stay centred", async () => {
+test("no slide text lives outside a placeholder", async () => {
   const zip = await qaPackage();
-  const anchorsByName = new Map();
-  for (const { xml } of await xmlFiles(zip, /^ppt\/slides\/slide\d+\.xml$/)) {
+  const free = [];
+  for (const { name, xml } of await xmlFiles(zip, /^ppt\/slides\/slide\d+\.xml$/)) {
     for (const sp of xml.match(/<p:sp>[\s\S]*?<\/p:sp>/g) ?? []) {
-      const name = /name="([^"]*)"/.exec(sp)?.[1];
-      const bodyPr = /<a:bodyPr\b[^>]*>/.exec(sp)?.[0];
-      if (!name || !bodyPr) continue;
-      const anchor = /anchor="(\w+)"/.exec(bodyPr)?.[1] ?? "t"; // OOXML default is top
-      if (!anchorsByName.has(name)) anchorsByName.set(name, anchor);
+      if (sp.includes("<p:ph")) continue;
+      if (!/<a:t>[^<]/.test(sp)) continue; // decorative shapes carry no text
+      free.push(`${name}: ${/name="([^"]*)"/.exec(sp)?.[1] ?? "?"}`);
     }
   }
-  for (const [name, anchor] of anchorsByName) {
-    if (/^(Paragraph|List|Quote text|Code text|Heading|Content)/.test(name)) {
-      assert.equal(anchor, "t", `${name} should sit at the top of its slot, got anchor=${anchor}`);
+  assert.deepEqual(free, [], "every text-bearing shape must be a placeholder");
+  // Guard the fixture itself: these are the shapes this test exists to cover.
+  const text = (await xmlFiles(zip, /^ppt\/slides\/slide\d+\.xml$/))
+    .map(f => f.xml).join("");
+  for (const expected of ["TEST BRAND", "A paragraph.", "A quote.", "const x = 1;"]) {
+    assert.ok(text.includes(expected), `fixture must exercise ${expected}`);
+  }
+});
+
+test("body placeholders are top-anchored and title slides stay centred", async () => {
+  const zip = await qaPackage();
+  let bodies = 0;
+  let centredTitles = 0;
+  for (const { name, xml } of await xmlFiles(zip, /^ppt\/slides\/slide\d+\.xml$/)) {
+    for (const sp of xml.match(/<p:sp>[\s\S]*?<\/p:sp>/g) ?? []) {
+      const ph = /<p:ph\b[^>]*?\/?>/.exec(sp)?.[0];
+      if (!ph) continue;
+      const anchor = /anchor="(\w+)"/.exec(/<a:bodyPr\b[^>]*>/.exec(sp)?.[0] ?? "")?.[1] ?? "t";
+      if (/type="body"/.test(ph) && /<a:t>[^<]/.test(sp)) {
+        bodies += 1;
+        assert.equal(anchor, "t", `${name}: body placeholder should be top-anchored`);
+      }
+      if (/type="title"/.test(ph) && anchor === "ctr") centredTitles += 1;
     }
   }
-  // The deliberate exceptions: the deck title and section dividers stay centred,
-  // matching the web deck where .slide--title is align-self: center.
-  for (const required of ["Quote text 1", "Code text 2", "Paragraph 1", "List 2"]) {
-    assert.ok(anchorsByName.has(required),
-      `fixture must exercise ${required}, otherwise this test proves nothing`);
-  }
+  assert.ok(bodies >= 3, `expected several filled body placeholders, saw ${bodies}`);
+  assert.ok(centredTitles >= 1, "the deck title and section divider stay vertically centred");
 });
