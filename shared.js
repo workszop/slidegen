@@ -23,21 +23,61 @@ function stripOuterFence(md) {
   return fenceCount % 2 === 0 ? inner.trim() : md;
 }
 
+// Mark every line that sits inside a CLOSED ``` or ~~~ fence. An unterminated
+// fence is deliberately not treated as one: otherwise a single stray opener
+// hides every later separator and collapses the rest of the document into one
+// slide.
+function fencedLines(lines) {
+  const fenced = new Array(lines.length).fill(false);
+  let openIndex = -1;
+  let openChar = "";
+  lines.forEach((line, index) => {
+    const match = line.match(/^\s{0,3}(`{3,}|~{3,})/);
+    if (!match) return;
+    const char = match[1][0];
+    if (openIndex === -1) {
+      openIndex = index;
+      openChar = char;
+    } else if (char === openChar) {
+      for (let i = openIndex; i <= index; i += 1) fenced[i] = true;
+      openIndex = -1;
+      openChar = "";
+    }
+  });
+  return fenced;
+}
+
+// A --- directly under paragraph text can be a setext H2 underline rather than
+// a slide break, and this app's own decks put --- straight after the intro
+// line, so the previous line alone cannot decide it. Treat it as a heading
+// underline only when what follows is not a new slide: every slide in this
+// format opens with a # or ## heading, whereas a setext heading is followed by
+// its own body text.
+function isSetextUnderline(previousLine, followingLines) {
+  const text = String(previousLine ?? "").trim();
+  if (!text) return false;
+  if (/^(#{1,6}\s|>|[-*+]\s|\d+[.)]\s|\||`{3,}|~{3,})/.test(text)) return false;
+  const nextContent = (followingLines ?? []).find(line => line.trim());
+  return !!nextContent && !/^#{1,6}\s/.test(nextContent.trim());
+}
+
 // Split markdown into slides on lines that are exactly --- (outside code fences).
 function splitSlides(md) {
-  const lines = md.split("\n");
+  const lines = String(md).split("\n");
+  const fenced = fencedLines(lines);
   const segments = [];
   let buf = [];
-  let inFence = false;
-  for (const line of lines) {
-    if (/^\s*```/.test(line)) inFence = !inFence;
-    if (!inFence && /^\s*---\s*$/.test(line)) {
+  lines.forEach((line, index) => {
+    const isSeparator = !fenced[index]
+      && /^\s*---\s*$/.test(line)
+      && !isSetextUnderline(lines[index - 1], lines.slice(index + 1));
+    if (isSeparator) {
       segments.push(buf.join("\n"));
       buf = [];
     } else {
       buf.push(line);
     }
-  }
+  });
   segments.push(buf.join("\n"));
   const slides = segments.map(s => s.trim()).filter(Boolean);
   return slides.length ? slides : [md];
@@ -218,6 +258,15 @@ function buildOpenAIRequest({ key, model, source, prompt }) {
   };
 }
 
+// Sonnet 5 and Opus 4.8 run adaptive thinking unless told otherwise, and
+// thinking shares the max_tokens budget. Turning it off for slide generation
+// (a formatting task, not a reasoning one) keeps the budget for markdown and
+// removes the long silent gap before the first visible chunk.
+function claudeThinking(model) {
+  const optional = AI_MODEL_CATALOG?.providers?.claude?.thinkingOptional ?? [];
+  return optional.includes(model) ? { type: "disabled" } : null;
+}
+
 function buildClaudeRequest({ key, model, source, prompt }) {
   const content = [];
   if (source.kind === "pdf") {
@@ -238,7 +287,13 @@ function buildClaudeRequest({ key, model, source, prompt }) {
     // Sonnet 5 and Opus 4.8 allow 128000. The request streams, so the large
     // budget costs nothing until it is used. Sonnet 5 thinks by default and
     // thinking shares this budget, which the previous 16000 truncated.
-    body: { model, max_tokens: 64000, stream: true, messages: [{ role: "user", content }] },
+    body: {
+      model,
+      max_tokens: 64000,
+      stream: true,
+      ...(claudeThinking(model) ? { thinking: claudeThinking(model) } : {}),
+      messages: [{ role: "user", content }],
+    },
   };
 }
 
@@ -290,6 +345,30 @@ function openaiChunk(data) {
 function claudeChunk(data) {
   return data.type === "content_block_delta" && data.delta?.type === "text_delta"
     ? (data.delta.text ?? "") : "";
+}
+
+// Why the model stopped, normalised across providers: "" (still fine),
+// "truncated" (hit the output cap — the deck is real but cut short) or
+// "blocked" (safety/refusal — no usable content). Without this a truncated
+// deck reports success and a refusal reports "empty response".
+function providerStopReason(data) {
+  const raw = data?.type === "message_delta" ? data.delta?.stop_reason           // Claude
+    : data?.type === "response.incomplete" ? data.response?.incomplete_details?.reason // OpenAI
+      : data?.candidates?.[0]?.finishReason;                                     // Gemini
+  switch (String(raw ?? "").toLowerCase()) {
+    case "max_tokens":
+    case "max_output_tokens":
+      return "truncated";
+    case "refusal":
+    case "safety":
+    case "recitation":
+    case "blocklist":
+    case "prohibited_content":
+    case "content_filter":
+      return "blocked";
+    default:
+      return "";
+  }
 }
 
 // Parse complete Server-Sent Events from a buffer. The caller retains the
@@ -461,9 +540,9 @@ function makeResponseError(message) {
   return err;
 }
 
-function makeProviderError(message) {
+function makeProviderError(message, { code = "api_error" } = {}) {
   const err = new Error(message || "stream error");
-  err.code = "api_error";
+  err.code = code;
   return err;
 }
 
@@ -501,8 +580,9 @@ function readSourceFile(file) {
 // Generic SSE POST: builds nothing itself — request comes from a build*Request
 // helper, per-event text extraction from a *Chunk helper. onChunk(accumulated)
 // fires per chunk (throttling is the caller's job). Returns the full text.
-async function streamSseRequest({ url, headers, body }, extractChunk, onChunk, { signal, timeoutMs = DEFAULT_STREAM_TIMEOUT_MS } = {}) {
+async function streamSseRequest({ url, headers, body }, extractChunk, onChunk, { signal, timeoutMs = DEFAULT_STREAM_TIMEOUT_MS, onNotice } = {}) {
   const request = createRequestSignal(signal, timeoutMs);
+  let stopReason = "";
   try {
     const res = await fetch(url, { method: "POST", headers, body: JSON.stringify(body), signal: request.signal });
     if (!res.ok) throw await responseError(res);
@@ -518,6 +598,7 @@ async function streamSseRequest({ url, headers, body }, extractChunk, onChunk, {
         try { data = JSON.parse(payload); } catch { continue; }
         const message = providerErrorMessage(data, frame.event);
         if (message) throw makeProviderError(message);
+        stopReason = providerStopReason(data) || stopReason;
         const chunk = extractChunk(data);
         if (!chunk) continue;
         acc += chunk;
@@ -534,9 +615,14 @@ async function streamSseRequest({ url, headers, body }, extractChunk, onChunk, {
     }
     buf += decoder.decode();
     handleFrames(parseSseFrames(buf, { final: true }).events);
+    // A refusal yields no text, so reporting it beats the caller's generic
+    // "empty response". A truncated deck is still usable, so it is surfaced
+    // as a notice rather than discarded.
+    if (stopReason === "blocked") throw makeProviderError("blocked", { code: "blocked" });
+    if (stopReason === "truncated") onNotice?.({ code: "truncated" });
     return acc;
   } catch (cause) {
-    if (cause?.isResponseError || cause?.code === "api_error" || cause?.code === "timeout") throw cause;
+    if (cause?.isResponseError || cause?.code === "api_error" || cause?.code === "blocked" || cause?.code === "timeout") throw cause;
     if (request.signal.aborted) throw transportError(url, cause, request.signal);
     if (isAbortError(cause)) throw cause;
     throw transportError(url, cause, request.signal);
@@ -552,9 +638,9 @@ const PROVIDER_STREAMS = {
 };
 
 // Streams slide markdown from whichever provider the settings select.
-function streamSlides({ provider, model, key, source, prompt, onChunk, signal, timeoutMs }) {
+function streamSlides({ provider, model, key, source, prompt, onChunk, onNotice, signal, timeoutMs }) {
   const [build, extract] = PROVIDER_STREAMS[provider] ?? PROVIDER_STREAMS[DEFAULT_PROVIDER];
-  return streamSseRequest(build({ key, model, source, prompt }), extract, onChunk, { signal, timeoutMs });
+  return streamSseRequest(build({ key, model, source, prompt }), extract, onChunk, { signal, timeoutMs, onNotice });
 }
 
 // ─── AI model selector (chip + <dialog>) ─────────

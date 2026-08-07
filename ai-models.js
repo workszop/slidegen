@@ -19,6 +19,12 @@ const AI_MODEL_CATALOG = {
     claude: {
       label: "Claude",
       models: ["claude-opus-4-8", "claude-sonnet-5", "claude-haiku-4-5"],
+      // Models that accept thinking:{type:"disabled"}. Turning thinking off
+      // keeps the whole max_tokens budget for slide markdown and avoids a
+      // silent pause while the model thinks. Anything absent here (including
+      // custom model IDs) is sent without a thinking field, because the
+      // parameter shape differs on older models and would be rejected.
+      thinkingOptional: ["claude-opus-4-8", "claude-sonnet-5"],
       keyPlaceholder: "sk-ant-…",
       keyUrl: "https://console.anthropic.com/settings/keys",
     },

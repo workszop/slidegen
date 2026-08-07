@@ -62,6 +62,8 @@
       errNoKeyBody: "Wklej klucz API dostawcy {provider} w ustawieniach modelu (kliknij wskaźnik modelu). Wygenerujesz go na {url}.",
       errApiTitle: "Błąd API",
       errEmpty: "Model zwrócił pustą odpowiedź. Spróbuj ponownie lub zmień model.",
+      errBlocked: "Model odmówił odpowiedzi na ten dokument. Spróbuj innego materiału lub modelu.",
+      genTruncated: "Model osiągnął limit długości – deck może być niekompletny.",
       genSending: "Wysyłam dokument…",
       genWaiting: "Generuję slajdy…",
       downloadHtml: "Pobierz html",
@@ -107,6 +109,8 @@
       errNoKeyBody: "Paste your {provider} API key in the model settings (click the model chip). Generate one at {url}.",
       errApiTitle: "API error",
       errEmpty: "The model returned an empty response. Try again or switch models.",
+      errBlocked: "The model declined to answer for this document. Try different material or another model.",
+      genTruncated: "The model hit its length limit – the deck may be incomplete.",
       genSending: "Sending the document…",
       genWaiting: "Generating slides…",
       downloadHtml: "Download HTML",
@@ -135,15 +139,26 @@
       errNetwork: "Could not connect to {host}. Check your connection, browser extensions, or network firewall and try again.",
     },
   };
-  let uiLang = localStorage.getItem(LS_LANG) ?? "pl";
-  function t(key) { return T[uiLang][key] ?? key; }
+  // localStorage throws in Chrome with cookies blocked and in a cross-site
+  // iframe. This runs before the UI is built, so an unguarded read would abort
+  // the whole IIFE and leave a blank page.
+  function readStored(key) {
+    try { return localStorage.getItem(key); } catch { return null; }
+  }
+  function writeStored(key, value) {
+    try { localStorage.setItem(key, value); } catch { /* storage unavailable */ }
+  }
+  // LS_LANG is shared with sibling apps, so it can hold anything; fall back
+  // rather than throwing on T[undefined].
+  let uiLang = ["pl", "en"].includes(readStored(LS_LANG)) ? readStored(LS_LANG) : "pl";
+  function t(key) { return (T[uiLang] ?? T.pl)[key] ?? key; }
   function browserTitle() {
     if (typeof BRAND.title === "string") return BRAND.title;
     return BRAND.title?.[uiLang] ?? BRAND.title?.pl ?? t("appTitle");
   }
   function setUiLang(lang) {
     uiLang = lang;
-    localStorage.setItem(LS_LANG, lang);
+    writeStored(LS_LANG, lang);
     document.documentElement.lang = lang;
     document.title = browserTitle();
     renderTexts();
@@ -377,7 +392,7 @@
     rs.setProperty("--slide-bg", p.bg);
     rs.setProperty("--slide-fg", p.fg);
     rs.setProperty("--slide-accent", p.accent);
-    localStorage.setItem(BRAND.presetKey, p.id);
+    writeStored(BRAND.presetKey, p.id);
     document.querySelectorAll(".preset").forEach((b, j) =>
       b.setAttribute("aria-pressed", String(j === activePreset)));
   }
@@ -577,10 +592,35 @@
     return declarations.length ? `:root { ${declarations.join(" ")} }` : "";
   }
 
+  // Workbench-only selectors. A standalone deck contains none of these
+  // elements, so shipping their rules inside every exported presentation is
+  // pure weight — including the AI key dialog and the panel resizer that
+  // shared.js injects at runtime. Everything else is kept, so a rule the deck
+  // does need can never be dropped by accident.
+  const EXPORT_CHROME_SELECTOR = new RegExp([
+    "\\.(workbench|chrome|panel|panel-resizer|has-panel-resizer|editor-|dropzone|preset",
+    "|btn|side-|side_|file-chip|error-panel|gen-|lang-toggle|mono-input|stage-wrap",
+    "|deck|hints|spacer|wordmark|nav-btns|dz-label|ai-|visually-hidden)",
+    "|#pasteArea|#editor\\b|#countHint|#view-input",
+  ].join(""));
+
+  function exportRuleText(rule) {
+    if (rule.cssRules && /^@(media|supports|layer)/i.test(rule.cssText)) {
+      const inner = [...rule.cssRules].map(exportRuleText).filter(Boolean).join("\n");
+      if (!inner) return "";
+      return `${rule.cssText.slice(0, rule.cssText.indexOf("{") + 1)}\n${inner}\n}`;
+    }
+    if (typeof rule.selectorText !== "string") return rule.cssText; // @font-face, @keyframes
+    const selectors = rule.selectorText.split(",").map(part => part.trim())
+      .filter(part => part && !EXPORT_CHROME_SELECTOR.test(part));
+    if (!selectors.length) return "";
+    return `${selectors.join(", ")} { ${rule.style.cssText} }`;
+  }
+
   function collectExportCss() {
     return [...document.styleSheets].map(sheet => {
       try {
-        return [...sheet.cssRules].map(rule => rule.cssText).join("\n");
+        return [...sheet.cssRules].map(exportRuleText).filter(Boolean).join("\n");
       } catch {
         // Cross-origin font stylesheets cannot be inspected. Their <link>
         // elements are preserved separately below.
@@ -693,6 +733,7 @@ ${fontLinks}
   }
 
   function apiErrorDetail(err) {
+    if (err?.code === "blocked") return t("errBlocked");
     return err?.code === "network_error"
       ? t("errNetwork").replace("{host}", err.host || "API")
       : String(err?.message ?? err);
@@ -791,7 +832,7 @@ ${fontLinks}
     genStatusTextEl.textContent = t("genSending");
     renderSidebar();
     state.images = [];
-    let started = false, lastRender = 0;
+    let started = false, lastRender = 0, truncated = false;
     try {
       const acc = await streamSlides({
         provider: ai.provider,
@@ -804,6 +845,9 @@ ${fontLinks}
           additionalPrompt: additionalPromptEl?.value ?? "",
         }),
         signal: state.generationController.signal,
+        onNotice(notice) {
+          if (notice.code === "truncated") truncated = true;
+        },
         onChunk(text) {
           if (!started) {
             started = true;
@@ -825,6 +869,9 @@ ${fontLinks}
       });
       if (!acc.trim()) throw new Error(t("errEmpty"));
       setDeck(stripOuterFence(acc.trim()), { example: false });
+      // The deck is real but cut short; keep it and say so rather than
+      // reporting a clean success.
+      if (truncated) showError(t("errApiTitle"), t("genTruncated"));
     } catch (err) {
       if (err?.name !== "AbortError") showError(t("errApiTitle"), apiErrorDetail(err));
     } finally {
@@ -933,14 +980,17 @@ ${fontLinks}
   }
   renderPresets();
   {
-    const savedPreset = BRAND.presets.findIndex(p => p.id === localStorage.getItem(BRAND.presetKey));
+    const savedPreset = BRAND.presets.findIndex(p => p.id === readStored(BRAND.presetKey));
     applyPreset(savedPreset >= 0 ? savedPreset : 0);
   }
   {
     const params = new URLSearchParams(location.search);
-    if (["pl", "en"].includes(params.get("lang"))) { uiLang = params.get("lang"); localStorage.setItem(LS_LANG, uiLang); }
+    if (["pl", "en"].includes(params.get("lang"))) { uiLang = params.get("lang"); writeStored(LS_LANG, uiLang); }
     setDeck(BRAND.exampleMd[uiLang] ?? BRAND.exampleMd.pl, { example: true });
-    if (params.has("slide")) setMd(state.md, Math.max(0, Number(params.get("slide")) - 1));
+    // Number("abc") is NaN and survives the clamp (Math.min(NaN, n) is NaN),
+    // which renders the literal string "undefined" as the slide body.
+    const slideParam = Number.parseInt(params.get("slide"), 10);
+    if (Number.isFinite(slideParam)) setMd(state.md, Math.max(0, slideParam - 1));
     if (location.hash === "#present" && state.slides.length) state.view = "present";
   }
   document.documentElement.lang = uiLang; // after ?lang so the param wins
