@@ -139,6 +139,13 @@ body.presenting .chrome { display: none; }
   color: var(--slide-fg, var(--ink));
   --slide-fg-muted: color-mix(in srgb, var(--slide-fg, var(--ink)) 72%, var(--slide-bg, var(--paper)));
   --slide-surface: color-mix(in srgb, var(--slide-fg, var(--ink)) 8%, var(--slide-bg, var(--paper)));
+  /* Accent pulled toward the slide foreground so links and eyebrows stay
+     legible on both light and dark presets; a raw accent fails contrast on
+     one side or the other. */
+  --slide-link: color-mix(in srgb, var(--slide-accent, var(--marigold)) 62%, var(--slide-fg, var(--ink)));
+  --slide-quote-bg: color-mix(in srgb, var(--slide-accent, var(--marigold)) 12%, var(--slide-bg, var(--paper)));
+  --slide-line: color-mix(in srgb, var(--slide-fg, var(--ink)) 22%, var(--slide-bg, var(--paper)));
+  --slide-line-strong: color-mix(in srgb, var(--slide-fg, var(--ink)) 42%, var(--slide-bg, var(--paper)));
 }
 .present-footer {
   display: flex; align-items: center; justify-content: space-between;

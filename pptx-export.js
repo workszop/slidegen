@@ -72,8 +72,27 @@
         .toString(16).padStart(2, "0")).join("").toUpperCase();
   }
 
+  // XML 1.0 forbids most C0 control characters. PowerPoint and Google Slides
+  // reject the whole package when one reaches a text run, so they are replaced
+  // with a space — they usually arrive as separators in text copied out of a
+  // PDF or spreadsheet, and dropping them would join adjacent words.
+  const XML_ILLEGAL = /[\u0000-\u0008\u000B\u000C\u000E-\u001F\uFFFE\uFFFF]/g;
+
+  function stripXmlIllegal(value) {
+    return String(value).replace(XML_ILLEGAL, " ");
+  }
+
+  function sanitizeDeckText(value) {
+    if (typeof value === "string") return stripXmlIllegal(value);
+    if (Array.isArray(value)) return value.map(sanitizeDeckText);
+    if (value && typeof value === "object") {
+      return Object.fromEntries(Object.entries(value).map(([key, item]) => [key, sanitizeDeckText(item)]));
+    }
+    return value;
+  }
+
   function escapeXml(value) {
-    return String(value ?? "")
+    return stripXmlIllegal(String(value ?? ""))
       .replace(/&/g, "&amp;")
       .replace(/</g, "&lt;")
       .replace(/>/g, "&gt;")
@@ -605,6 +624,26 @@
       /\stype=/.test(match) ? match : match.replace("<p:ph", `<p:ph type="${placeholderType}"`));
   }
 
+  // PptxGenJS 4.0.1 numbers tables independently of text shapes, so a table
+  // sharing a slide with other content collides with an existing shape id.
+  // Ids must be unique within one spTree; PowerPoint repairs the file and
+  // Google Slides rejects it. Renumber the duplicates above the current max.
+  function repairShapeIds(xml) {
+    const pattern = /(<p:cNvPr\b[^>]*\bid=")(\d+)(")/g;
+    let next = 0;
+    for (const match of xml.matchAll(pattern)) next = Math.max(next, Number(match[2]));
+    const seen = new Set();
+    return xml.replace(pattern, (full, head, id, tail) => {
+      if (!seen.has(id)) {
+        seen.add(id);
+        return full;
+      }
+      next += 1;
+      seen.add(String(next));
+      return head + next + tail;
+    });
+  }
+
   async function patchPackage(bytes, palette, metadata, outputType) {
     const zip = await JSZip.loadAsync(bytes);
     const themeFile = zip.file("ppt/theme/theme1.xml");
@@ -638,6 +677,13 @@
         const file = zip.file(path);
         const xml = await file.async("string");
         zip.file(path, repairPlaceholderTypes(xml));
+      }));
+
+    await Promise.all(Object.keys(zip.files)
+      .filter(path => /^ppt\/slides\/slide\d+\.xml$/.test(path))
+      .map(async path => {
+        const xml = await zip.file(path).async("string");
+        zip.file(path, repairShapeIds(xml));
       }));
 
     if (metadata.language) {
@@ -691,7 +737,7 @@
   // ─── Public API ─────────────────────────────────
   return async function exportDeckToPptx(opts = {}) {
     if (!PptxGenJS || !JSZip) throw new Error("PptxGenJS and JSZip are required for PowerPoint export");
-    const deck = resolveDeck(opts);
+    const deck = sanitizeDeckText(resolveDeck(opts));
     const inputTheme = opts.theme ?? {};
     const palette = {
       bg: hex(inputTheme.bg, "FFFFFF"),

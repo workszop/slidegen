@@ -213,3 +213,42 @@ test("supports slidesMd fallback and returns requested Node output type", async 
   assert.match(theme, /<a:dk1><a:srgbClr val="102030"\/><\/a:dk1>/);
   assert.match(theme, /<a:accent1><a:srgbClr val="00AAFF"\/><\/a:accent1>/);
 });
+
+test("strips XML-illegal control characters so the package stays openable", async () => {
+  const verticalTab = String.fromCharCode(0x0b);
+  const deck = DeckModel.create([
+    "# Control chars",
+    `## Pasted text\n\nA paragraph with${verticalTab}a vertical tab.`,
+  ], { marked });
+  const buffer = await exportDeckToPptx({
+    deck, theme: {}, outputType: "nodebuffer", onWarnings() {},
+  });
+  const zip = await JSZip.loadAsync(buffer);
+  const slides = await xmlFiles(zip, /^ppt\/slides\/slide\d+\.xml$/);
+
+  for (const { name, xml } of slides) {
+    const illegal = [...xml].filter(char => {
+      const code = char.charCodeAt(0);
+      return code < 0x20 && code !== 0x09 && code !== 0x0a && code !== 0x0d;
+    });
+    assert.equal(illegal.length, 0, `${name} must not contain XML-illegal control characters`);
+  }
+  assert.match(slides.map(item => item.xml).join("\n"), /A paragraph with a vertical tab\./);
+});
+
+test("keeps shape ids unique when a table shares a slide with other content", async () => {
+  const deck = DeckModel.create([
+    "# Ids",
+    "## Text plus table\n\nA lead-in paragraph.\n\n| Key | Action |\n|---|---|\n| a | b |",
+  ], { marked });
+  const buffer = await exportDeckToPptx({
+    deck, theme: {}, outputType: "nodebuffer", onWarnings() {},
+  });
+  const zip = await JSZip.loadAsync(buffer);
+  const slides = await xmlFiles(zip, /^ppt\/slides\/slide\d+\.xml$/);
+
+  for (const { name, xml } of slides) {
+    const ids = [...xml.matchAll(/<p:cNvPr\b[^>]*\bid="(\d+)"/g)].map(match => match[1]);
+    assert.equal(new Set(ids).size, ids.length, `${name} must not reuse a shape id`);
+  }
+});

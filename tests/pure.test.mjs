@@ -164,7 +164,7 @@ test("buildClaudeRequest uses document block and browser headers", () => {
   assert.equal(r.headers["anthropic-version"], "2023-06-01");
   assert.equal(r.headers["anthropic-dangerous-direct-browser-access"], "true");
   assert.equal(r.body.stream, true);
-  assert.equal(r.body.max_tokens, 16000);
+  assert.equal(r.body.max_tokens, 64000);
   const content = r.body.messages[0].content;
   assert.deepEqual(content[0], { type: "document", source: { type: "base64", media_type: "application/pdf", data: "QUJD" } });
   assert.equal(content[1].type, "text");
