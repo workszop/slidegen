@@ -326,3 +326,36 @@ test("splitSlides keeps this app's own format: --- straight after the intro line
   const md = "# doc2slide\nA short guide.\n---\n## What is this?\n\n- a bullet";
   assert.equal(H.splitSlides(md).length, 2);
 });
+
+// ── Gemini default model and sampling deprecation ──
+test("the default Gemini model is gemini-3.6-flash", () => {
+  assert.equal(H.PROVIDER_INFO.gemini.models[0], "gemini-3.6-flash");
+  // normalizeAiSettings picks models[0] when nothing is stored.
+  assert.equal(H.normalizeAiSettings(null).model, "gemini-3.6-flash");
+});
+
+test("temperature is sent only to Gemini models that still honour it", () => {
+  const body = model => H.buildGeminiRequest({
+    key: "K", model, source: { kind: "text", text: "doc" }, prompt: "P",
+  }).body;
+  assert.equal("generationConfig" in body("gemini-3.6-flash"), false,
+    "3.6 deprecates sampling and later generations reject it");
+  assert.deepEqual(body("gemini-3.5-flash").generationConfig, { temperature: 0.4 });
+  assert.deepEqual(body("gemini-3.1-flash-lite-preview").generationConfig, { temperature: 0.4 });
+  assert.equal("generationConfig" in body("some-custom-gemini"), false,
+    "custom IDs must not receive a parameter that may be rejected");
+});
+
+test("a stored model choice still wins over the new default", () => {
+  const s = H.normalizeAiSettings(JSON.stringify({ provider: "gemini", model: "gemini-3.5-flash" }));
+  assert.equal(s.model, "gemini-3.5-flash");
+});
+
+test("the Gemini model ID is URL-encoded into the endpoint", () => {
+  const r = H.buildGeminiRequest({
+    key: "K", model: "evil/../models/x?key=leak",
+    source: { kind: "text", text: "d" }, prompt: "p",
+  });
+  assert.doesNotMatch(r.url, /\?key=leak/, "a crafted ID must not inject query parameters");
+  assert.match(r.url, /alt=sse$/);
+});

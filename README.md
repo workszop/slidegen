@@ -139,9 +139,21 @@ The provider and model catalogue lives in `ai-models.js`. Update model IDs
 there. On startup, `shared.js` validates required providers, unique model IDs,
 and HTTPS key URLs. Custom model IDs remain supported.
 
-The Claude entry also carries `thinkingOptional`, the models whose API accepts
-`thinking: {type: "disabled"}`. Slide generation is a formatting task, so those
-models are asked not to think, which keeps the whole output budget for slide
-Markdown and avoids a silent pause before the first streamed text. Models left
-out of that list, including custom IDs, are sent no thinking field at all,
-because the parameter has a different shape on older models.
+The first model listed for a provider is the one a new visitor gets; the
+current default is `gemini-3.6-flash`. A model already saved in the browser
+keeps working and is not migrated, so changing the order here only affects
+people who have not picked a model themselves.
+
+Two entries mark per-model API differences, and in both the rule is that a
+model left out of the list is sent nothing. That way an unfamiliar or custom ID
+can never receive a parameter its endpoint rejects:
+
+- `samplingSupported` (Gemini) lists the models that still honour
+  `generationConfig` sampling. Gemini 3.6 deprecates and ignores
+  `temperature`, `top_p`, and `top_k`, and Google documents that later
+  generations will return a 400 for them.
+- `thinkingOptional` (Claude) lists the models whose API accepts
+  `thinking: {type: "disabled"}`. Slide generation is a formatting task, so
+  those models are asked not to think, which keeps the whole output budget for
+  slide Markdown and avoids a silent pause before the first streamed text. The
+  parameter has a different shape on older models.
