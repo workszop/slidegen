@@ -60,3 +60,33 @@ test("long-running generation and illustration requests are cancellable", async 
   assert.match(shared, /DEFAULT_STREAM_TIMEOUT_MS\s*=\s*180_000/);
   assert.match(shared, /DEFAULT_IMAGE_TIMEOUT_MS\s*=\s*180_000/);
 });
+
+test("every localStorage access is guarded so blocked storage cannot blank the app", async () => {
+  const source = await read("app.js");
+  const touches = source.split("\n")
+    .filter(line => line.includes("localStorage") && !line.trim().startsWith("//"));
+  assert.ok(touches.length, "expected at least one storage call site");
+  for (const line of touches) {
+    assert.match(line, /try\s*\{[^}]*localStorage\.(getItem|setItem)/,
+      `unguarded localStorage access: ${line.trim()}`);
+  }
+  assert.match(source, /function readStored\(/);
+  assert.match(source, /function writeStored\(/);
+  // A corrupt value in the cross-app language key must not break t().
+  assert.match(source, /\(T\[uiLang\] \?\? T\.pl\)/);
+});
+
+test("the slide query parameter rejects non-numeric input", async () => {
+  const source = await read("app.js");
+  assert.match(source, /Number\.parseInt\(params\.get\("slide"\), 10\)/);
+  assert.match(source, /Number\.isFinite\(slideParam\)/);
+});
+
+test("standalone HTML export drops workbench-only rules", async () => {
+  const source = await read("app.js");
+  assert.match(source, /EXPORT_CHROME_SELECTOR/);
+  assert.match(source, /function exportRuleText\(/);
+  for (const chrome of ["workbench", "dropzone", "editor-", "panel-resizer", "ai-"]) {
+    assert.ok(source.includes(chrome), `chrome filter should cover ${chrome}`);
+  }
+});

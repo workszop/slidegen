@@ -13,7 +13,7 @@ const H = new Function(`${catalogSrc}\n${section}; return {
   PROVIDER_INFO, DEFAULT_PROVIDER, OPENAI_IMAGE_MODELS, validateModelCatalog, normalizeAiSettings,
   buildGeminiRequest, buildOpenAIRequest, buildClaudeRequest,
   buildOpenAIImageRequest, buildSlideImagePrompt,
-  geminiChunk, openaiChunk, claudeChunk, parseSseFrames,
+  geminiChunk, openaiChunk, claudeChunk, parseSseFrames, providerStopReason, claudeThinking,
 };`)();
 
 // ── existing helpers keep working ──
@@ -263,4 +263,66 @@ test("buildSlideImagePrompt forbids text and layout artefacts", () => {
   const p = H.buildSlideImagePrompt({ slideMd: "x", direction: "", deckSegments: ["x"] });
   assert.match(p, /black and white contour image in the style of Notion/);
   assert.match(p, /Do not include text, letters, numbers, logos/);
+});
+
+// ── splitSlides edge cases ──
+test("splitSlides keeps a setext H2 underline with its heading", () => {
+  assert.deepEqual(
+    H.splitSlides("Wprowadzenie\n---\n\nTresc akapitu."),
+    ["Wprowadzenie\n---\n\nTresc akapitu."],
+  );
+});
+
+test("splitSlides still splits on --- after a block-level line", () => {
+  assert.equal(H.splitSlides("# A\n---\n# B").length, 2);
+  assert.equal(H.splitSlides("# A\n\n---\n\n# B").length, 2);
+});
+
+test("splitSlides ignores an unterminated fence instead of swallowing the deck", () => {
+  assert.equal(H.splitSlides("# A\n\n```js\ncode\n\n---\n\n# B\n\n---\n\n# C").length, 3);
+});
+
+test("splitSlides honours ~~~ fences", () => {
+  assert.equal(H.splitSlides("# A\n\n~~~\n---\n~~~\n\n---\n\n# B").length, 2);
+});
+
+test("splitSlides still hides --- inside a closed ``` fence", () => {
+  assert.equal(H.splitSlides("# A\n\n```\n---\n```\n\n---\n\n# B").length, 2);
+});
+
+// ── provider stop reasons ──
+test("providerStopReason maps truncation across providers", () => {
+  assert.equal(H.providerStopReason({ type: "message_delta", delta: { stop_reason: "max_tokens" } }), "truncated");
+  assert.equal(H.providerStopReason({ type: "response.incomplete", response: { incomplete_details: { reason: "max_output_tokens" } } }), "truncated");
+  assert.equal(H.providerStopReason({ candidates: [{ finishReason: "MAX_TOKENS" }] }), "truncated");
+});
+
+test("providerStopReason maps refusals and safety blocks", () => {
+  assert.equal(H.providerStopReason({ type: "message_delta", delta: { stop_reason: "refusal" } }), "blocked");
+  assert.equal(H.providerStopReason({ candidates: [{ finishReason: "SAFETY" }] }), "blocked");
+  assert.equal(H.providerStopReason({ type: "response.incomplete", response: { incomplete_details: { reason: "content_filter" } } }), "blocked");
+});
+
+test("providerStopReason stays quiet for normal completion and unrelated events", () => {
+  assert.equal(H.providerStopReason({ type: "message_delta", delta: { stop_reason: "end_turn" } }), "");
+  assert.equal(H.providerStopReason({ candidates: [{ finishReason: "STOP" }] }), "");
+  assert.equal(H.providerStopReason({ type: "content_block_delta", delta: { type: "text_delta", text: "x" } }), "");
+  assert.equal(H.providerStopReason(null), "");
+});
+
+// ── Claude thinking config ──
+test("buildClaudeRequest disables thinking only where the parameter is valid", () => {
+  const build = model => H.buildClaudeRequest({
+    key: "k", model, source: { kind: "text", text: "doc" }, prompt: "p",
+  }).body;
+  assert.deepEqual(build("claude-sonnet-5").thinking, { type: "disabled" });
+  assert.deepEqual(build("claude-opus-4-8").thinking, { type: "disabled" });
+  assert.equal("thinking" in build("claude-haiku-4-5"), false, "older models take a different thinking shape");
+  assert.equal("thinking" in build("some-custom-model"), false, "custom model IDs must not get an unvalidated parameter");
+});
+
+test("splitSlides keeps this app's own format: --- straight after the intro line", () => {
+  // The bundled example decks separate slides without a blank line before ---.
+  const md = "# doc2slide\nA short guide.\n---\n## What is this?\n\n- a bullet";
+  assert.equal(H.splitSlides(md).length, 2);
 });
