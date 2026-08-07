@@ -234,15 +234,24 @@
     const pages = [];
     let page = [];
     let used = 0;
+    // A table is a native graphic frame, so it cannot flow inside the body
+    // placeholder the way text does. Giving it a page of its own keeps every
+    // other page pure text, which is what lets that text live in a placeholder.
     renderable.forEach(block => {
+      const alone = block.type === "table";
       const units = Math.min(PAGE_CAPACITY, blockUnits(block));
-      if (page.length && used + units > PAGE_CAPACITY) {
+      if (page.length && (alone || used + units > PAGE_CAPACITY)) {
         pages.push(page);
         page = [];
         used = 0;
       }
       page.push(block);
       used += units;
+      if (alone) {
+        pages.push(page);
+        page = [];
+        used = 0;
+      }
     });
     if (page.length) pages.push(page);
     return pages;
@@ -388,13 +397,32 @@
       { fontSize: 15, color: SC.text1, valign: "top", ...options },
     );
 
+    const titleSlideTitle = () =>
+      title({ x: 0.8, y: 1.65, w: 8.4, h: 1.25, fontSize: 40, align: "center", valign: "middle" });
+    const titleSlideSubtitle = () =>
+      body("subtitle", 1.15, 3.08, 7.7, 0.85, { fontSize: 18, align: "center" });
+    // Two variants so the brand eyebrow is never a slot the slide leaves empty:
+    // a layout must define exactly the placeholders its slides fill, or the
+    // unfilled one shows up as a "Click to add text" box on theme apply.
     pptx.defineSlideMaster({
       title: "TITLE",
       ...common,
       objects: [
         ...masterDecoration(SC, logo),
-        title({ x: 0.8, y: 1.65, w: 8.4, h: 1.25, fontSize: 40, align: "center", valign: "middle" }),
-        body("subtitle", 1.15, 3.08, 7.7, 0.85, { fontSize: 18, align: "center" }),
+        titleSlideTitle(),
+        placeholder("eyebrow", "body", 2, 1.25, 6, 0.26, {
+          fontSize: 10, align: "center", charSpacing: 3, color: SC.accent1, valign: "top",
+        }),
+        titleSlideSubtitle(),
+      ],
+    });
+    pptx.defineSlideMaster({
+      title: "TITLE_PLAIN",
+      ...common,
+      objects: [
+        ...masterDecoration(SC, logo),
+        titleSlideTitle(),
+        titleSlideSubtitle(),
       ],
     });
     pptx.defineSlideMaster({
@@ -522,122 +550,100 @@
     };
   }
 
-  function renderBlock(slide, block, box, context) {
-    const { SC, theme, index } = context;
-    const height = Math.max(0.18, box.h);
-    const common = {
-      x: box.x, y: box.y, w: box.w, h: height,
-      // Each block sits in a slot sized from an estimate, and PptxGenJS anchors
-      // a text box vertically centred by default, which floats short blocks in
-      // the middle of their slot and makes the gaps between them uneven. Top
-      // anchoring matches the body placeholders, which already use valign top.
-      margin: 0, fit: "shrink", breakLine: false, valign: "top",
-    };
-    switch (block.type) {
-      case "heading":
-        slide.addText(toTextRuns(block.runs, SC, theme, {
-          fontSize: block.level <= 3 ? 18 : 16,
-          bold: true,
-          color: SC.text1,
-        }), { ...common, objectName: `Secondary heading ${index}` });
-        break;
-      case "paragraph":
-        slide.addText(toTextRuns(block.runs, SC, theme, { fontSize: 15, color: SC.text1 }), {
-          ...common, objectName: `Paragraph ${index}`,
-        });
-        break;
-      case "list":
-        slide.addText(listRuns(block, SC, theme), {
-          ...common, paraSpaceAfterPt: 7, breakLine: false, objectName: `List ${index}`,
-        });
-        break;
-      case "blockquote":
-        slide.addShape(PptxGenJS.ShapeType?.rect ?? "rect", {
-          ...common,
-          fill: { color: SC.accent1, transparency: 84 },
-          line: { color: SC.accent1, width: 1.25 },
-          objectName: `Quote background ${index}`,
-        });
-        slide.addText(quoteRuns(block, SC, theme), {
-          x: box.x + 0.18, y: box.y + 0.12, w: box.w - 0.36, h: Math.max(0.15, height - 0.24),
-          margin: 0, fit: "shrink", valign: "top", objectName: `Quote text ${index}`,
-        });
-        break;
-      case "code": {
-        slide.addShape(PptxGenJS.ShapeType?.rect ?? "rect", {
-          ...common,
-          fill: { color: SC.background2 },
-          line: { color: SC.text1, transparency: 78, width: 0.75 },
-          objectName: `Code background ${index}`,
-        });
-        const lines = String(block.text ?? "").split("\n");
-        const runs = lines.map((line, lineIndex) => ({
-          text: line || " ",
-          options: {
-            fontFace: theme.monoFont,
-            fontSize: 11.5,
-            color: SC.text1,
-            breakLine: lineIndex < lines.length - 1,
-          },
-        }));
-        slide.addText(runs, {
-          x: box.x + 0.16, y: box.y + 0.12, w: box.w - 0.32, h: Math.max(0.15, height - 0.24),
-          margin: 0, fit: "shrink", valign: "top", objectName: `Code text ${index}`,
-        });
-        break;
-      }
-      case "table": {
-        const align = block.align ?? [];
-        const rows = [
-          (block.header ?? []).map((cell, cellIndex) => tableCell(cell, SC, theme, align[cellIndex], true)),
-          ...(block.rows ?? []).map(row =>
-            row.map((cell, cellIndex) => tableCell(cell, SC, theme, align[cellIndex], false))),
-        ];
-        slide.addTable(rows, {
-          ...common,
-          ...(context.tablePlaceholder ? { placeholder: "table" } : {}),
-          border: { type: "solid", pt: 0.65, color: SC.text1, transparency: 72 },
-          fill: { color: SC.background1 },
-          color: SC.text1,
-          valign: "middle",
-          margin: 4,
-          autoFit: false,
-          objectName: `Table ${index}`,
-        });
-        break;
-      }
-      case "divider":
-        slide.addShape(PptxGenJS.ShapeType?.line ?? "line", {
-          x: box.x, y: box.y + 0.1, w: box.w, h: 0,
-          line: { color: SC.accent1, transparency: 35, width: 1 },
-          objectName: `Divider ${index}`,
-        });
-        break;
-      case "unsupported":
-        slide.addText(toTextRuns([{
-          type: "text",
-          text: String(block.raw || `[Unsupported ${block.tokenType || "content"}]`),
-        }], SC, theme, { fontSize: 12 }), {
-          ...common, objectName: `Unsupported content ${index}`,
-        });
-        break;
-      default:
-        if (blockText(block)) {
-          slide.addText(toTextRuns([{ type: "text", text: blockText(block) }], SC, theme, {
-            fontSize: 14,
-          }), { ...common, objectName: `Content ${index}` });
-        }
-    }
+  // A table page holds exactly one table, so this is the only block type that
+  // still renders as its own frame; everything else flows inside a body
+  // placeholder. Tables stay native rather than becoming a grid of
+  // placeholders, which is a deliberate departure from the slides skill.
+  function renderTable(slide, block, box, context) {
+    const { SC, theme } = context;
+    const align = block.align ?? [];
+    const rows = [
+      (block.header ?? []).map((cell, cellIndex) => tableCell(cell, SC, theme, align[cellIndex], true)),
+      ...(block.rows ?? []).map(row =>
+        row.map((cell, cellIndex) => tableCell(cell, SC, theme, align[cellIndex], false))),
+    ];
+    slide.addTable(rows, {
+      x: box.x, y: box.y, w: box.w, h: Math.max(0.18, box.h),
+      ...(context.tablePlaceholder ? { placeholder: "table" } : {}),
+      border: { type: "solid", pt: 0.65, color: SC.text1, transparency: 72 },
+      fill: { color: SC.background1 },
+      color: SC.text1,
+      valign: "middle",
+      margin: 4,
+      autoFit: false,
+      objectName: "Table 1",
+    });
   }
 
-  function renderBlockColumn(slide, blocks, box, context) {
-    const totalUnits = Math.max(1, blocks.reduce((sum, block) => sum + blockUnits(block), 0));
-    let y = box.y;
-    blocks.forEach((block, index) => {
-      const proportional = box.h * (blockUnits(block) / totalUnits);
-      const h = Math.max(0.18, proportional - (index < blocks.length - 1 ? 0.1 : 0));
-      renderBlock(slide, block, { x: box.x, y, w: box.w, h }, { ...context, index: index + 1 });
-      y += proportional;
+  // Every text block in a column becomes a paragraph inside ONE body
+  // placeholder, so no slide text sits outside a placeholder. Runs carry no
+  // font size on purpose: size belongs in the layout's defRPr, and packaging
+  // strips any that reach a placeholder shape.
+  function columnRuns(blocks, SC, theme) {
+    const out = [];
+    const paragraphs = runs => {
+      if (!runs.length) return;
+      const copy = runs.map(run => ({ text: run.text, options: { ...run.options } }));
+      if (out.length) copy[0].options.paraSpaceBefore = 8;
+      copy[copy.length - 1].options.breakLine = true;
+      out.push(...copy);
+    };
+
+    (blocks ?? []).forEach(block => {
+      switch (block.type) {
+        case "heading":
+          paragraphs(toTextRuns(block.runs, SC, theme, { bold: true }));
+          break;
+        case "paragraph":
+          paragraphs(toTextRuns(block.runs, SC, theme));
+          break;
+        case "list":
+          paragraphs(listRuns(block, SC, theme));
+          break;
+        case "blockquote": {
+          // The tinted callout box cannot follow flowing text, so the quote
+          // reads as an indented italic paragraph instead.
+          const runs = quoteRuns(block, SC, theme);
+          if (runs.length) runs[0].options = { ...runs[0].options, indentLevel: 1 };
+          paragraphs(runs);
+          break;
+        }
+        case "code": {
+          // Likewise the code background: the monospaced face carries it.
+          const lines = String(block.text ?? "").split("\n");
+          paragraphs(lines.map(line => ({
+            text: line || " ",
+            options: { fontFace: theme.monoFont, color: SC.text1, breakLine: true },
+          })));
+          break;
+        }
+        case "unsupported":
+          paragraphs(toTextRuns([{ type: "text", text: String(block.raw ?? "") }], SC, theme));
+          break;
+        case "divider":
+          // A rule cannot be drawn between paragraphs of one placeholder, so it
+          // becomes the blank line it stands for rather than disappearing.
+          paragraphs([{ text: " ", options: { color: SC.text1 } }]);
+          break;
+        default:
+          if (blockText(block)) {
+            paragraphs(toTextRuns([{ type: "text", text: blockText(block) }], SC, theme));
+          }
+      }
+    });
+    return out;
+  }
+
+  // A placeholder left with no text renders its "Click to add text" prompt, so
+  // an empty column is filled with a space rather than skipped.
+  function renderBodyPlaceholder(slide, blocks, name, SC, theme) {
+    const runs = columnRuns(blocks, SC, theme);
+    slide.addText(runs.length ? runs : " ", {
+      placeholder: name,
+      fit: "shrink",
+      margin: 0,
+      valign: "top",
+      objectName: name === "body" ? "Body content" : `Body content ${name}`,
     });
   }
 
@@ -925,7 +931,7 @@
       const illustration = normalizeImage(opts.images?.[sourceIndex], sourceIndex);
 
       if (sourceSlide.type === "title") {
-        const titleSlide = pptx.addSlide({ masterName: "TITLE" });
+        const titleSlide = pptx.addSlide({ masterName: opts.brandName ? "TITLE" : "TITLE_PLAIN" });
         addTitle(titleSlide, sourceSlide.title, SC, theme);
         titleSlide.addText(toTextRuns(sourceSlide.subtitle, SC, theme, {
           fontSize: 18, color: SC.text1,
@@ -935,20 +941,14 @@
         });
         if (opts.brandName) {
           titleSlide.addText(opts.brandName.toUpperCase(), {
-            x: 2, y: 1.25, w: 6, h: 0.26,
-            align: "center", charSpacing: 3, fontSize: 10,
-            color: SC.accent1, margin: 0,
-            objectName: "Brand name",
+            placeholder: "eyebrow", margin: 0, objectName: "Brand name",
           });
         }
         if (sourceSlide.notes?.length) titleSlide.addNotes(sourceSlide.notes.join("\n\n"));
         pages.filter(page => page.length).forEach((page, pageIndex) => {
           const continuation = pptx.addSlide({ masterName: "TITLE_BODY" });
           addTitle(continuation, continuedTitle(sourceSlide.title, language), SC, theme);
-          continuation.addText(" ", { placeholder: "body", objectName: "Body placeholder" });
-          renderBlockColumn(continuation, page, {
-            x: LEFT, y: BODY_Y, w: BODY_W, h: BODY_H,
-          }, { SC, theme, pageIndex });
+          renderBodyPlaceholder(continuation, page, "body", SC, theme);
         });
         return;
       }
@@ -972,19 +972,23 @@
         if (sourceSlide.notes?.length && isFirst) slide.addNotes(sourceSlide.notes.join("\n\n"));
 
         if (masterName === "SECTION") {
-          slide.addText(toTextRuns(sourceSlide.subtitle, SC, theme, {
-            fontSize: 17, color: SC.text1,
-          }), { placeholder: "body", fit: "shrink", margin: 0, objectName: "Section subtitle" });
-          if (page.length) {
-            renderBlockColumn(slide, page, {
-              x: 1.35, y: 3.12, w: 7.3, h: 1.45,
-            }, { SC, theme, pageIndex });
+          // The subtitle placeholder is this layout's only body slot, so any
+          // extra blocks continue inside it instead of getting a second box.
+          const subtitle = toTextRuns(sourceSlide.subtitle, SC, theme, { color: SC.text1 });
+          const extra = columnRuns(page, SC, theme);
+          if (subtitle.length && extra.length) {
+            subtitle[subtitle.length - 1].options = {
+              ...subtitle[subtitle.length - 1].options, breakLine: true,
+            };
           }
+          slide.addText([...subtitle, ...extra], {
+            placeholder: "body", fit: "shrink", margin: 0, objectName: "Section subtitle",
+          });
           return;
         }
 
         if (masterName === "TITLE_IMAGE") {
-          slide.addText(" ", { placeholder: "body", objectName: "Body placeholder" });
+          renderBodyPlaceholder(slide, page, "body", SC, theme);
           // Explicit geometry rather than the placeholder's own box: the frame
           // has to match the picture's aspect ratio, and it stays centred in
           // the area the TITLE_IMAGE layout reserves for it.
@@ -994,36 +998,23 @@
             placeholder: "image",
             objectName: `Slide ${sourceIndex + 1} illustration`,
           });
-          renderBlockColumn(slide, page, {
-            x: LEFT, y: BODY_Y, w: 5.05, h: BODY_H,
-          }, { SC, theme, pageIndex });
           return;
         }
 
         if (masterName === "TITLE_TABLE") {
-          renderBlockColumn(slide, page, {
-            x: LEFT, y: BODY_Y, w: BODY_W, h: BODY_H,
-          }, { SC, theme, pageIndex, tablePlaceholder: true });
+          renderTable(slide, page[0], { x: LEFT, y: BODY_Y, w: BODY_W, h: BODY_H },
+            { SC, theme, tablePlaceholder: true });
           return;
         }
 
         if (masterName === "TITLE_TWO_COLUMN") {
-          slide.addText(" ", { placeholder: "body_left", objectName: "Left body placeholder" });
-          slide.addText(" ", { placeholder: "body_right", objectName: "Right body placeholder" });
           const [left, right] = splitColumns(page);
-          renderBlockColumn(slide, left, {
-            x: LEFT, y: BODY_Y, w: 4.18, h: BODY_H,
-          }, { SC, theme, pageIndex });
-          renderBlockColumn(slide, right, {
-            x: 5.2, y: BODY_Y, w: 4.18, h: BODY_H,
-          }, { SC, theme, pageIndex });
+          renderBodyPlaceholder(slide, left, "body_left", SC, theme);
+          renderBodyPlaceholder(slide, right, "body_right", SC, theme);
           return;
         }
 
-        slide.addText(" ", { placeholder: "body", objectName: "Body placeholder" });
-        renderBlockColumn(slide, page, {
-          x: LEFT, y: BODY_Y, w: BODY_W, h: BODY_H,
-        }, { SC, theme, pageIndex });
+        renderBodyPlaceholder(slide, page, "body", SC, theme);
       });
     });
 
