@@ -329,3 +329,64 @@ test("a slide illustration keeps its aspect ratio inside its column", async () =
   assert.ok(Math.abs(box.w / box.h - 1536 / 1024) < 0.02,
     `expected aspect 1.500, got ${(box.w / box.h).toFixed(3)}`);
 });
+
+// ── Placeholder and theme-responsiveness contract (Downloads/SKILL.md checks) ──
+async function qaPackage() {
+  const deck = DeckModel.create([
+    "# Deck title\nAn intro line",
+    "## Body and list\n\nA paragraph.\n\n- one\n- two\n\n<!-- notes:\nNote.\n-->",
+    "## A table\n\n| K | V |\n|---|---|\n| a | b |",
+    "## Illustrated\n\nCaption text.",
+    "## Section",
+  ], { marked });
+  const buffer = await exportDeckToPptx({
+    deck, theme: {}, logo: PIXEL_PNG,
+    images: [null, null, null, { data: PIXEL_PNG, altText: "pic" }, null],
+    outputType: "nodebuffer", onWarnings() {},
+  });
+  return JSZip.loadAsync(buffer);
+}
+
+const phSet = xml => new Set(
+  [...xml.matchAll(/<p:ph\b([^>]*?)\/?>/g)].map(m => {
+    const type = /type="(\w+)"/.exec(m[1])?.[1] ?? "body";
+    const idx = /idx="(\d+)"/.exec(m[1])?.[1] ?? "";
+    return `${type}:${idx}`;
+  }),
+);
+
+test("no title placeholder carries an idx, in slides or layouts", async () => {
+  const zip = await qaPackage();
+  for (const pattern of [/^ppt\/slides\/slide\d+\.xml$/, /^ppt\/slideLayouts\/slideLayout\d+\.xml$/]) {
+    for (const { name, xml } of await xmlFiles(zip, pattern)) {
+      for (const m of xml.matchAll(/<p:ph\b[^>]*?\/?>/g)) {
+        if (!/type="title"/.test(m[0])) continue;
+        assert.doesNotMatch(m[0], /\bidx="/, `${name}: title placeholder must not carry an idx`);
+      }
+    }
+  }
+});
+
+test("placeholder-bound runs carry no per-run sz, so the layout controls size", async () => {
+  const zip = await qaPackage();
+  for (const { name, xml } of await xmlFiles(zip, /^ppt\/slides\/slide\d+\.xml$/)) {
+    for (const sp of xml.match(/<p:sp>[\s\S]*?<\/p:sp>/g) ?? []) {
+      if (!sp.includes("<p:ph")) continue; // free boxes keep their size until stage 2
+      const shape = /name="([^"]*)"/.exec(sp)?.[1] ?? "?";
+      assert.doesNotMatch(sp, /<a:(?:rPr|endParaRPr)\b[^>]*\ssz="/,
+        `${name} (${shape}): placeholder run must inherit size from the layout`);
+    }
+  }
+});
+
+test("layouts define no placeholder their slides leave unfilled", async () => {
+  const zip = await qaPackage();
+  for (const { name, xml } of await xmlFiles(zip, /^ppt\/slides\/slide\d+\.xml$/)) {
+    const rels = await zip.file(name.replace("slides/", "slides/_rels/") + ".rels").async("string");
+    const layout = /slideLayout\d+\.xml/.exec(rels)[0];
+    const layoutXml = await zip.file(`ppt/slideLayouts/${layout}`).async("string");
+    const orphans = [...phSet(layoutXml)].filter(entry => !phSet(xml).has(entry));
+    assert.deepEqual(orphans, [],
+      `${name} (${layout}): unfilled placeholders render as empty boxes on theme apply`);
+  }
+});
