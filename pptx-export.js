@@ -40,6 +40,10 @@
   const MAX_LIST_ITEMS = 7;
   const MAX_CODE_LINES = 12;
   const MAX_TABLE_ROWS = 8;
+  // Reserved column for a slide illustration, shared by the TITLE_IMAGE layout
+  // placeholder and the picture placed into it.
+  const IMAGE_X = 6.04;
+  const IMAGE_W = 3.34;
 
   // ─── Color helpers ──────────────────────────────
   function hex(color, fallback) {
@@ -261,6 +265,75 @@
     return warnings;
   }
 
+  // ─── Image geometry ─────────────────────────────
+  // PptxGenJS writes the requested w/h straight into <a:ext> and does not
+  // decode base64 images, so its sizing:{type:"contain"} never shrinks the
+  // frame and any picture whose aspect ratio differs from the box is
+  // stretched. Read the intrinsic size from the data URI and fit the box here.
+  function base64Bytes(base64) {
+    if (typeof atob === "function") {
+      const binary = atob(base64);
+      const bytes = new Uint8Array(binary.length);
+      for (let i = 0; i < binary.length; i += 1) bytes[i] = binary.charCodeAt(i);
+      return bytes;
+    }
+    if (typeof Buffer !== "undefined") return new Uint8Array(Buffer.from(base64, "base64"));
+    return null;
+  }
+
+  function pixelSize(bytes) {
+    const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+    // PNG: 8-byte signature, then an IHDR chunk carrying width/height.
+    if (bytes.length > 24 && view.getUint32(0) === 0x89504e47) {
+      return { w: view.getUint32(16), h: view.getUint32(20) };
+    }
+    // GIF: logical screen descriptor, little-endian.
+    if (bytes.length > 10 && bytes[0] === 0x47 && bytes[1] === 0x49 && bytes[2] === 0x46) {
+      return { w: view.getUint16(6, true), h: view.getUint16(8, true) };
+    }
+    // JPEG: walk the segment chain to the frame header.
+    if (bytes.length > 4 && view.getUint16(0) === 0xffd8) {
+      let offset = 2;
+      while (offset + 9 < bytes.length) {
+        if (bytes[offset] !== 0xff) { offset += 1; continue; }
+        const marker = bytes[offset + 1];
+        if (marker >= 0xc0 && marker <= 0xcf && marker !== 0xc4 && marker !== 0xc8 && marker !== 0xcc) {
+          return { w: view.getUint16(offset + 7), h: view.getUint16(offset + 5) };
+        }
+        if (marker === 0xd8 || marker === 0x01 || (marker >= 0xd0 && marker <= 0xd7)) { offset += 2; continue; }
+        offset += 2 + view.getUint16(offset + 2);
+      }
+    }
+    return null;
+  }
+
+  function imageAspect(data) {
+    const match = /^data:image\/[a-z.+-]+;base64,([\s\S]+)$/i.exec(String(data ?? "").trim());
+    if (!match) return null;
+    let bytes;
+    try { bytes = base64Bytes(match[1].replace(/\s+/g, "")); } catch { return null; }
+    if (!bytes || !bytes.length) return null;
+    const size = pixelSize(bytes);
+    return size?.w > 0 && size?.h > 0 ? size.w / size.h : null;
+  }
+
+  // Largest w/h with the image's aspect ratio that fits inside box, anchored by
+  // `align`. Unreadable formats keep the full box, which is the previous
+  // behaviour rather than a new guess.
+  function containImage(data, box, align = {}) {
+    const aspect = imageAspect(data);
+    if (!aspect) return { x: box.x, y: box.y, w: box.w, h: box.h };
+    const w = Math.min(box.w, box.h * aspect);
+    const h = w / aspect;
+    const x = align.x === "right" ? box.x + box.w - w
+      : align.x === "center" ? box.x + (box.w - w) / 2
+        : box.x;
+    const y = align.y === "bottom" ? box.y + box.h - h
+      : align.y === "top" ? box.y
+        : box.y + (box.h - h) / 2;
+    return { x, y, w, h };
+  }
+
   // ─── Theme-native masters ───────────────────────
   function masterDecoration(SC, logo) {
     const objects = [{
@@ -273,11 +346,13 @@
     }];
     if (logo) {
       const image = typeof logo === "string" ? { data: logo } : logo;
+      // Right-aligned in the reserved corner so the mark keeps its position
+      // against the slide edge whatever its proportions.
+      const frame = containImage(image.data, { x: W - 1.66, y: 0.18, w: 1.12, h: 0.46 }, { x: "right" });
       objects.push({
         image: {
           ...image,
-          x: W - 1.66, y: 0.18, w: 1.12, h: 0.46,
-          sizing: { type: "contain", w: 1.12, h: 0.46 },
+          ...frame,
           altText: image.altText ?? "Brand logo",
           objectName: "Brand logo",
         },
@@ -357,7 +432,7 @@
         ...masterDecoration(SC, logo),
         title(),
         body("body", LEFT, BODY_Y, 5.05, BODY_H),
-        placeholder("image", "image", 6.04, BODY_Y, 3.34, BODY_H),
+        placeholder("image", "image", IMAGE_X, BODY_Y, IMAGE_W, BODY_H),
       ],
     });
     pptx.defineSlideMaster({
@@ -843,10 +918,13 @@
 
         if (masterName === "TITLE_IMAGE") {
           slide.addText(" ", { placeholder: "body", objectName: "Body placeholder" });
+          // Explicit geometry rather than the placeholder's own box: the frame
+          // has to match the picture's aspect ratio, and it stays centred in
+          // the area the TITLE_IMAGE layout reserves for it.
           slide.addImage({
             ...illustration,
+            ...containImage(illustration.data, { x: IMAGE_X, y: BODY_Y, w: IMAGE_W, h: BODY_H }, { x: "center" }),
             placeholder: "image",
-            sizing: { type: "contain", w: 3.34, h: BODY_H },
             objectName: `Slide ${sourceIndex + 1} illustration`,
           });
           renderBlockColumn(slide, page, {
