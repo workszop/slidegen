@@ -226,6 +226,16 @@ function normalizeAiSettings(raw, legacy = {}) {
 
 // ─── Per-provider request builders (pure) ────────
 // Each returns {url, headers, body} for the provider's streaming endpoint.
+// Gemini 3.6 onward ignores temperature/top_p/top_k and later generations are
+// documented to reject them outright, so the parameter is sent only to the
+// models that still honour it. Unlisted and custom IDs get nothing, which is
+// the safe direction: a missing sampling hint costs a little consistency, a
+// rejected one costs the whole request.
+function geminiGenerationConfig(model) {
+  const supported = PROVIDER_INFO.gemini?.samplingSupported ?? [];
+  return supported.includes(model) ? { temperature: 0.4 } : null;
+}
+
 function buildGeminiRequest({ key, model, source, prompt }) {
   const parts = [{ text: prompt }];
   if (source.kind === "pdf") {
@@ -233,10 +243,11 @@ function buildGeminiRequest({ key, model, source, prompt }) {
   } else {
     parts.push({ text: "\n\n--- DOCUMENT ---\n\n" + source.text });
   }
+  const generationConfig = geminiGenerationConfig(model);
   return {
-    url: `${GEMINI_BASE}/${model}:streamGenerateContent?alt=sse`,
+    url: `${GEMINI_BASE}/${encodeURIComponent(model)}:streamGenerateContent?alt=sse`,
     headers: { "Content-Type": "application/json", "x-goog-api-key": key },
-    body: { contents: [{ parts }], generationConfig: { temperature: 0.4 } },
+    body: { contents: [{ parts }], ...(generationConfig ? { generationConfig } : {}) },
   };
 }
 
@@ -263,7 +274,7 @@ function buildOpenAIRequest({ key, model, source, prompt }) {
 // (a formatting task, not a reasoning one) keeps the budget for markdown and
 // removes the long silent gap before the first visible chunk.
 function claudeThinking(model) {
-  const optional = AI_MODEL_CATALOG?.providers?.claude?.thinkingOptional ?? [];
+  const optional = PROVIDER_INFO.claude?.thinkingOptional ?? [];
   return optional.includes(model) ? { type: "disabled" } : null;
 }
 

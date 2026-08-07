@@ -6,7 +6,12 @@ const AI_MODEL_CATALOG = {
   providers: {
     gemini: {
       label: "Gemini",
-      models: ["gemini-3.5-flash", "gemini-3.1-flash-lite-preview"],
+      models: ["gemini-3.6-flash", "gemini-3.5-flash", "gemini-3.1-flash-lite-preview"],
+      // Models that still honour generationConfig sampling. Gemini 3.6 onward
+      // deprecates and ignores temperature/top_p/top_k, and Google documents
+      // that later generations will reject them with a 400, so anything not
+      // listed here (including custom model IDs) is sent without them.
+      samplingSupported: ["gemini-3.5-flash", "gemini-3.1-flash-lite-preview"],
       keyPlaceholder: "AIza…",
       keyUrl: "https://aistudio.google.com/apikey",
     },
