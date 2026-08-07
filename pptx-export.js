@@ -527,7 +527,11 @@
     const height = Math.max(0.18, box.h);
     const common = {
       x: box.x, y: box.y, w: box.w, h: height,
-      margin: 0, fit: "shrink", breakLine: false,
+      // Each block sits in a slot sized from an estimate, and PptxGenJS anchors
+      // a text box vertically centred by default, which floats short blocks in
+      // the middle of their slot and makes the gaps between them uneven. Top
+      // anchoring matches the body placeholders, which already use valign top.
+      margin: 0, fit: "shrink", breakLine: false, valign: "top",
     };
     switch (block.type) {
       case "heading":
@@ -556,7 +560,7 @@
         });
         slide.addText(quoteRuns(block, SC, theme), {
           x: box.x + 0.18, y: box.y + 0.12, w: box.w - 0.36, h: Math.max(0.15, height - 0.24),
-          margin: 0, fit: "shrink", objectName: `Quote text ${index}`,
+          margin: 0, fit: "shrink", valign: "top", objectName: `Quote text ${index}`,
         });
         break;
       case "code": {
@@ -578,7 +582,7 @@
         }));
         slide.addText(runs, {
           x: box.x + 0.16, y: box.y + 0.12, w: box.w - 0.32, h: Math.max(0.15, height - 0.24),
-          margin: 0, fit: "shrink", objectName: `Code text ${index}`,
+          margin: 0, fit: "shrink", valign: "top", objectName: `Code text ${index}`,
         });
         break;
       }

@@ -336,12 +336,13 @@ async function qaPackage() {
     "# Deck title\nAn intro line",
     "## Body and list\n\nA paragraph.\n\n- one\n- two\n\n<!-- notes:\nNote.\n-->",
     "## A table\n\n| K | V |\n|---|---|\n| a | b |",
+    "## Quote and code\n\n> A quote.\n\n```js\nconst x = 1;\n```",
     "## Illustrated\n\nCaption text.",
     "## Section",
   ], { marked });
   const buffer = await exportDeckToPptx({
     deck, theme: {}, logo: PIXEL_PNG,
-    images: [null, null, null, { data: PIXEL_PNG, altText: "pic" }, null],
+    images: [null, null, null, null, { data: PIXEL_PNG, altText: "pic" }, null],
     outputType: "nodebuffer", onWarnings() {},
   });
   return JSZip.loadAsync(buffer);
@@ -388,5 +389,30 @@ test("layouts define no placeholder their slides leave unfilled", async () => {
     const orphans = [...phSet(layoutXml)].filter(entry => !phSet(xml).has(entry));
     assert.deepEqual(orphans, [],
       `${name} (${layout}): unfilled placeholders render as empty boxes on theme apply`);
+  }
+});
+
+test("body content is anchored to the top of its slot, title slides stay centred", async () => {
+  const zip = await qaPackage();
+  const anchorsByName = new Map();
+  for (const { xml } of await xmlFiles(zip, /^ppt\/slides\/slide\d+\.xml$/)) {
+    for (const sp of xml.match(/<p:sp>[\s\S]*?<\/p:sp>/g) ?? []) {
+      const name = /name="([^"]*)"/.exec(sp)?.[1];
+      const bodyPr = /<a:bodyPr\b[^>]*>/.exec(sp)?.[0];
+      if (!name || !bodyPr) continue;
+      const anchor = /anchor="(\w+)"/.exec(bodyPr)?.[1] ?? "t"; // OOXML default is top
+      if (!anchorsByName.has(name)) anchorsByName.set(name, anchor);
+    }
+  }
+  for (const [name, anchor] of anchorsByName) {
+    if (/^(Paragraph|List|Quote text|Code text|Heading|Content)/.test(name)) {
+      assert.equal(anchor, "t", `${name} should sit at the top of its slot, got anchor=${anchor}`);
+    }
+  }
+  // The deliberate exceptions: the deck title and section dividers stay centred,
+  // matching the web deck where .slide--title is align-self: center.
+  for (const required of ["Quote text 1", "Code text 2", "Paragraph 1", "List 2"]) {
+    assert.ok(anchorsByName.has(required),
+      `fixture must exercise ${required}, otherwise this test proves nothing`);
   }
 });
