@@ -134,14 +134,14 @@ test("buildGeminiRequest shapes inline PDF and text", () => {
 });
 
 test("buildOpenAIRequest uses responses API with input_file for PDF", () => {
-  const r = H.buildOpenAIRequest({ key: "K", model: "gpt-5.6", source: PDF_SRC, prompt: "P" });
+  const r = H.buildOpenAIRequest({ key: "K", model: "gpt-5.6-sol", source: PDF_SRC, prompt: "P" });
   assert.equal(r.url, "https://api.openai.com/v1/responses");
   assert.equal(r.headers.Authorization, "Bearer K");
   assert.equal(r.body.stream, true);
   const parts = r.body.input[0].content;
   assert.equal(parts[0].type, "input_text");
   assert.deepEqual(parts[1], { type: "input_file", filename: "doc.pdf", file_data: "data:application/pdf;base64,QUJD" });
-  const t = H.buildOpenAIRequest({ key: "K", model: "gpt-5.6", source: TEXT_SRC, prompt: "P" });
+  const t = H.buildOpenAIRequest({ key: "K", model: "gpt-5.6-sol", source: TEXT_SRC, prompt: "P" });
   assert.equal(t.body.input[0].content.length, 1);
   assert.match(t.body.input[0].content[0].text, /hello world/);
 });
@@ -358,4 +358,17 @@ test("the Gemini model ID is URL-encoded into the endpoint", () => {
   });
   assert.doesNotMatch(r.url, /\?key=leak/, "a crafted ID must not inject query parameters");
   assert.match(r.url, /alt=sse$/);
+});
+
+test("the OpenAI catalogue is the GPT-5.6 frontier family, most capable first", () => {
+  assert.deepEqual(H.PROVIDER_INFO.openai.models,
+    ["gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna"]);
+  assert.equal(H.normalizeAiSettings(JSON.stringify({ provider: "openai" })).model, "gpt-5.6-sol");
+});
+
+test("OpenAI requests carry no sampling parameters to deprecate", () => {
+  const body = H.buildOpenAIRequest({
+    key: "K", model: "gpt-5.6-sol", source: { kind: "text", text: "d" }, prompt: "p",
+  }).body;
+  assert.deepEqual(Object.keys(body).sort(), ["input", "model", "stream"]);
 });

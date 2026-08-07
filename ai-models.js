@@ -17,7 +17,9 @@ const AI_MODEL_CATALOG = {
     },
     openai: {
       label: "OpenAI",
-      models: ["gpt-5.6", "gpt-5-mini", "gpt-5-nano"],
+      // The GPT-5.6 frontier family, most capable first: Sol for complex work,
+      // Terra for the intelligence/cost balance, Luna for high-volume runs.
+      models: ["gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna"],
       keyPlaceholder: "sk-…",
       keyUrl: "https://platform.openai.com/api-keys",
     },
