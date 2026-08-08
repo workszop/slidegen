@@ -114,6 +114,33 @@ textarea { resize: vertical; }
 .preset .dots span { width: 12px; height: 12px; border-radius: 50%; border: 1px solid var(--dot-border); display: inline-block; }
 .preset .name { font-family: var(--font-mono); font-size: var(--overline); font-weight: 500; }
 
+/* Collapsible side-panel groups. The chevron sits on the section title
+   itself, so a group costs no extra row when it is closed. The marker is
+   drawn rather than native so it looks the same in every browser. */
+.side-fold-toggle {
+  display: flex; align-items: center; gap: var(--sp-2); width: 100%;
+  border: 0; padding: 0; background: none; cursor: pointer;
+  color: inherit; font: inherit; letter-spacing: inherit; text-transform: inherit;
+}
+.side-fold-toggle::after {
+  content: ""; margin-left: auto; width: 6px; height: 6px;
+  border-right: 2px solid currentColor; border-bottom: 2px solid currentColor;
+  transform: translateY(-2px) rotate(45deg); transition: transform .2s;
+}
+.side-fold-toggle[aria-expanded="true"]::after { transform: translateY(1px) rotate(-135deg); }
+.side-fold-toggle:hover { color: var(--ink); }
+.side-fold-body { display: flex; flex-direction: column; gap: var(--sp-2); }
+.side-fold-label { font-family: var(--font-mono); font-size: var(--overline); color: var(--ink-2); }
+
+.font-grid { display: grid; grid-template-columns: 1fr 1fr; gap: var(--sp-2); }
+.font-chip {
+  border: 2px solid var(--line); border-radius: var(--r-sm); background: var(--paper);
+  color: var(--ink); padding: var(--sp-2); cursor: pointer; text-align: left;
+  font-size: var(--body-sm); line-height: 1.2;
+}
+.font-chip:hover { border-color: var(--line-2); }
+.font-chip[aria-pressed="true"] { border-color: var(--marigold); }
+
 /* ============================================================
    Present view
    ============================================================ */
@@ -136,6 +163,9 @@ body.presenting .chrome { display: none; }
 .slide {
   width: min(1600px, 90vw); max-height: 88vh; overflow: auto;
   font-size: clamp(15px, 1.55vw + 0.9vh, 46px);
+  /* Deck typography is a slide-scoped token so the font picker never
+     restyles the app chrome around it. */
+  font-family: var(--slide-body-font, var(--font-sans));
   color: var(--slide-fg, var(--ink));
   --slide-fg-muted: color-mix(in srgb, var(--slide-fg, var(--ink)) 72%, var(--slide-bg, var(--paper)));
   --slide-surface: color-mix(in srgb, var(--slide-fg, var(--ink)) 8%, var(--slide-bg, var(--paper)));

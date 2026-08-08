@@ -1,9 +1,10 @@
 /* Quantica slide identity. Load after theme-edulab.css. */
 :root {
-  --quantica-pink: #C41E54;
+  /* The Quantica deck palette is closed: white or black grounds, and
+     type/accents drawn only from these five values. */
+  --quantica-pink: #d20757;
   --deep-berry: #8A004C;
-  --magenta-tint: #FFE6F1;
-  --violet-primary: #7030A0;
+  --quantica-ink: #111111;
   --font-slide: 'Poppins', 'Inter', system-ui, sans-serif;
   --font-slide-mono: 'Geist Mono', ui-monospace, 'SF Mono', Menlo, monospace;
 }
@@ -16,9 +17,9 @@
   letter-spacing: .08em;
   color: var(--slide-accent, var(--quantica-pink));
 }
-.slide h1 { font-family: var(--font-slide); font-weight: 700; }
-.slide h2 { font-family: var(--font-slide); letter-spacing: -0.01em; }
-.slide h3 { font-family: var(--font-slide); }
+.slide h1 { font-family: var(--slide-heading-font, var(--font-slide)); font-weight: 700; }
+.slide h2 { font-family: var(--slide-heading-font, var(--font-slide)); letter-spacing: -0.01em; }
+.slide h3 { font-family: var(--slide-heading-font, var(--font-slide)); }
 .slide li::marker { color: var(--slide-accent, var(--quantica-pink)); }
 .slide a { color: var(--slide-link); }
 .slide code,

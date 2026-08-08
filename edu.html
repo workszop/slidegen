@@ -18,6 +18,7 @@
 <script src="favicon.js"></script>
 <link rel="stylesheet" href="deck-base.css">
 <link rel="stylesheet" href="theme-edulab.css">
+<link rel="stylesheet" href="theme-illustrated.css">
 </head>
 <body>
 <script>
@@ -29,11 +30,12 @@ window.APP_BRAND = {
   presetKey: "eduapp_preset_edu",
   editorWKey: "edu.editorW",
   pptx: { headingFont: "Raleway", bodyFont: "Raleway", monoFont: "DM Mono", company: "edulab" },
+  illustrations: true,
   presets: [
+    { id: "kontrast", name: { pl: "Kontrast", en: "Contrast" }, bg: "#FFFFFF", fg: "#211E1A", accent: "#211E1A" },
     { id: "papier",   name: { pl: "Papier",   en: "Paper" },    bg: "#FBF7F0", fg: "#211E1A", accent: "#E8920C" },
     { id: "atrament", name: { pl: "Atrament", en: "Ink" },      bg: "#211E1A", fg: "#FBF7F0", accent: "#E8920C" },
     { id: "morski",   name: { pl: "Morski",   en: "Teal" },     bg: "#FBF7F0", fg: "#211E1A", accent: "#0E8C7F" },
-    { id: "kontrast", name: { pl: "Kontrast", en: "Contrast" }, bg: "#FFFFFF", fg: "#211E1A", accent: "#211E1A" },
   ],
   exampleMd: {
     pl: `# doc2slide
@@ -41,7 +43,7 @@ Przewodnik po tworzeniu prezentacji w wariancie edulab.
 ---
 ## Jak działa doc2slide?
 - Wgraj materiał źródłowy w panelu **Dokument**
-- Wybierz model, język i orientacyjną liczbę slajdów
+- Wybierz model i język, resztę opcji znajdziesz pod nagłówkiem **Generowanie**
 - Kliknij **Generuj slajdy**, a potem sprawdź i popraw wynik
 
 > Ten przewodnik możesz przeglądać przyciskami pod slajdem lub klawiszami ← i →.
@@ -63,14 +65,21 @@ Przewodnik po tworzeniu prezentacji w wariancie edulab.
 - **Auto** zachowuje język dokumentu; możesz wymusić polski lub angielski
 - Kliknij **Generuj slajdy** i poczekaj, aż pojawi się cała prezentacja
 ---
-## 4. Sprawdź i popraw treść
+## 4. Dodaj ilustracje
+- Model obrazu wybierzesz w ustawieniach modelu AI; ilustracje wymagają klucza OpenAI
+- Przejdź do wybranego slajdu treści i kliknij **Ilustruj ten slajd** pod podglądem
+- Każdą ilustrację generujesz osobno; możesz ją usunąć albo wygenerować ponownie
+- Generowanie obrazów zwiększa czas oraz koszt wywołań API
+---
+## 5. Sprawdź i popraw treść
 - Przejrzyj slajdy i upewnij się, że nie brakuje ważnych informacji
 - Kliknij **Edytuj**, aby otworzyć tekst prezentacji po prawej stronie
 - Zmiany widać na bieżąco; slajdy rozdziela osobna linia \`---\`
 - Skracaj długie akapity — jeden slajd powinien przekazywać jedną główną myśl
 ---
-## 5. Wybierz styl i prezentuj
+## 6. Wybierz styl i prezentuj
 - W sekcji **Styl** jednym kliknięciem zmienisz wygląd całej prezentacji
+- Strzałka przy nagłówku **Styl** rozwija wybór czcionki: cztery kroje lub dowolny font Google
 - Wybrany styl zostanie użyty także w pliku PowerPoint
 - Kliknij **Prezentuj**, aby uruchomić tryb prezentacji
 
@@ -80,7 +89,7 @@ Przewodnik po tworzeniu prezentacji w wariancie edulab.
 | ← | poprzedni slajd |
 | Esc | powrót do edycji |
 ---
-## 6. Zapisz swoją pracę
+## 7. Zapisz swoją pracę
 - **Pobierz html** zapisuje samodzielną prezentację do otwarcia w przeglądarce
 - **Pobierz .pptx** tworzy edytowalną prezentację PowerPoint
 - Przed udostępnieniem sprawdź układ, fakty i dane wygenerowane przez AI
@@ -107,6 +116,13 @@ A short guide to creating presentations in the edulab style.
 ## Choose a style
 - Four styles in the **Style** section - one click restyles the whole deck
 - Colors stay within the edulab palette, also in the .pptx export
+- The chevron on the **Style** heading unfolds the font picker: four faces or any Google font
+---
+## Add illustrations
+- Pick the image model in the AI model dialog; illustrations need an OpenAI key
+- Open a content slide and click **Illustrate this slide** below the preview
+- Each illustration is generated separately and can be removed or regenerated
+- Image generation adds API cost and may take longer
 ---
 ## Edit the content
 - The **Edit** button opens a markdown editor to the right of the slide
