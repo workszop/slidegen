@@ -433,3 +433,12 @@ test("body placeholders are top-anchored and title slides stay centred", async (
   assert.ok(bodies >= 3, `expected several filled body placeholders, saw ${bodies}`);
   assert.ok(centredTitles >= 1, "the deck title and section divider stay vertically centred");
 });
+
+test("without a brandName the title slide carries no brand eyebrow", async () => {
+  const { zip } = await makePackage({ brandName: undefined });
+  const slide = await zip.file("ppt/slides/slide1.xml").async("string");
+  assert.doesNotMatch(slide, /Test Brand/i, "the title slide must not print the brand");
+  // Metadata still identifies the deck through `company`.
+  const core = await zip.file("docProps/core.xml").async("string");
+  assert.match(core, /<dc:creator>Test Company<\/dc:creator>/);
+});

@@ -7,1046 +7,153 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Raleway:wght@400;500;600;700;800&family=DM+Mono:wght@400;500&display=swap">
-<style>
-/* ============================================================
-   styler — edulab-branded presentation style playground
-   App chrome uses fixed edulab tokens; the DECK is driven by
-   --deck-* variables the user plays with.
-   ============================================================ */
-
-:root {
-  --font-display: 'Raleway', system-ui, sans-serif;
-  --font-sans:    'Raleway', system-ui, -apple-system, sans-serif;
-  --font-mono:    'DM Mono', ui-monospace, 'SF Mono', Menlo, monospace;
-
-  --paper:    #FBF7F0;
-  --paper-2:  #F4EDDF;
-  --paper-3:  #ECE1CF;
-  --surface:  #FFFFFF;
-  --ink:      #211E1A;
-  --ink-2:    #5B554D;
-  --ink-3:    #938A7C;
-  --line:     #E7DCCB;
-  --line-2:   #D6C8B2;
-  --marigold:      #E8920C;
-  --marigold-600:  #CE800A;
-  --marigold-ink:  #8A4F00;
-  --teal-soft: #D2EBE6;
-  --teal-ink:  #0A5A52;
-  --danger:    #D8412A;
-
-  /* Aliases for the shared AI selector component (mountAiSelector in shared.js) */
-  --accent: var(--marigold);
-  --border: var(--line);
-  --bg:     var(--paper);
-
-  --focus-ring: 0 0 0 3px rgba(232,146,12,.38);
-  --sp-1: 4px; --sp-2: 8px; --sp-3: 12px; --sp-4: 16px;
-  --sp-5: 20px; --sp-6: 24px;
-  --r-xs: 6px; --r-sm: 10px; --r-md: 14px; --r-pill: 999px;
-  --shadow-md: 0 4px 16px rgba(33,30,26,.08), 0 1px 3px rgba(33,30,26,.05);
-}
-
-*, *::before, *::after { box-sizing: border-box; }
-body {
-  margin: 0; height: 100vh; overflow: hidden;
-  background: var(--paper); color: var(--ink);
-  font-family: var(--font-sans); font-size: 15px; line-height: 1.55;
-  display: flex; flex-direction: column;
-}
-button { font: inherit; cursor: pointer; }
-:focus-visible { outline: none; box-shadow: var(--focus-ring); border-radius: var(--r-xs); }
-.hidden { display: none !important; }
-kbd {
-  font-family: var(--font-mono); font-size: 12px;
-  background: var(--paper-3); color: var(--ink-2);
-  border: 1px solid var(--line-2); border-bottom-width: 2px;
-  border-radius: var(--r-xs); padding: 0 5px;
-}
-
-/* ─── Chrome bar ─── */
-.chrome {
-  display: flex; align-items: center; gap: var(--sp-3); flex: none;
-  padding: var(--sp-2) var(--sp-5);
-  background: rgba(251,247,240,.85); border-bottom: 1px solid var(--line);
-}
-.chrome img { height: 26px; }
-.chrome .wordmark { font-family: var(--font-display); font-weight: 800; font-size: 17px; }
-.chrome .tag {
-  font-family: var(--font-mono); font-size: 11px; letter-spacing: .14em;
-  text-transform: uppercase; color: var(--teal-ink); background: var(--teal-soft);
-  padding: 2px 10px; border-radius: var(--r-pill);
-}
-.chrome .spacer { flex: 1; }
-.lang-toggle { display: flex; border: 1px solid var(--line-2); border-radius: var(--r-pill); overflow: hidden; }
-.lang-toggle button {
-  border: 0; background: transparent; color: var(--ink-2);
-  font-family: var(--font-mono); font-size: 12px; padding: 3px 10px;
-}
-.lang-toggle button[aria-pressed="true"] { background: var(--ink); color: var(--paper); }
-
-/* ─── Layout: panel + stage ─── */
-.workbench { flex: 1; display: flex; min-height: 0; }
-
-.panel {
-  width: 280px; flex: none; overflow-y: auto;
-  padding: var(--sp-4) var(--sp-5); border-right: 1px solid var(--line);
-  display: flex; flex-direction: column; gap: 14px;
-  background: var(--paper);
-}
-.panel h2 {
-  font-family: var(--font-mono); font-weight: 500; font-size: 11px;
-  letter-spacing: .14em; text-transform: uppercase; color: var(--marigold-ink);
-  margin: 0 0 var(--sp-2);
-}
-.panel section { margin: 0; }
-
-.preset-grid { display: grid; grid-template-columns: 1fr 1fr; gap: var(--sp-2); }
-.preset {
-  border: 2px solid var(--line); border-radius: var(--r-md); padding: 7px 9px;
-  background: var(--surface); text-align: left;
-  transition: border-color .2s, transform .1s;
-}
-.preset:hover { transform: translateY(-2px); }
-.preset:active { transform: translateY(2px); }
-.preset[aria-pressed="true"] { border-color: var(--marigold); }
-.preset .dots { display: flex; gap: 4px; margin-bottom: 4px; }
-.preset .dots span { width: 12px; height: 12px; border-radius: 50%; border: 1px solid rgba(0,0,0,.12); }
-.preset .name { font-weight: 700; font-size: 13px; }
-
-.field { display: flex; flex-direction: column; gap: var(--sp-1); margin-bottom: 6px; }
-.field-inline { flex-direction: row; align-items: center; justify-content: space-between; }
-.field label {
-  font-family: var(--font-mono); font-size: 11px; letter-spacing: .1em;
-  text-transform: uppercase; color: var(--ink-2);
-}
-.field input[type="text"], .field input[type="password"] {
-  font-family: var(--font-mono); font-size: 13px; color: var(--ink);
-  background: var(--surface); border: 1px solid var(--line-2);
-  border-radius: var(--r-sm); padding: 7px 10px; width: 100%;
-}
-.note.error { color: var(--danger); }
-.note a { color: var(--teal-ink); }
-.picker-row { display: flex; justify-content: space-between; gap: var(--sp-2); }
-.picker-item {
-  display: flex; flex-direction: column; align-items: center; gap: var(--sp-1);
-  font-size: 12px; color: var(--ink-2); text-align: center; cursor: pointer;
-}
-
-/* Round color pickers — hide the native square-in-frame look */
-input[type="color"] {
-  -webkit-appearance: none; appearance: none;
-  width: 30px; height: 30px; padding: 0; border: 2px solid var(--line-2);
-  border-radius: 50%; background: none; cursor: pointer; overflow: hidden; flex: none;
-}
-input[type="color"]::-webkit-color-swatch-wrapper { padding: 0; }
-input[type="color"]::-webkit-color-swatch { border: none; border-radius: 50%; }
-input[type="color"]::-moz-color-swatch { border: none; border-radius: 50%; }
-input[type="color"]:hover { border-color: var(--marigold); }
-
-/* Font chooser with live previews */
-.font-chooser { position: relative; }
-.font-current {
-  width: 100%; display: flex; justify-content: space-between; align-items: center;
-  background: var(--surface); border: 1px solid var(--line-2); border-radius: var(--r-sm);
-  padding: 6px 10px; font-size: 14px; color: var(--ink);
-}
-.font-current .caret { color: var(--ink-3); font-size: 11px; }
-.font-menu {
-  position: absolute; z-index: 30; top: calc(100% + 4px); left: 0; right: 0;
-  max-height: 300px; overflow-y: auto;
-  background: var(--surface); border: 1px solid var(--line-2);
-  border-radius: var(--r-md); box-shadow: var(--shadow-md); padding: 4px;
-}
-.font-option {
-  display: block; width: 100%; text-align: left; border: 0; background: none;
-  padding: 7px 10px; font-size: 16px; color: var(--ink); border-radius: var(--r-xs);
-}
-.font-option:hover { background: var(--paper-2); }
-.font-custom { border-top: 1px solid var(--line); margin-top: 4px; padding: 6px; }
-.font-custom input {
-  width: 100%; font-family: var(--font-mono); font-size: 12px; color: var(--ink);
-  padding: 6px 8px; border: 1px solid var(--line-2); border-radius: var(--r-xs);
-  background: var(--paper);
-}
-
-.btn {
-  display: inline-flex; align-items: center; justify-content: center; gap: var(--sp-2);
-  border: 0; border-radius: var(--r-pill); padding: 6px 16px; font-weight: 600; font-size: 13px;
-  transition: background .2s, transform .1s;
-}
-.btn:active { transform: scale(.97); }
-.btn-primary { background: var(--marigold); color: #FFFFFF; }
-.btn-primary:hover { background: var(--marigold-600); }
-.btn-primary:disabled { background: var(--line-2); color: var(--ink-3); cursor: not-allowed; }
-.btn-ghost { background: transparent; color: var(--ink-2); border: 1px solid var(--line-2); }
-.btn-ghost:hover { background: var(--paper-2); color: var(--ink); }
-.btn-block { width: 100%; }
-.btn-row { display: flex; gap: var(--sp-2); }
-.btn-row .btn { flex: 1; }
-.visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
-.note { font-size: 12px; color: var(--ink-3); margin: var(--sp-2) 0 0; }
-
-/* ─── Stage (deck preview, driven by --deck-* vars) ─── */
-.stage-wrap { flex: 1; display: flex; flex-direction: column; min-width: 0; position: relative; }
-.deck {
-  /* slides anchor to a fixed top offset so headings sit at the same height;
-     only the title slide stays vertically centered */
-  flex: 1; display: grid; place-items: start center; padding: 14vh 3vw 3vh; overflow: hidden;
-  position: relative;
-  background: var(--deck-bg);
-  --deck-fg-soft:   color-mix(in srgb, var(--deck-fg) 74%, var(--deck-bg));
-  --deck-fg-faint:  color-mix(in srgb, var(--deck-fg) 45%, var(--deck-bg));
-  --deck-line:      color-mix(in srgb, var(--deck-fg) 16%, var(--deck-bg));
-  --deck-wash:      color-mix(in srgb, var(--deck-fg) 7%, var(--deck-bg));
-  --deck-accent-soft: color-mix(in srgb, var(--deck-accent) 18%, var(--deck-bg));
-}
-.deck-bar {
-  position: absolute; top: 0; left: 0; height: 4px; width: 0%;
-  background: var(--deck-accent); transition: width 450ms cubic-bezier(.2,.6,.2,1); z-index: 5;
-}
-.deck-logo {
-  position: absolute; top: calc(4px + 2.2vh); right: 2.5vw; z-index: 4;
-  height: clamp(30px, 3.4vh + 1.5vw, 76px); width: auto; opacity: .92;
-}
-.slide {
-  width: min(1500px, 92%); max-height: 100%; overflow: auto;
-  font-size: clamp(14px, 1.35vw + 0.8vh, 40px);
-  font-family: var(--deck-body-font); color: var(--deck-fg);
-}
-.slide h1 {
-  font-family: var(--deck-heading-font); font-weight: 800;
-  font-size: 3em; line-height: 1.06; letter-spacing: -0.015em; margin: 0 0 .35em;
-  color: var(--deck-fg);
-}
-.slide h2 {
-  font-family: var(--deck-heading-font); font-weight: 700; font-size: 2.1em;
-  line-height: 1.12; letter-spacing: -0.01em; margin: 0 0 .6em; color: var(--deck-fg);
-}
-.slide h3 { font-family: var(--deck-heading-font); font-weight: 700; font-size: 1.35em; margin: 1em 0 .5em; color: var(--deck-fg); }
-.slide p, .slide li { font-size: 1em; line-height: 1.55; color: var(--deck-fg-soft); }
-.slide p { margin: 0 0 .6em; }
-.slide li { margin-bottom: .45em; }
-.slide li::marker { color: var(--deck-accent); }
-.slide strong { color: var(--deck-fg); font-weight: 700; }
-.slide em { color: var(--deck-fg); }
-.slide a { color: var(--deck-accent); }
-/* Mono rules for presenting code — required by the style contract */
-.slide code {
-  font-family: var(--font-mono); font-size: .9em; color: var(--deck-fg);
-  background: var(--deck-wash); padding: .1em .4em; border-radius: var(--r-xs);
-}
-.slide pre {
-  font-family: var(--font-mono);
-  background: var(--deck-wash); border: 1px solid var(--deck-line);
-  border-radius: var(--r-md); padding: .8em; overflow-x: auto; font-size: .8em; line-height: 1.5;
-}
-.slide pre code { background: none; padding: 0; font-size: 1em; }
-.slide blockquote {
-  margin: .9em 0; padding: .6em 1em;
-  border-left: .18em solid var(--deck-accent); background: var(--deck-accent-soft);
-  border-radius: 0 var(--r-md) var(--r-md) 0; color: var(--deck-fg);
-}
-.slide blockquote p { color: inherit; margin: 0; }
-.slide table { border-collapse: collapse; width: 100%; font-size: .92em; }
-.slide th {
-  font-family: var(--font-mono); font-size: .6em; letter-spacing: .08em;
-  text-transform: uppercase; text-align: left; color: var(--deck-fg-faint);
-  border-bottom: 2px solid var(--deck-line); padding: .5em .7em;
-}
-.slide td { border-bottom: 1px solid var(--deck-line); padding: .55em .7em; color: var(--deck-fg-soft); }
-.slide--title { text-align: center; align-self: center; }
-.slide--title h1 { font-size: 3.5em; }
-.slide--title p { font-size: 1.3em; }
-
-/* ─── Editing: deck letterboxes a fixed 16:9 frame that scales to fit ───
-   .slide-frame is inert (display: contents) unless the editor is open,
-   so editor-closed geometry is untouched. cq units measure the deck's
-   content box, so the existing deck padding is respected. Desktop only;
-   in present mode the deck reverts to full-bleed. */
-.slide-frame { display: contents; }
-@media (min-width: 769px) {
-  body:not(.presenting) .workbench.editing .deck { container-type: size; }
-  body:not(.presenting) .workbench.editing .slide-frame {
-    display: grid; place-items: start center;
-    width: min(100cqw, 177.78cqh); aspect-ratio: 16 / 9;
-    container-type: size;
-  }
-  body:not(.presenting) .workbench.editing .slide {
-    font-size: clamp(14px, 1.35cqw + 0.8cqh, 40px);
-  }
-}
-
-.editor-panel {
-  flex: none; width: var(--editor-w, min(440px, 34vw)); border-left: 1px solid var(--line);
-  background: var(--paper-2); padding: var(--sp-3); display: flex; flex-direction: column; min-height: 0;
-}
-.editor-head { display: flex; justify-content: flex-end; margin-bottom: var(--sp-2); }
-.editor-close {
-  width: 24px; height: 24px; padding: 0; flex: none;
-  display: inline-flex; align-items: center; justify-content: center;
-  font-size: 12px; line-height: 1; border: 0; border-radius: 6px;
-  background: transparent; color: inherit; opacity: .65; cursor: pointer;
-}
-.editor-close:hover { opacity: 1; background: color-mix(in srgb, var(--border) 60%, transparent); }
-.editor-panel textarea {
-  flex: 1; width: auto; height: auto; resize: none;
-  font-family: var(--font-mono); font-size: 13px; line-height: 1.55; color: var(--ink);
-  background: var(--surface); border: 1px solid var(--line-2);
-  border-radius: var(--r-sm); padding: var(--sp-3); min-width: 0;
-}
-
-.deck-footer {
-  flex: none; display: flex; align-items: center; gap: var(--sp-4);
-  padding: var(--sp-2) var(--sp-5); border-top: 1px solid var(--line);
-  color: var(--ink-3); font-size: 12px; background: var(--paper);
-}
-.deck-footer .nav-btns { display: flex; gap: var(--sp-2); }
-.deck-footer .spacer { flex: 1; }
-.deck-counter { font-family: var(--font-mono); }
-.deck-footer .hints { display: flex; gap: var(--sp-4); }
-.deck-footer .hints span { display: inline-flex; align-items: center; gap: var(--sp-1); }
-
-/* ─── Fullscreen presentation mode ─── */
-body.presenting .chrome, body.presenting .panel, body.presenting .editor-panel { display: none; }
-body.presenting .deck-footer { border-top: 0; position: absolute; bottom: 0; left: 0; right: 0; background: transparent; }
-
-@media (max-width: 768px) {
-  body { overflow: auto; }
-  .workbench { flex-direction: column; }
-  .panel { width: 100%; border-right: 0; border-bottom: 1px solid var(--line); }
-  .deck { min-height: 55vh; }
-  .deck-footer .hints { display: none; }
-  .editor-panel { position: fixed; right: 0; top: 0; bottom: 0; width: min(440px, 92vw); z-index: 30; box-shadow: -8px 0 24px rgba(33,30,26,.2); }
-}
-</style>
-</head>
-<body>
-
-<header class="chrome">
-  <img id="chromeLogo" alt="" aria-hidden="true">
-  <div class="wordmark">doc2slide</div>
-  <div class="spacer"></div>
-  <div class="lang-toggle" role="group" aria-label="Język interfejsu / UI language">
-    <button id="langPl" aria-pressed="true">PL</button>
-    <button id="langEn" aria-pressed="false">EN</button>
-  </div>
-</header>
-
-<div class="workbench">
-  <aside class="panel">
-    <section>
-      <h2 data-i18n="templates"></h2>
-      <div class="preset-grid" id="presetGrid" role="group"></div>
-    </section>
-
-    <section>
-      <h2 data-i18n="fonts"></h2>
-      <div class="field">
-        <label data-i18n="headingFont"></label>
-        <div class="font-chooser" id="headingChooser"></div>
-      </div>
-      <div class="field">
-        <label data-i18n="bodyFont"></label>
-        <div class="font-chooser" id="bodyChooser"></div>
-      </div>
-    </section>
-
-    <section>
-      <h2 data-i18n="colors"></h2>
-      <div class="picker-row">
-        <label class="picker-item">
-          <input type="color" id="accentColor" />
-          <span data-i18n="accentColor"></span>
-        </label>
-        <label class="picker-item">
-          <input type="color" id="fgColor" />
-          <span data-i18n="fontColor"></span>
-        </label>
-        <label class="picker-item">
-          <input type="color" id="bgColor" />
-          <span data-i18n="bgColor"></span>
-        </label>
-      </div>
-    </section>
-
-    <section>
-      <h2 data-i18n="logo"></h2>
-      <input type="file" id="logoInput" class="visually-hidden" accept="image/png,image/jpeg,image/svg+xml,image/webp" />
-      <div class="btn-row">
-        <button class="btn btn-ghost" id="logoBtn" data-i18n="uploadLogo"></button>
-        <button class="btn btn-ghost" id="logoClear" data-i18n="removeLogo"></button>
-      </div>
-    </section>
-
-    <section>
-      <h2 data-i18n="deck"></h2>
-      <input type="file" id="mdInput" class="visually-hidden" accept=".txt,.md,.markdown,.pdf" />
-      <div class="btn-row">
-        <button class="btn btn-ghost" id="mdBtn" data-i18n="loadDoc"></button>
-        <button class="btn btn-ghost" id="resetBtn" data-i18n="reset"></button>
-      </div>
-      <p class="note hidden" id="fileNote"></p>
-    </section>
-
-    <section>
-      <h2 data-i18n="aiSectionTitle"></h2>
-      <div class="field">
-        <button id="aiChip"></button>
-      </div>
-      <div class="field field-inline">
-        <label id="slideLangLabel" data-i18n="slideLangLabel"></label>
-        <div class="lang-toggle" role="group" aria-labelledby="slideLangLabel">
-          <button id="slideLangPl" aria-pressed="false">PL</button>
-          <button id="slideLangEn" aria-pressed="false">EN</button>
-          <button id="slideLangAuto" aria-pressed="true">Auto</button>
-        </div>
-      </div>
-      <button class="btn btn-primary btn-block" id="generateBtn" disabled data-i18n="generate"></button>
-      <p class="note hidden" id="genNote" role="status"></p>
-    </section>
-
-    <button class="btn btn-primary btn-block" id="presentBtn" data-i18n="present"></button>
-    <button class="btn btn-ghost btn-block" id="pptxBtn" data-i18n="downloadPptx"></button>
-  </aside>
-
-  <main class="stage-wrap">
-    <div class="deck" id="deck">
-      <div class="deck-bar" id="deckBar" aria-hidden="true"></div>
-      <img class="deck-logo" id="deckLogo" alt="" aria-hidden="true">
-      <div class="slide-frame"><div class="slide" id="stage" aria-live="polite"></div></div>
-    </div>
-    <div class="deck-footer">
-      <div class="nav-btns">
-        <button class="btn btn-ghost" id="prevBtn" aria-label="previous">←</button>
-        <button class="btn btn-ghost" id="nextBtn" aria-label="next">→</button>
-      </div>
-      <div class="deck-counter" id="deckCounter"></div>
-      <button class="btn btn-ghost" id="editToggle" data-i18n="editMd"></button>
-      <div class="spacer"></div>
-      <div class="hints">
-        <span><kbd>←</kbd><kbd>→</kbd> <span data-i18n="hintNav"></span></span>
-        <span><kbd>Esc</kbd> <span data-i18n="hintEsc"></span></span>
-      </div>
-    </div>
-  </main>
-  <div class="editor-panel hidden" id="editorDrawer">
-    <div class="editor-head"><button class="editor-close" id="editorCloseBtn" aria-label="close">✕</button></div>
-    <textarea id="mdEditor" spellcheck="false"></textarea>
-  </div>
-</div>
-
-<script src="https://cdn.jsdelivr.net/npm/marked@18.0.5/lib/marked.umd.js"
+<script defer src="https://cdn.jsdelivr.net/npm/marked@18.0.5/lib/marked.umd.js"
         integrity="sha384-ZD0fTOwPMHi7zM6WTVIWJR21I07lq0ccnqz3J6WMvQKG9thh4y7TA1QE6PJu0Af8" crossorigin="anonymous"></script>
-<script src="https://cdn.jsdelivr.net/npm/dompurify@3.0.11/dist/purify.min.js"
+<script defer src="https://cdn.jsdelivr.net/npm/dompurify@3.0.11/dist/purify.min.js"
         integrity="sha384-Ic7KEGROu37YaruU6NyiYeib7UhjFyDZQ5fzBAji965L75T/4LGk5nzwMEjNGexs" crossorigin="anonymous"></script>
-<script src="ai-models.js"></script>
-<script src="shared.js"></script>
-<script src="deck-model.js"></script>
+<script defer src="ai-models.js"></script>
+<script defer src="shared.js"></script>
+<script defer src="deck-model.js"></script>
 <script src="edulab-logo.js"></script>
 <script src="favicon.js"></script>
+<link rel="stylesheet" href="deck-base.css">
+<link rel="stylesheet" href="theme-edulab.css">
+<link rel="stylesheet" href="theme-illustrated.css">
+</head>
+<body>
 <script>
-// ─── Constants (LS_* etc. come from ../shared.js) ───
-const LS_CONFIG = "styler_config";
+window.APP_BRAND = {
+  logo: window.EDULAB_LOGO,
+  wordmark: "doc2slide",
+  tag: null,
+  presentBrand: "edulab",
+  title: { pl: "doc2slide", en: "doc2slide" },
+  presetKey: "eduapp_preset_index",
+  editorWKey: "index.editorW",
+  pptx: { headingFont: "Raleway", bodyFont: "Raleway", monoFont: "DM Mono", company: "edulab" },
+  illustrations: true,
+  presets: [
+    { id: "kontrast", name: { pl: "Kontrast", en: "Contrast" }, bg: "#FFFFFF", fg: "#211E1A", accent: "#211E1A" },
+    { id: "papier",   name: { pl: "Papier",   en: "Paper" },    bg: "#FBF7F0", fg: "#211E1A", accent: "#E8920C" },
+    { id: "atrament", name: { pl: "Atrament", en: "Ink" },      bg: "#211E1A", fg: "#FBF7F0", accent: "#E8920C" },
+    { id: "morski",   name: { pl: "Morski",   en: "Teal" },     bg: "#FBF7F0", fg: "#211E1A", accent: "#0E8C7F" },
+  ],
+  exampleMd: {
+    pl: `# doc2slide
+Zamień dokument w gotową prezentację: tekst i ilustracje przygotuje AI, a Ty poprawisz je w edytorze.
+---
+## Jak to działa?
+- Wgraj materiał źródłowy w panelu **Dokument**
+- Dodaj własne instrukcje, które rozszerzą podstawowy prompt aplikacji
+- Ilustruj wybrane slajdy pojedynczo; wynik możesz usunąć lub wygenerować ponownie
+- Domyślny styl obrazu to czarno-biały kontur w estetyce Notion
+- Sprawdź wynik, popraw tekst i wybierz styl prezentacji
 
-const DEFAULT_LOGO = window.EDULAB_LOGO; // ../edulab-logo.js
+> Ten przewodnik możesz przeglądać przyciskami pod slajdem lub klawiszami ← i →.
+---
+## 1. Dodaj materiał
+- Wgraj plik **.txt**, **.md** lub **.pdf** w panelu **Dokument**
+- Możesz też wkleić tekst bezpośrednio pod polem wyboru pliku
+- Plik .md z separatorami \`---\` otworzy się od razu jako gotowa prezentacja
+- Limit pliku PDF wynosi 19 MB
+---
+## 2. Skonfiguruj model AI
+- Kliknij nazwę modelu w sekcji **Generowanie**
+- Tekst może przygotować Gemini, OpenAI albo Claude
+- Ilustracje korzystają z osobnego modelu GPT Image i wymagają klucza OpenAI
+- Klucz jest zapisany tylko w pamięci tej przeglądarki
 
-const PRESETS = [
-  { name: { pl: "Papier", en: "Paper" },
-    bg: "#FBF7F0", fg: "#211E1A", accent: "#E8920C",
-    heading: "Raleway", body: "Raleway" },
-  { name: { pl: "Atrament", en: "Ink" },
-    bg: "#211E1A", fg: "#FBF7F0", accent: "#E8920C",
-    heading: "Space Grotesk", body: "Work Sans" },
-  { name: { pl: "Żurnal", en: "Journal" },
-    bg: "#FFFFFF", fg: "#161412", accent: "#EF5B3F",
-    heading: "Playfair Display", body: "Lora" },
-  { name: { pl: "Pastel", en: "Pastel" },
-    bg: "#EAF4F2", fg: "#0A3B35", accent: "#0E8C7F",
-    heading: "Poppins", body: "Nunito" },
-];
+> Podczas generowania treść dokumentu jest wysyłana bezpośrednio do wybranego dostawcy AI.
+---
+## 3. Dopasuj sposób generowania
+- **Auto** zachowuje język dokumentu; możesz wymusić polski lub angielski
+- W polu **Dodatkowe instrukcje dla AI** opisz ton, odbiorców lub zakres prezentacji
+- Instrukcje uzupełniają zasady doc2slide, ale nie zastępują formatu slajdów
+---
+## 4. Dodaj ilustracje
+- Model obrazu wybierzesz w ustawieniach modelu AI; wskazówki do ilustracji wpiszesz w panelu
+- Przejdź do wybranego slajdu treści i kliknij **Ilustruj ten slajd** pod podglądem
+- Każdą ilustrację generujesz osobno; możesz ją usunąć albo wygenerować ponownie
+- Domyślnie powstaje czarno-biały obraz konturowy w stylu Notion
+- Ilustracje są generowane bez napisów, logo i elementów interfejsu
+- Generowanie obrazów zwiększa czas oraz koszt wywołań API
+---
+## 5. Sprawdź i popraw treść
+- Przejrzyj slajdy i upewnij się, że nie brakuje ważnych informacji
+- Kliknij **Edytuj**, aby otworzyć tekst prezentacji po prawej stronie
+- Zmiany widać na bieżąco; slajdy rozdziela osobna linia \`---\`
+- Zweryfikuj tekst i obrazy wygenerowane przez AI przed udostępnieniem
+---
+## 6. Wybierz styl i prezentuj
+- W sekcji **Styl** jednym kliknięciem zmienisz wygląd całej prezentacji
+- Wybrany styl zostanie użyty także w pliku PowerPoint
+- Kliknij **Prezentuj**, aby uruchomić tryb prezentacji
 
-const SAMPLE_MD = `# doc2slide
-Przewodnik po projektowaniu wyglądu i tworzeniu prezentacji.
+| Klawisz | Działanie |
+|---------|-----------|
+| → | następny slajd |
+| ← | poprzedni slajd |
+| Esc | powrót do edycji |
 ---
-## Studio stylów doc2slide
-- Wybierz szablon, który jest najbliższy oczekiwanemu efektowi
-- Dopasuj kroje pisma, kolory i logo w panelu po lewej stronie
-- Obserwuj zmiany bezpośrednio na tej przykładowej prezentacji
-- Ustawienia są zapisywane w pamięci przeglądarki
----
-## 1. Wybierz szablon i kolory
-- Szablony **Papier**, **Atrament**, **Żurnal** i **Pastel** stanowią dobry punkt wyjścia
-- Kliknięcie szablonu przywraca jego domyślne kroje pisma i kolory
-- Trzy próbki pozwalają ustawić akcent, kolor tekstu i kolor tła
-- Kolory cytatów, linii i bloków kodu dopasują się automatycznie
+## 7. Zapisz swoją pracę
+- **Pobierz html** zapisuje samodzielną prezentację do otwarcia w przeglądarce
+- **Pobierz .pptx** tworzy edytowalną prezentację PowerPoint razem z ilustracjami
+- Przed udostępnieniem sprawdź układ, fakty i dane wygenerowane przez AI
 
-> Wskazówka: zadbaj o wyraźny kontrast tekstu względem tła.
+Gotowe – wgraj własny dokument w panelu po lewej stronie.`,
+    en: `# doc2slide
+Turn a document into a finished deck: AI writes the slides and the illustrations, you refine them in the editor.
 ---
-## 2. Dobierz kroje pisma
-- Nagłówki i tekst główny mogą używać różnych krojów Google Fonts
-- Lista pokazuje podgląd każdego dostępnego kroju
-- Możesz też wpisać nazwę dowolnego kroju z fonts.google.com
-- Dla czytelności wybierz najwyżej dwa kroje i unikaj zbyt cienkich odmian
+## How it works
+- Upload a source document or paste text
+- Add your own instructions on top of the built-in slide prompt
+- Illustrate selected slides one at a time, then remove or regenerate the result
+- Images default to black-and-white contours in the style of Notion
+- Review the result, edit the text, and pick a style
 ---
-## 3. Dodaj logo
-- **Wgraj logo** umieszcza znak w prawym górnym rogu każdego slajdu
-- Najlepiej sprawdzi się plik PNG lub SVG z przezroczystym tłem
-- Przycisk **Usuń** ukrywa logo, a **Przywróć demo** przywraca ustawienia początkowe
+## Load your material
+- Upload a .txt, .md, or .pdf file in the **Document** panel
+- You can also paste text below the file control
+- A ready-made .md deck opens immediately without AI
 ---
-## 4. Wgraj lub utwórz prezentację
-- **Wgraj dokument** otwiera pliki .md, .txt i .pdf
-- Gotowy plik .md z separatorami \`---\` pojawi się od razu jako prezentacja
-- Dla pliku .txt lub .pdf wybierz model AI, dodaj klucz API i kliknij **Generuj slajdy**
-- Podczas generowania dokument jest wysyłany bezpośrednio do wybranego dostawcy AI
----
-## 5. Popraw treść
-- **Edytuj markdown** otwiera panel z tekstem prezentacji
-- Zmiany widać na slajdzie na bieżąco
-- Każdy slajd oddziel osobną linią \`---\`
+## Configure the models
+- Gemini, OpenAI, or Claude can generate the slide text
+- GPT Image models generate illustrations and require an OpenAI key
+- Keys are stored only in this browser
 
-\`\`\`markdown
-## Nagłówek slajdu
-- punkt listy i **ważne pojęcie**
-\`\`\`
+> During generation, document content is sent directly to the selected AI providers.
 ---
-## 6. Prezentuj i eksportuj
-| Element | Jak |
-|---------|-----|
-| Zmiana slajdu | przyciski → / ← |
-| Tryb pełnoekranowy | **Prezentuj**; wyjście: Esc |
-| Edytowalny PowerPoint | **Pobierz .pptx** |
+## Add your instructions
+- Choose the output language for the deck
+- Describe the audience, tone, emphasis, or examples in **Additional AI instructions**
+- Your instructions extend the built-in doc2slide format rules
 ---
-## Dobra prezentacja przed eksportem
-- Sprawdź kontrast, wielkość tekstu i długość punktów
-- Upewnij się, że każdy slajd przekazuje jedną główną myśl
-- Zweryfikuj fakty i dane przygotowane przez AI
-- Przejrzyj całość w trybie prezentacji, a następnie pobierz plik .pptx`;
-
-// ─── Translations (T + t) ───────────────────────
-const T = {
-  pl: {
-    appTitle: "doc2slide",
-    templates: "Szablony",
-    fonts: "Fonty (Google Fonts)",
-    headingFont: "Nagłówki",
-    bodyFont: "Tekst",
-    customFontPh: "dowolny font Google…",
-    colors: "Kolory",
-    accentColor: "akcent",
-    fontColor: "kolor tekstu",
-    bgColor: "kolor tła",
-    logo: "Logo",
-    uploadLogo: "Wgraj logo",
-    removeLogo: "Usuń",
-    deck: "Prezentacja",
-    loadDoc: "Wgraj dokument",
-    reset: "Przywróć demo",
-    present: "Prezentuj (pełny ekran)",
-    downloadPptx: "Pobierz .pptx",
-    errPptx: "Eksport PPTX nie powiódł się",
-    hintNav: "slajdy",
-    hintEsc: "wyjście",
-    editMd: "Edytuj markdown",
-    aiSectionTitle: "Model AI",
-    slideLangLabel: "Język slajdów",
-    generate: "Generuj slajdy",
-    cancelGeneration: "Anuluj generowanie",
-    fileLoaded: "wgrano",
-    genSending: "Wysyłam dokument…",
-    genWaiting: "Generuję slajdy…",
-    genDone: "Gotowe - slajdy wygenerowane.",
-    errNoKey: "Wklej klucz API dostawcy {provider} w ustawieniach modelu (kliknij wskaźnik). Wygenerujesz go na {url}.",
-    errFileType: "Obsługiwane formaty: .txt, .md, .pdf",
-    errTooBig: "Plik jest za duży (limit: PDF 19 MB, tekst 2 MB).",
-    errEmpty: "Model zwrócił pustą odpowiedź. Spróbuj ponownie.",
-    errNetwork: "Nie udało się połączyć z {host}. Sprawdź połączenie, rozszerzenia przeglądarki lub zaporę sieciową i spróbuj ponownie.",
-  },
-  en: {
-    appTitle: "doc2slide",
-    templates: "Templates",
-    fonts: "Fonts (Google Fonts)",
-    headingFont: "Headings",
-    bodyFont: "Body",
-    customFontPh: "any Google Font…",
-    colors: "Colors",
-    accentColor: "accent",
-    fontColor: "font color",
-    bgColor: "background color",
-    logo: "Logo",
-    uploadLogo: "Upload logo",
-    removeLogo: "Remove",
-    deck: "Deck",
-    loadDoc: "Load document",
-    reset: "Reset demo",
-    present: "Present (fullscreen)",
-    downloadPptx: "Download .pptx",
-    errPptx: "PPTX export failed",
-    hintNav: "slides",
-    hintEsc: "exit",
-    editMd: "Edit markdown",
-    aiSectionTitle: "AI model",
-    slideLangLabel: "Slide language",
-    generate: "Generate slides",
-    cancelGeneration: "Cancel generation",
-    fileLoaded: "loaded",
-    genSending: "Sending the document…",
-    genWaiting: "Generating slides…",
-    genDone: "Done - slides generated.",
-    errNoKey: "Paste your {provider} API key in the model settings (click the chip). Generate one at {url}.",
-    errFileType: "Supported formats: .txt, .md, .pdf",
-    errTooBig: "File too large (limits: PDF 19 MB, text 2 MB).",
-    errEmpty: "The model returned an empty response. Try again.",
-    errNetwork: "Could not connect to {host}. Check your connection, browser extensions, or network firewall and try again.",
+## Generate illustrations
+- Pick the image model in the AI model dialog; add illustration direction in the panel
+- Open a content slide and click **Illustrate this slide** below the preview
+- Each illustration is generated separately and can be removed or regenerated
+- The default output is a black-and-white contour image in the style of Notion
+- Image generation adds API cost and may take longer
+---
+## Review and edit
+- The **Edit** button opens a markdown editor to the right of the slide
+- Changes render live; slides are separated by a \`---\` line
+- Verify both text and AI-generated imagery before sharing
+---
+## Present and export
+| Key | Action |
+|-----|--------|
+| → | next slide |
+| ← | previous slide |
+| Esc | back to editing |
+---
+## Save your work
+- **Download HTML** - save a standalone presentation that opens in a browser
+- **Download .pptx** - editable PowerPoint with generated illustrations
+- Happy presenting!`,
   },
 };
-let uiLang = localStorage.getItem(LS_LANG) ?? "pl";
-function t(key) { return T[uiLang][key] ?? key; }
-
-// ─── State ──────────────────────────────────────
-const state = {
-  md: SAMPLE_MD,
-  slides: [],
-  deckModel: { slides: [], warnings: [], stats: {} },
-  current: 0,
-  source: null,       // {name, kind:"text"|"pdf", text?, base64?} — for the AI request
-  slideLang: "auto",
-  generating: false,
-  generationController: null,
-  config: {           // the user's style playground settings
-    preset: 0,
-    heading: null,    // Google Font name overrides (null = preset's font)
-    body: null,
-    fg: null,         // color overrides (null = preset's color)
-    bg: null,
-    accent: null,     // accent override (null = preset's accent)
-    logo: null,       // data URI override (null = edulab horse, "" = removed)
-  },
-};
-
-const FONT_CHOICES = [
-  "Raleway", "Inter", "Lato", "Montserrat", "Poppins", "Roboto",
-  "Work Sans", "Nunito", "Space Grotesk", "Fira Sans", "Source Sans 3",
-  "Playfair Display", "Lora", "Merriweather", "DM Serif Display", "Caveat",
-];
-
-// ─── DOM refs ───────────────────────────────────
-const $ = id => document.getElementById(id);
-const deckEl = $("deck"), stageEl = $("stage"), deckBarEl = $("deckBar"),
-  deckLogoEl = $("deckLogo"), deckCounterEl = $("deckCounter"),
-  presetGridEl = $("presetGrid"), fgColorEl = $("fgColor"), bgColorEl = $("bgColor"),
-  logoInputEl = $("logoInput"), mdInputEl = $("mdInput");
-
-// ─── Helpers (pure helpers come from ../shared.js) ───
-const loadedFonts = new Set();
-function loadGoogleFont(name) {
-  if (!name || loadedFonts.has(name)) return;
-  loadedFonts.add(name);
-  const link = document.createElement("link");
-  link.rel = "stylesheet";
-  link.href = `https://fonts.googleapis.com/css2?family=${name.trim().replace(/\s+/g, "+")}:wght@400;500;600;700;800&display=swap`;
-  document.head.appendChild(link);
-}
-
-function saveConfig() { localStorage.setItem(LS_CONFIG, JSON.stringify(state.config)); }
-
-// ─── Render functions ───────────────────────────
-function effective() {
-  const p = PRESETS[state.config.preset] ?? PRESETS[0];
-  return {
-    bg: state.config.bg ?? p.bg,
-    fg: state.config.fg ?? p.fg,
-    accent: state.config.accent ?? p.accent,
-    heading: state.config.heading ?? p.heading,
-    body: state.config.body ?? p.body,
-    logo: state.config.logo === null ? DEFAULT_LOGO : state.config.logo,
-  };
-}
-
-function applyStyle() {
-  const e = effective();
-  loadGoogleFont(e.heading);
-  loadGoogleFont(e.body);
-  deckEl.style.setProperty("--deck-bg", e.bg);
-  deckEl.style.setProperty("--deck-fg", e.fg);
-  deckEl.style.setProperty("--deck-accent", e.accent);
-  deckEl.style.setProperty("--deck-heading-font", `'${e.heading}', sans-serif`);
-  deckEl.style.setProperty("--deck-body-font", `'${e.body}', sans-serif`);
-  deckLogoEl.classList.toggle("hidden", !e.logo);
-  if (e.logo) deckLogoEl.src = e.logo;
-  // the default ink-colored horse vanishes on dark decks — invert it there;
-  // never filter a user-uploaded logo
-  const [r, g, b] = [1, 3, 5].map(i => parseInt(e.bg.slice(i, i + 2), 16));
-  const dark = (0.2126 * r + 0.7152 * g + 0.0722 * b) < 128;
-  deckLogoEl.style.filter = (dark && e.logo === DEFAULT_LOGO) ? "invert(1)" : "";
-  // reflect state into controls
-  fgColorEl.value = e.fg;
-  bgColorEl.value = e.bg;
-  document.querySelectorAll(".preset").forEach((b, i) =>
-    b.setAttribute("aria-pressed", String(i === state.config.preset)));
-  accentPickerEl.value = e.accent;
-  updateChooserLabels();
-}
-
-// Parsed slide HTML is memoized per segment string: during streaming and
-// editing only the changed segment pays the marked+DOMPurify cost.
-const slideHtmlCache = new Map();
-const SLIDE_CACHE_LIMIT = 500;
-function slideHtml(segment) {
-  if (slideHtmlCache.has(segment)) {
-    const cached = slideHtmlCache.get(segment);
-    slideHtmlCache.delete(segment);
-    slideHtmlCache.set(segment, cached);
-    return cached;
-  }
-  const html = DOMPurify.sanitize(marked.parse(segment));
-  slideHtmlCache.set(segment, html);
-  if (slideHtmlCache.size > SLIDE_CACHE_LIMIT) {
-    slideHtmlCache.delete(slideHtmlCache.keys().next().value);
-  }
-  return html;
-}
-function renderSlides() {
-  const segments = splitSlides(stripOuterFence(state.md));
-  state.deckModel = DeckModel.create(segments, { marked });
-  state.slides = segments.map(slideHtml);
-  state.current = Math.min(state.current, state.slides.length - 1);
-  showSlide(state.current);
-}
-
-function showSlide(i) {
-  const n = state.slides.length;
-  state.current = Math.max(0, Math.min(i, n - 1));
-  const semanticSlide = state.deckModel.slides[state.current];
-  stageEl.className = "slide" + (semanticSlide?.type === "title" ? " slide--title" : "");
-  stageEl.dataset.slideType = semanticSlide?.type ?? "content";
-  stageEl.dataset.warningCount = String(semanticSlide?.warnings?.length ?? 0);
-  stageEl.innerHTML = state.slides[state.current];
-  deckBarEl.style.width = `${((state.current + 1) / n) * 100}%`;
-  deckCounterEl.textContent = `${state.current + 1} / ${n}`;
-}
-
-function renderChromeText() {
-  document.documentElement.lang = uiLang;
-  document.title = t("appTitle");
-  $("langPl").setAttribute("aria-pressed", String(uiLang === "pl"));
-  $("langEn").setAttribute("aria-pressed", String(uiLang === "en"));
-  document.querySelectorAll("[data-i18n]").forEach(el => { el.textContent = t(el.dataset.i18n); });
-  document.querySelectorAll("[data-i18n-placeholder]").forEach(el => { el.placeholder = t(el.dataset.i18nPlaceholder); });
-  document.querySelectorAll(".preset .name").forEach((el, i) => { el.textContent = PRESETS[i].name[uiLang]; });
-  aiSelector.refresh();
-}
-
-// ─── Event listeners ────────────────────────────
-$("langPl").addEventListener("click", () => { uiLang = "pl"; localStorage.setItem(LS_LANG, "pl"); renderChromeText(); });
-$("langEn").addEventListener("click", () => { uiLang = "en"; localStorage.setItem(LS_LANG, "en"); renderChromeText(); });
-
-PRESETS.forEach((p, i) => {
-  const btn = document.createElement("button");
-  btn.className = "preset";
-  btn.innerHTML = `<div class="dots">
-      <span style="background:${p.bg}"></span>
-      <span style="background:${p.fg}"></span>
-      <span style="background:${p.accent}"></span>
-    </div><div class="name"></div>`;
-  btn.addEventListener("click", () => {
-    // picking a template resets the per-property overrides
-    state.config = { preset: i, heading: null, body: null, fg: null, bg: null, accent: null, logo: state.config.logo };
-    saveConfig(); applyStyle();
-  });
-  presetGridEl.appendChild(btn);
-});
-
-// ─── Font choosers (options preview their own typeface) ───
-let previewFontsLoaded = false;
-function ensurePreviewFonts() {
-  if (previewFontsLoaded) return;
-  previewFontsLoaded = true;
-  FONT_CHOICES.forEach(loadGoogleFont);
-}
-
-const chooserRegistry = [];
-function buildFontChooser(el, getName, setName) {
-  const btn = document.createElement("button");
-  btn.className = "font-current";
-  btn.innerHTML = `<span class="label"></span><span class="caret">▾</span>`;
-  const menu = document.createElement("div");
-  menu.className = "font-menu hidden";
-  FONT_CHOICES.forEach(name => {
-    const opt = document.createElement("button");
-    opt.className = "font-option";
-    opt.textContent = name;
-    opt.style.fontFamily = `'${name}', sans-serif`;
-    opt.addEventListener("click", () => { setName(name); closeAllChoosers(); });
-    menu.appendChild(opt);
-  });
-  const custom = document.createElement("div");
-  custom.className = "font-custom";
-  const customInput = document.createElement("input");
-  customInput.type = "text";
-  customInput.spellcheck = false;
-  customInput.dataset.i18nPlaceholder = "customFontPh";
-  customInput.addEventListener("keydown", e => {
-    if (e.key === "Enter" && customInput.value.trim()) {
-      setName(customInput.value.trim());
-      customInput.value = "";
-      closeAllChoosers();
-    }
-  });
-  custom.appendChild(customInput);
-  menu.appendChild(custom);
-  btn.addEventListener("click", e => {
-    e.stopPropagation();
-    const wasOpen = !menu.classList.contains("hidden");
-    closeAllChoosers();
-    if (!wasOpen) { ensurePreviewFonts(); menu.classList.remove("hidden"); }
-  });
-  el.append(btn, menu);
-  chooserRegistry.push({ btn, menu, getName });
-}
-function closeAllChoosers() {
-  chooserRegistry.forEach(c => c.menu.classList.add("hidden"));
-}
-function updateChooserLabels() {
-  chooserRegistry.forEach(c => {
-    const name = c.getName();
-    const label = c.btn.querySelector(".label");
-    label.textContent = name;
-    label.style.fontFamily = `'${name}', sans-serif`;
-  });
-}
-document.addEventListener("click", closeAllChoosers);
-
-buildFontChooser($("headingChooser"),
-  () => effective().heading,
-  name => { loadGoogleFont(name); state.config.heading = name; saveConfig(); applyStyle(); });
-buildFontChooser($("bodyChooser"),
-  () => effective().body,
-  name => { loadGoogleFont(name); state.config.body = name; saveConfig(); applyStyle(); });
-
-const accentPickerEl = $("accentColor");
-bindPicker(accentPickerEl, "accent", "--deck-accent");
-
-// While dragging a picker only the changed CSS var is written (derived
-// tones follow via color-mix); the full applyStyle + save runs on release.
-let saveTimer;
-function queueSave() { clearTimeout(saveTimer); saveTimer = setTimeout(saveConfig, 250); }
-function bindPicker(el, prop, cssVar) {
-  el.addEventListener("input", () => {
-    state.config[prop] = el.value;
-    deckEl.style.setProperty(cssVar, el.value);
-    queueSave();
-  });
-  el.addEventListener("change", () => { saveConfig(); applyStyle(); });
-}
-bindPicker(fgColorEl, "fg", "--deck-fg");
-bindPicker(bgColorEl, "bg", "--deck-bg");
-
-$("logoBtn").addEventListener("click", () => logoInputEl.click());
-logoInputEl.addEventListener("change", () => {
-  const file = logoInputEl.files[0];
-  if (!file) return;
-  const reader = new FileReader();
-  reader.onload = () => { state.config.logo = reader.result; saveConfig(); applyStyle(); };
-  reader.readAsDataURL(file);
-});
-$("logoClear").addEventListener("click", () => { state.config.logo = ""; saveConfig(); applyStyle(); });
-
-// ─── Markdown editor drawer ─────────────────────
-const editorDrawerEl = $("editorDrawer"), mdEditorEl = $("mdEditor");
-mountPanelResizer({ panel: editorDrawerEl, storageKey: "styler.editorW" });
-
-// Single entry point for markdown changes — keeps the drawer in sync.
-function setMd(md, slideIndex = 0, { fromEditor = false } = {}) {
-  state.md = md;
-  state.current = slideIndex;
-  if (!fromEditor && !editorDrawerEl.classList.contains("hidden")) mdEditorEl.value = md;
-  renderSlides();
-}
-
-function setEditorDrawerOpen(open) {
-  editorDrawerEl.classList.toggle("hidden", !open);
-  document.querySelector(".workbench").classList.toggle("editing", open);
-  if (open) {
-    mdEditorEl.value = state.md;
-    mdEditorEl.focus();
-  }
-}
-$("editToggle").addEventListener("click", () => setEditorDrawerOpen(editorDrawerEl.classList.contains("hidden")));
-$("editorCloseBtn").addEventListener("click", () => setEditorDrawerOpen(false));
-let editTimer;
-mdEditorEl.addEventListener("input", () => {
-  clearTimeout(editTimer);
-  editTimer = setTimeout(() => setMd(mdEditorEl.value, state.current, { fromEditor: true }), 300);
-});
-
-// ─── Document loading + AI generation (same logic as the main apps) ───
-const fileNoteEl = $("fileNote"), genNoteEl = $("genNote"),
-  generateBtnEl = $("generateBtn"),
-  slideLangPlBtn = $("slideLangPl"), slideLangEnBtn = $("slideLangEn"), slideLangAutoBtn = $("slideLangAuto");
-
-function note(el, msg, isError) {
-  el.textContent = msg;
-  el.classList.toggle("hidden", !msg);
-  el.classList.toggle("error", Boolean(isError));
-}
-function reflectSource() {
-  generateBtnEl.disabled = !state.source && !state.generating;
-  generateBtnEl.textContent = state.generating ? t("cancelGeneration") : t("generate");
-  generateBtnEl.setAttribute("aria-busy", String(state.generating));
-  note(fileNoteEl, state.source ? `✓ ${t("fileLoaded")}: ${state.source.name}` : "");
-  slideLangPlBtn.setAttribute("aria-pressed", String(state.slideLang === "pl"));
-  slideLangEnBtn.setAttribute("aria-pressed", String(state.slideLang === "en"));
-  slideLangAutoBtn.setAttribute("aria-pressed", String(state.slideLang === "auto"));
-}
-
-$("mdBtn").addEventListener("click", () => mdInputEl.click());
-mdInputEl.addEventListener("change", () => {
-  const file = mdInputEl.files[0];
-  if (!file) return;
-  note(genNoteEl, "");
-  readSourceFile(file).then(source => {
-    state.source = source;
-    if (source.kind === "text") {
-      // markdown that already contains slide delimiters previews immediately
-      if (splitSlides(source.text).length > 1) setMd(source.text);
-    }
-    reflectSource();
-  }).catch(err => {
-    note(genNoteEl, err.message === "size" ? t("errTooBig") : t("errFileType"), true);
-  });
-});
-$("resetBtn").addEventListener("click", () => {
-  state.source = null;
-  note(genNoteEl, ""); reflectSource(); setMd(SAMPLE_MD);
-});
-
-slideLangPlBtn.addEventListener("click", () => { state.slideLang = "pl"; reflectSource(); });
-slideLangEnBtn.addEventListener("click", () => { state.slideLang = "en"; reflectSource(); });
-slideLangAutoBtn.addEventListener("click", () => { state.slideLang = "auto"; reflectSource(); });
-
-// Streaming: slides appear in the styled deck as the AI writes them
-// (transport lives in ../shared.js; this function is only the UI reaction).
-async function generateSlidesFromSource() {
-  if (state.generating) {
-    state.generationController?.abort(new DOMException("Generation cancelled", "AbortError"));
-    return;
-  }
-  const ai = loadAiSettings();
-  const key = ai.keys[ai.provider]?.trim();
-  if (!key) {
-    const info = PROVIDER_INFO[ai.provider];
-    return note(genNoteEl,
-      t("errNoKey").replace("{provider}", info.label).replace("{url}", info.keyUrl.replace("https://", "")), true);
-  }
-  if (!state.source) return;
-
-  state.generating = true;
-  state.generationController = new AbortController();
-  reflectSource();
-  note(genNoteEl, t("genSending"));
-  let lastRender = 0;
-  try {
-    const acc = await streamSlides({
-      provider: ai.provider,
-      model: ai.model,
-      key,
-      source: state.source,
-      prompt: buildPrompt({ lang: state.slideLang }),
-      signal: state.generationController.signal,
-      onChunk(text) {
-        const now = Date.now();
-        if (now - lastRender > 400) {
-          lastRender = now;
-          setMd(text, Infinity); // Infinity clamps to the newest slide
-          note(genNoteEl, `${t("genWaiting")} (${state.slides.length})`);
-        }
-      },
-    });
-    if (!acc.trim()) throw new Error(t("errEmpty"));
-    setMd(stripOuterFence(acc.trim()));
-    note(genNoteEl, t("genDone"));
-  } catch (err) {
-    if (err?.name !== "AbortError") {
-      const detail = err?.code === "network_error"
-        ? t("errNetwork").replace("{host}", err.host || "API")
-        : String(err.message ?? err);
-      note(genNoteEl, detail, true);
-    } else {
-      note(genNoteEl, "");
-    }
-  } finally {
-    state.generating = false;
-    state.generationController = null;
-    reflectSource();
-  }
-}
-generateBtnEl.addEventListener("click", generateSlidesFromSource);
-
-// ─── PPTX export (deps lazy-loaded via ../shared.js) ───
-$("pptxBtn").addEventListener("click", async () => {
-  const btn = $("pptxBtn");
-  try {
-    btn.disabled = true;
-    await ensurePptxDeps("pptx-export.js");
-    const e = effective();
-    const monoFont = firstFont(getComputedStyle(document.documentElement).getPropertyValue("--font-mono"));
-    await exportDeckToPptx({
-      slidesMd: splitSlides(stripOuterFence(state.md)),
-      deck: state.deckModel,
-      theme: { bg: e.bg, fg: e.fg, accent: e.accent,
-               headingFont: e.heading, bodyFont: e.body, monoFont },
-      logo: e.logo || null,
-      language: uiLang,
-      fileName: (deckTitle(state.md) || "slides") + ".pptx",
-    });
-    note(genNoteEl, "");
-  } catch (err) {
-    note(genNoteEl, `${t("errPptx")}: ${err.message ?? err}`, true);
-  } finally {
-    btn.disabled = false;
-  }
-});
-
-$("prevBtn").addEventListener("click", () => showSlide(state.current - 1));
-$("nextBtn").addEventListener("click", () => showSlide(state.current + 1));
-$("presentBtn").addEventListener("click", () => {
-  document.body.classList.add("presenting");
-  document.documentElement.requestFullscreen?.().catch(() => {});
-});
-
-document.addEventListener("keydown", e => {
-  if (e.key === "Escape" && !editorDrawerEl.classList.contains("hidden") && !document.body.classList.contains("presenting") && !document.querySelector("dialog[open]")) {
-    e.preventDefault(); setEditorDrawerOpen(false); return;
-  }
-  if (/^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName)) return;
-  if (["ArrowRight", " ", "PageDown"].includes(e.key)) { e.preventDefault(); showSlide(state.current + 1); }
-  else if (["ArrowLeft", "PageUp"].includes(e.key)) { e.preventDefault(); showSlide(state.current - 1); }
-  else if (e.key === "Home") { e.preventDefault(); showSlide(0); }
-  else if (e.key === "End") { e.preventDefault(); showSlide(state.slides.length - 1); }
-  else if (e.key === "Escape") { document.body.classList.remove("presenting"); document.exitFullscreen?.().catch(() => {}); }
-});
-document.addEventListener("fullscreenchange", () => {
-  if (!document.fullscreenElement) document.body.classList.remove("presenting");
-});
-
-// ─── Init ───────────────────────────────────────
-$("chromeLogo").src = DEFAULT_LOGO;
-const aiSelector = mountAiSelector({ chip: $("aiChip"), getLang: () => uiLang });
-reflectSource();
-try {
-  const saved = JSON.parse(localStorage.getItem(LS_CONFIG));
-  if (saved && typeof saved === "object") Object.assign(state.config, saved);
-} catch { /* corrupt config — keep defaults */ }
-{
-  const params = new URLSearchParams(location.search);
-  if (["pl", "en"].includes(params.get("lang"))) { uiLang = params.get("lang"); localStorage.setItem(LS_LANG, uiLang); }
-  const preset = Number(params.get("preset"));
-  if (preset >= 1 && preset <= PRESETS.length) state.config.preset = preset - 1;
-}
-renderChromeText();
-applyStyle();
-renderSlides();
 </script>
+<script defer src="app.js"></script>
 </body>
 </html>
