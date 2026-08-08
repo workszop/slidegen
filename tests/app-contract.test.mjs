@@ -8,8 +8,8 @@ const read = file => readFile(new URL(file, ROOT), "utf8");
 test("deck-first shells load shared model and layered styles", async () => {
   const shells = {
     "index.html": ["deck-base.css", "theme-edulab.css", "theme-illustrated.css"],
-    "edu.html": ["deck-base.css", "theme-edulab.css"],
-    "quantica.html": ["deck-base.css", "theme-edulab.css", "theme-quantica.css"],
+    "edu.html": ["deck-base.css", "theme-edulab.css", "theme-illustrated.css"],
+    "quantica.html": ["deck-base.css", "theme-edulab.css", "theme-quantica.css", "theme-illustrated.css"],
   };
 
   for (const [file, styles] of Object.entries(shells)) {
@@ -54,6 +54,85 @@ test("the title slide carries no brand eyebrow in any output", async () => {
   const uses = app.split("\n").filter(line => line.includes("BRAND.presentBrand"));
   assert.deepEqual(uses.map(line => line.trim()),
     ["company: BRAND.pptx.company || BRAND.presentBrand,"]);
+});
+
+test("the deck font picker is slide-scoped and reaches every output", async () => {
+  const app = await read("app.js");
+  const base = await read("deck-base.css");
+  const edulab = await read("theme-edulab.css");
+
+  for (const font of ["Raleway", "Lato", "Poppins", "PT Serif"]) {
+    assert.ok(app.includes(`"${font}"`), `${font} is offered in the picker`);
+  }
+  // Slide-scoped tokens: the picker must not restyle the app chrome.
+  assert.match(base, /font-family: var\(--slide-body-font, var\(--font-sans\)\)/);
+  assert.match(edulab, /var\(--slide-heading-font, var\(--font-display\)\)/);
+  assert.match(app, /setProperty\("--slide-heading-font", stack\)/);
+  assert.match(app, /setProperty\("--slide-body-font", stack\)/);
+  // The choice has to survive into both exports.
+  assert.match(app, /"--slide-heading-font", "--slide-body-font"/,
+    "standalone HTML must inline the font tokens");
+  assert.match(app, /headingFont: activeFont/);
+  assert.match(app, /bodyFont: activeFont/);
+  // A stored or typed family is untrusted input before it reaches a URL.
+  assert.match(app, /const FONT_NAME = \/\^\[A-Za-z0-9\]/);
+  assert.match(app, /if \(!FONT_NAME\.test\(clean\)\) return false/);
+});
+
+test("side-panel groups fold from their section title", async () => {
+  const app = await read("app.js");
+  const base = await read("deck-base.css");
+  // One control per group: the title itself, no extra summary row.
+  const toggles = [...app.matchAll(/class="side-fold-toggle" data-fold="(\w+)"/g)].map(m => m[1]);
+  assert.deepEqual(toggles, ["styleFold", "genFold"]);
+  for (const id of toggles) assert.ok(app.includes(`id="${id}"`), `${id} body exists`);
+  // The always-visible parts stay outside the folds.
+  assert.ok(app.indexOf('id="presetGrid"') < app.indexOf('id="styleFold"'));
+  assert.ok(app.indexOf('id="genFold"') < app.indexOf('id="generateBtn"'));
+  assert.match(app, /toggle\.setAttribute\("aria-expanded", String\(open\)\)/);
+  assert.match(base, /\.side-fold-toggle\[aria-expanded="true"\]::after/);
+});
+
+test("every shell offers the same mechanics on its own visual identity", async () => {
+  const shells = ["index.html", "edu.html", "quantica.html"];
+  const brands = {};
+  for (const file of shells) {
+    const html = await read(file);
+    assert.match(html, /illustrations: true/, `${file} enables illustrations`);
+    assert.match(html, /href="theme-illustrated\.css"/, `${file} loads the illustration layer`);
+    brands[file] = {
+      presets: [...html.matchAll(/\{ id: "(\w+)"/g)].map(m => m[1]),
+      storage: [...html.matchAll(/(presetKey|editorWKey): "([^"]+)"/g)].map(m => m[2]),
+      pptx: /monoFont: "([^"]+)"/.exec(html)[1],
+    };
+  }
+  // Distinct identity: no shared palette, storage namespace, or type stack.
+  const seen = new Set();
+  for (const [file, brand] of Object.entries(brands)) {
+    assert.equal(brand.presets.length, 4, `${file} keeps four presets`);
+    for (const key of brand.storage) {
+      assert.ok(!seen.has(key), `${key} must not be shared between shells`);
+      seen.add(key);
+    }
+  }
+  assert.notDeepEqual(brands["quantica.html"].presets, brands["edu.html"].presets);
+  // Quantica runs a closed palette: white or black grounds only, and type
+  // and accents drawn from an agreed five.
+  const quanticaHtml = await read("quantica.html");
+  const presetLines = quanticaHtml.split("\n").filter(line => /\{ id: "\w+"/.test(line));
+  assert.equal(presetLines.length, 4);
+  const PALETTE = ["#FFFFFF", "#000000", "#111111", "#d20757", "#8A004C"];
+  for (const line of presetLines) {
+    assert.match(line, /bg: "(#FFFFFF|#000000)"/, `background off palette: ${line.trim()}`);
+    for (const key of ["fg", "accent"]) {
+      const value = new RegExp(`${key}: "(#[0-9A-Fa-f]{6})"`).exec(line)[1];
+      assert.ok(PALETTE.includes(value), `${key} off palette: ${value}`);
+    }
+  }
+  assert.notEqual(brands["quantica.html"].pptx, brands["edu.html"].pptx);
+  // Both slide-font layers route through the shared token.
+  const quantica = await read("theme-quantica.css");
+  assert.match(quantica, /var\(--slide-heading-font, var\(--font-slide\)\)/);
 });
 
 test("API key persistence contract remains browser-local", async () => {

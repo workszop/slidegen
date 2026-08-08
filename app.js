@@ -73,6 +73,8 @@
       sideGen: "Generowanie",
       sideStyle: "Styl",
       sideActions: "Akcje",
+      customFont: "Inna czcionka Google",
+      customFontPh: "np. Merriweather",
       edit: "Edytuj",
       additionalPrompt: "Dodatkowe instrukcje dla AI",
       additionalPromptPh: "np. użyj konkretnych przykładów i krótkich nagłówków",
@@ -117,6 +119,8 @@
       sideGen: "Generate",
       sideStyle: "Style",
       sideActions: "Actions",
+      customFont: "Another Google font",
+      customFontPh: "e.g. Merriweather",
       edit: "Edit",
       additionalPrompt: "Additional AI instructions",
       additionalPromptPh: "e.g. use concrete examples and short headings",
@@ -190,8 +194,17 @@
   <div class="workbench" id="view-workspace">
     <aside class="panel">
       <section class="side-section">
-        <h2 class="side-title" data-i18n="sideStyle"></h2>
+        <h2 class="side-title">
+          <button type="button" class="side-fold-toggle" data-fold="styleFold"
+                  aria-expanded="false" aria-controls="styleFold"><span data-i18n="sideStyle"></span></button>
+        </h2>
         <div class="preset-grid" id="presetGrid" role="group"></div>
+        <div class="side-fold-body hidden" id="styleFold">
+          <div class="font-grid" id="fontGrid" role="group"></div>
+          <label class="side-fold-label" for="customFont" data-i18n="customFont"></label>
+          <input id="customFont" class="mono-input" type="text" autocomplete="off"
+                 spellcheck="false" data-i18n-placeholder="customFontPh" />
+        </div>
       </section>
 
       <section class="side-section">
@@ -206,16 +219,21 @@
       </section>
 
       <section class="side-section">
-        <h2 class="side-title" data-i18n="sideGen"></h2>
+        <h2 class="side-title">
+          <button type="button" class="side-fold-toggle" data-fold="genFold"
+                  aria-expanded="false" aria-controls="genFold"><span data-i18n="sideGen"></span></button>
+        </h2>
         <button id="aiChip"></button>
-        <div class="side-row">
-          <div class="lang-toggle" role="group" aria-label="PL/EN/Auto">
-            <button id="slideLangPl" aria-pressed="false">PL</button>
-            <button id="slideLangEn" aria-pressed="false">EN</button>
-            <button id="slideLangAuto" aria-pressed="true">Auto</button>
+        <div class="side-fold-body hidden" id="genFold">
+          <div class="side-row">
+            <div class="lang-toggle" role="group" aria-label="PL/EN/Auto">
+              <button id="slideLangPl" aria-pressed="false">PL</button>
+              <button id="slideLangEn" aria-pressed="false">EN</button>
+              <button id="slideLangAuto" aria-pressed="true">Auto</button>
+            </div>
           </div>
+          ${illustrationControlsHtml}
         </div>
-        ${illustrationControlsHtml}
         <button class="btn btn-primary btn-block" id="generateBtn" disabled data-i18n="generate"></button>
         <div class="gen-status hidden" id="genStatus" role="status">
           <div class="gen-bar" aria-hidden="true"><div></div></div>
@@ -360,6 +378,8 @@
   const editToggleBtn = document.getElementById("editToggleBtn");
   const editorCloseBtn = document.getElementById("editorCloseBtn");
   const presetGridEl = document.getElementById("presetGrid");
+  const fontGridEl = document.getElementById("fontGrid");
+  const customFontEl = document.getElementById("customFont");
   const additionalPromptEl = document.getElementById("additionalPrompt");
   const illustrationNoteEl = document.getElementById("illustrationNote");
   const illustrateBtn = document.getElementById("illustrateBtn");
@@ -393,6 +413,84 @@
       b.addEventListener("click", () => applyPreset(i));
       presetGridEl.appendChild(b);
     });
+  }
+
+  // ─── Deck font ──────────────────────────────────
+  // The picker drives slide-scoped tokens only, so the app chrome keeps the
+  // brand font no matter what the user selects for the deck.
+  const DECK_FONTS = [
+    { name: "Raleway", stack: "system-ui, sans-serif" },
+    { name: "Lato", stack: "system-ui, sans-serif" },
+    { name: "Poppins", stack: "system-ui, sans-serif" },
+    { name: "PT Serif", stack: "Georgia, serif" },
+  ];
+  const FONT_KEY = `${BRAND.presetKey}_font`;
+  const DEFAULT_FONT = BRAND.pptx.headingFont || DECK_FONTS[0].name;
+  // Google's CSS API takes the family verbatim, so anything outside this
+  // shape is a typo (or an injection attempt) rather than a font.
+  const FONT_NAME = /^[A-Za-z0-9][A-Za-z0-9 ]{0,48}$/;
+  let activeFont = DEFAULT_FONT;
+
+  function loadGoogleFont(name) {
+    const family = name.trim().replace(/\s+/g, "+");
+    const href = `https://fonts.googleapis.com/css2?family=${family}:wght@400;500;600;700;800&display=swap`;
+    if (document.querySelector(`link[href="${href}"]`)) return;
+    const link = document.createElement("link");
+    link.rel = "stylesheet";
+    link.href = href;
+    document.head.appendChild(link);
+  }
+
+  function markFont(name) {
+    activeFont = name;
+    const known = DECK_FONTS.find(f => f.name.toLowerCase() === name.toLowerCase());
+    document.querySelectorAll(".font-chip").forEach(b =>
+      b.setAttribute("aria-pressed", String(b.dataset.font.toLowerCase() === name.toLowerCase())));
+    if (customFontEl && customFontEl !== document.activeElement) {
+      customFontEl.value = known ? "" : name;
+    }
+  }
+
+  function applyFont(name, { store = true } = {}) {
+    const clean = String(name ?? "").trim();
+    if (!FONT_NAME.test(clean)) return false;
+    const known = DECK_FONTS.find(f => f.name.toLowerCase() === clean.toLowerCase());
+    // Unquoted multi-word families are valid CSS and keep the value inside the
+    // character set collectExportPresetCss is willing to inline.
+    const stack = `${clean}, ${known?.stack ?? "system-ui, sans-serif"}`;
+    loadGoogleFont(clean);
+    const rs = document.documentElement.style;
+    rs.setProperty("--slide-heading-font", stack);
+    rs.setProperty("--slide-body-font", stack);
+    if (store) writeStored(FONT_KEY, clean);
+    markFont(clean);
+    return true;
+  }
+
+  // Clearing the picker hands typography back to the brand's own stylesheet,
+  // which is not the same as picking the brand's default family: Quantica
+  // pairs Poppins headings with a different body face, and only the CSS
+  // knows that pairing.
+  function resetFont() {
+    const rs = document.documentElement.style;
+    rs.removeProperty("--slide-heading-font");
+    rs.removeProperty("--slide-body-font");
+    writeStored(FONT_KEY, "");
+    markFont(DEFAULT_FONT);
+  }
+
+  function renderFonts() {
+    fontGridEl.innerHTML = "";
+    for (const font of DECK_FONTS) {
+      const b = document.createElement("button");
+      b.type = "button";
+      b.className = "font-chip";
+      b.dataset.font = font.name;
+      b.textContent = font.name;
+      b.style.fontFamily = `${font.name}, ${font.stack}`;
+      b.addEventListener("click", () => applyFont(font.name));
+      fontGridEl.appendChild(b);
+    }
   }
 
   // ─── Helpers (DOM-adjacent) ─────────────────────
@@ -532,8 +630,8 @@
       bg: preset?.bg ?? "#FFFFFF",
       fg: preset?.fg ?? "#111111",
       accent: preset?.accent ?? "#4472C4",
-      headingFont: BRAND.pptx.headingFont,
-      bodyFont: BRAND.pptx.bodyFont,
+      headingFont: activeFont,
+      bodyFont: activeFont,
       monoFont: BRAND.pptx.monoFont,
     };
   }
@@ -573,7 +671,8 @@
   // this the export falls back to the default preset on every var().
   function collectExportPresetCss() {
     const inline = document.documentElement.style;
-    const declarations = ["--slide-bg", "--slide-fg", "--slide-accent"]
+    const declarations = ["--slide-bg", "--slide-fg", "--slide-accent",
+      "--slide-heading-font", "--slide-body-font"]
       .map(name => [name, inline.getPropertyValue(name).trim()])
       .filter(([, value]) => value && /^[#\w(),.%\s-]+$/.test(value))
       .map(([name, value]) => `${name}: ${value};`);
@@ -588,6 +687,7 @@
   const EXPORT_CHROME_SELECTOR = new RegExp([
     "\\.(workbench|chrome|panel|panel-resizer|has-panel-resizer|editor-|dropzone|preset",
     "|btn|side-|side_|file-chip|error-panel|gen-|lang-toggle|mono-input|stage-wrap",
+    "|font-grid|font-chip",
     "|deck|hints|spacer|wordmark|nav-btns|dz-label|ai-|visually-hidden)",
     "|#pasteArea|#editor\\b|#view-input",
   ].join(""));
@@ -968,6 +1068,23 @@ ${fontLinks}
     const savedPreset = BRAND.presets.findIndex(p => p.id === readStored(BRAND.presetKey));
     applyPreset(savedPreset >= 0 ? savedPreset : 0);
   }
+  document.querySelectorAll(".side-fold-toggle").forEach(toggle => {
+    const body = document.getElementById(toggle.dataset.fold);
+    toggle.addEventListener("click", () => {
+      const open = body.classList.toggle("hidden") === false;
+      toggle.setAttribute("aria-expanded", String(open));
+    });
+  });
+  renderFonts();
+  // A stored value can be anything; applyFont rejects it. With no stored
+  // choice the tokens stay unset so each brand keeps the typography its own
+  // stylesheet defines.
+  if (!applyFont(readStored(FONT_KEY), { store: false })) markFont(DEFAULT_FONT);
+  customFontEl.addEventListener("input", () => {
+    const value = customFontEl.value.trim();
+    if (value) applyFont(value);
+    else resetFont();
+  });
   {
     const params = new URLSearchParams(location.search);
     if (["pl", "en"].includes(params.get("lang"))) { uiLang = params.get("lang"); writeStored(LS_LANG, uiLang); }
