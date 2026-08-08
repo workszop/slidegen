@@ -26,19 +26,22 @@ test("deck-first shells load shared model and layered styles", async () => {
 });
 
 test("one guide deck opens in every flavour, flow before options", async () => {
-  const source = await read("example-deck.js");
-  const decks = new Function(`const window = {}; ${source}; return window.EXAMPLE_DECK;`)();
+  const app = await read("app.js");
+  // The deck must stay inside app.js. Split across files, the two halves are
+  // cached separately and a half-stale deploy renders an empty workspace.
+  const literal = /const EXAMPLE_DECK = \{[\s\S]*?\n  \};/.exec(app);
+  assert.ok(literal, "app.js owns the example deck");
+  const decks = new Function(`${literal[0]} return EXAMPLE_DECK;`)();
   assert.deepEqual(Object.keys(decks).sort(), ["en", "pl"]);
+  assert.match(app, /exampleMd: EXAMPLE_DECK/);
+  assert.ok(app.indexOf("const EXAMPLE_DECK") < app.indexOf("exampleMd: EXAMPLE_DECK"),
+    "the deck must be declared before BRAND reads it (no temporal dead zone)");
 
   for (const file of ["index.html", "edu.html", "quantica.html"]) {
     const html = await read(file);
-    assert.match(html, /src="example-deck\.js"/, `${file} loads the shared deck`);
     assert.doesNotMatch(html, /exampleMd:/, `${file} must not carry its own copy`);
-    assert.ok(html.indexOf('src="example-deck.js"') < html.indexOf('src="app.js"'),
-      `${file} loads the deck before the controller reads it`);
+    assert.doesNotMatch(html, /example-deck\.js/, `${file} must not load a separate deck file`);
   }
-  const app = await read("app.js");
-  assert.match(app, /exampleMd: window\.EXAMPLE_DECK/);
 
   for (const [lang, md] of Object.entries(decks)) {
     const headings = [...md.matchAll(/^#{1,2} (.+)$/gm)].map(m => m[1]);
@@ -55,7 +58,22 @@ test("one guide deck opens in every flavour, flow before options", async () => {
     assert.ok(/Generuj slajdy|Generate slides/.test(flow), `${lang}: flow comes first`);
     assert.ok(/czcionk|font/i.test(options), `${lang}: options come after the divider`);
     assert.ok(!/czcionk|font picker/i.test(flow), `${lang}: options must not leak into the flow`);
+    // A closing slide of its own marks the end of the tour.
+    const slides = md.split(/\n---\n/);
+    assert.match(slides.at(-1), /^## (Gotowe|Ready when you are)\n/, `${lang}: closing slide`);
+    assert.ok(!/Gotowe –|That is everything/.test(slides.at(-2)),
+      `${lang}: the sign-off must not trail the previous slide`);
   }
+});
+
+test("an empty example deck is reported instead of rendering a blank stage", async () => {
+  const app = await read("app.js");
+  assert.match(app, /function exampleDeck\(lang\)/);
+  assert.match(app, /if \(!md\.trim\(\)\)/);
+  assert.match(app, /errExampleDeck/);
+  // Nothing may reach setDeck without going through the guard.
+  const rawReads = app.split("\n").filter(line => /setDeck\(BRAND\.exampleMd/.test(line));
+  assert.deepEqual(rawReads, [], "example deck reads must go through exampleDeck()");
 });
 
 test("controllers build one semantic model and expose the DOM contract", async () => {
