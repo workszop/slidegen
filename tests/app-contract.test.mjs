@@ -50,13 +50,18 @@ test("one guide deck opens in every flavour, flow before options", async () => {
     }
     // The deck is brand-neutral: every flavour opens the same words.
     assert.doesNotMatch(md, /edulab|Quantica/i, `${lang} deck names a brand`);
-    // A bodyless "## Options" heading splits the flow from the settings.
-    const divider = lang === "pl" ? "\n## Opcje\n" : "\n## Options\n";
-    assert.ok(md.includes(divider), `${lang} deck has the options divider`);
-    const flow = md.slice(0, md.indexOf(divider));
-    const options = md.slice(md.indexOf(divider));
+    // Every slide carries content; no bodyless heading acting as a divider.
+    for (const slide of md.split(/\n---\n/)) {
+      const [heading, ...rest] = slide.trim().split("\n");
+      assert.ok(rest.join("").trim(), `${lang}: slide "${heading}" has no body`);
+    }
+    // Making a deck comes first, the settings after.
+    const boundary = lang === "pl" ? "\n## Opcje generowania\n" : "\n## Generation options\n";
+    assert.ok(md.includes(boundary), `${lang} deck reaches the options`);
+    const flow = md.slice(0, md.indexOf(boundary));
+    const options = md.slice(md.indexOf(boundary));
     assert.ok(/Generuj slajdy|Generate slides/.test(flow), `${lang}: flow comes first`);
-    assert.ok(/czcionk|font/i.test(options), `${lang}: options come after the divider`);
+    assert.ok(/czcionk|font/i.test(options), `${lang}: options come after the flow`);
     assert.ok(!/czcionk|font picker/i.test(flow), `${lang}: options must not leak into the flow`);
     // A closing slide of its own marks the end of the tour.
     const slides = md.split(/\n---\n/);

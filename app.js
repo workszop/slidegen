@@ -70,8 +70,6 @@ Zamień dokument w gotową prezentację: tekst i ilustracje przygotuje AI, a Ty 
 | ← | poprzedni slajd |
 | Esc | powrót do edycji |
 ---
-## Opcje
----
 ## Opcje generowania
 - Strzałka przy nagłówku **Generowanie** rozwija dodatkowe ustawienia
 - **Auto** zachowuje język dokumentu; możesz wymusić polski albo angielski
@@ -136,8 +134,6 @@ Turn a document into a finished deck: AI writes the slides and the illustrations
 | → | next slide |
 | ← | previous slide |
 | Esc | back to editing |
----
-## Options
 ---
 ## Generation options
 - The chevron on the **Generate** heading unfolds the extra settings
