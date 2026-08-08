@@ -1,15 +1,14 @@
 # doc2slide
 
 A zero-build browser app that turns Markdown, text, or PDF documents into
-editable slide decks. It includes a style studio and three deck-first
-workspaces for edulab, Quantica Lab, and experimental AI illustrations.
+editable slide decks. It ships three deck-first workspaces: the default
+edulab workspace with AI illustrations, a plain edulab one, and Quantica Lab.
 
 ## Live apps
 
-- Style studio: https://workszop.github.io/slidegen/
+- doc2slide (edulab, with AI illustrations): https://workszop.github.io/slidegen/
 - edulab: https://workszop.github.io/slidegen/edu.html
 - Quantica Lab: https://workszop.github.io/slidegen/quantica.html
-- Experimental edulab: https://workszop.github.io/slidegen/experimental.html
 
 ## Features
 
@@ -20,7 +19,8 @@ workspaces for edulab, Quantica Lab, and experimental AI illustrations.
 - PL, EN, and automatic source-language output.
 - Standalone HTML and editable PowerPoint export, both carrying the selected
   style preset.
-- Optional OpenAI illustrations in the experimental workspace.
+- Optional OpenAI illustrations in the default workspace; the image model is
+  picked in the AI model dialog next to the text model.
 - Keyboard navigation, progress indicators, and bilingual UI.
 
 API keys keep the existing browser-local storage behavior. They are sent only
@@ -96,13 +96,12 @@ still be reduced to fit.
 
 ## Architecture
 
-- `index.html` is the style studio.
-- `edu.html`, `quantica.html`, and `experimental.html` are thin brand shells.
+- `index.html`, `edu.html`, and `quantica.html` are thin brand shells.
 - `app.js` contains the shared deck-first controller.
 - `shared.js` contains provider, streaming, file, and shared UI helpers.
 - `deck-model.js` is the semantic Markdown model used by HTML and PowerPoint.
 - `deck-base.css` contains the shared deck layout.
-- `theme-*.css` contains brand and experimental visual tokens.
+- `theme-*.css` contains the brand and illustration-workspace visual tokens.
 - `pptx-export.js` contains the PowerPoint renderer and theme post-processing.
 
 There is no production build step. A standalone HTML download inlines the deck

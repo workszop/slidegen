@@ -12,7 +12,7 @@
           logo:         "data:image/png;base64,…",  // chrome + slide corner
           wordmark:     "edulab" | null,            // text next to logo (null = logo only)
           tag:          "doc2slide",                 // app name in the chrome bar
-          presentBrand: "edulab",                   // brand name on the title-slide eyebrow
+          presentBrand: "edulab",                   // brand name for PPTX metadata
           title:        { pl: "doc2slide", en: "doc2slide" }, // browser title (optional)
         }
    ============================================================ */
@@ -30,7 +30,7 @@
     presetKey: "eduapp_preset",
     editorWKey: "eduapp.editorW",
     exampleMd: { pl: "", en: "" },
-    experimentalImages: false,
+    illustrations: false,
     pptx: {
       headingFont: "Raleway",
       bodyFont: "Raleway",
@@ -50,7 +50,6 @@
       dropHere: "Wgraj plik",
       browse: "Wybierz plik",
       pasteHere: "…albo wklej tekst tutaj",
-      countAuto: "auto",
       generate: "Generuj slajdy",
       cancelGeneration: "Anuluj generowanie",
       cancelIllustration: "Anuluj ilustrację",
@@ -70,7 +69,6 @@
       downloadPptx: "Pobierz .pptx",
       errPptxTitle: "Eksport PPTX nie powiódł się",
       present: "Prezentuj",
-      presentEyebrowWord: "prezentacja",
       sideDoc: "Dokument",
       sideGen: "Generowanie",
       sideStyle: "Styl",
@@ -78,7 +76,6 @@
       edit: "Edytuj",
       additionalPrompt: "Dodatkowe instrukcje dla AI",
       additionalPromptPh: "np. użyj konkretnych przykładów i krótkich nagłówków",
-      imageModel: "Model obrazu",
       illustrationNote: "Wskazówki do ilustracji",
       illustrationNotePh: "np. płaska ilustracja, ciepłe barwy",
       imageNote: "Ilustruj wybrany slajd przyciskiem pod podglądem. Wymaga klucza OpenAI i zwiększa koszt.",
@@ -97,7 +94,6 @@
       dropHere: "Upload a file",
       browse: "Choose file",
       pasteHere: "…or paste text here",
-      countAuto: "auto",
       generate: "Generate slides",
       cancelGeneration: "Cancel generation",
       cancelIllustration: "Cancel illustration",
@@ -117,7 +113,6 @@
       downloadPptx: "Download .pptx",
       errPptxTitle: "PPTX export failed",
       present: "Present",
-      presentEyebrowWord: "presentation",
       sideDoc: "Document",
       sideGen: "Generate",
       sideStyle: "Style",
@@ -125,7 +120,6 @@
       edit: "Edit",
       additionalPrompt: "Additional AI instructions",
       additionalPromptPh: "e.g. use concrete examples and short headings",
-      imageModel: "Image model",
       illustrationNote: "Illustration direction",
       illustrationNotePh: "e.g. flat illustration, warm palette",
       imageNote: "Illustrate a chosen slide with the button under the preview. Requires an OpenAI key and adds cost.",
@@ -168,24 +162,23 @@
 
   // ─── Markup (shared structure; brand styles it via CSS) ──
   const wordmarkHtml = BRAND.wordmark ? `<div class="wordmark"></div>` : "";
-  const experimentalControlsHtml = BRAND.experimentalImages ? `
-        <label class="experimental-label" for="additionalPrompt" data-i18n="additionalPrompt"></label>
+  const tagHtml = BRAND.tag ? `<div class="tag"></div>` : "";
+  const illustrationControlsHtml = BRAND.illustrations ? `
+        <label class="illustration-label" for="additionalPrompt" data-i18n="additionalPrompt"></label>
         <textarea id="additionalPrompt" rows="3" data-i18n-placeholder="additionalPromptPh"></textarea>
         <div class="image-options" id="imageOptions">
-          <label class="experimental-label" for="imageModel" data-i18n="imageModel"></label>
-          <select id="imageModel" class="mono-input"></select>
-          <label class="experimental-label" for="illustrationNote" data-i18n="illustrationNote"></label>
+          <label class="illustration-label" for="illustrationNote" data-i18n="illustrationNote"></label>
           <input id="illustrationNote" class="mono-input" type="text" data-i18n-placeholder="illustrationNotePh" />
-          <p class="experimental-note" data-i18n="imageNote"></p>
+          <p class="illustration-note" data-i18n="imageNote"></p>
         </div>` : "";
-  const illustrateControlsHtml = BRAND.experimentalImages ? `
+  const illustrateControlsHtml = BRAND.illustrations ? `
         <button class="btn btn-ghost btn-sm hidden" id="illustrateBtn">✦ <span id="illustrateBtnLabel"></span></button>
         <button class="btn btn-ghost btn-sm hidden" id="removeIllustrationBtn" data-i18n="removeIllustration"></button>` : "";
   document.body.insertAdjacentHTML("afterbegin", `
 <header class="chrome">
   <img class="chrome-mark brand-logo" alt="" aria-hidden="true">
   ${wordmarkHtml}
-  <div class="tag"></div>
+  ${tagHtml}
   <div class="spacer"></div>
   <div class="lang-toggle" role="group" aria-label="Język interfejsu / UI language">
     <button id="langPl" aria-pressed="true">PL</button>
@@ -196,6 +189,11 @@
 <main id="app" aria-live="polite">
   <div class="workbench" id="view-workspace">
     <aside class="panel">
+      <section class="side-section">
+        <h2 class="side-title" data-i18n="sideStyle"></h2>
+        <div class="preset-grid" id="presetGrid" role="group"></div>
+      </section>
+
       <section class="side-section">
         <h2 class="side-title" data-i18n="sideDoc"></h2>
         <div class="dropzone dropzone--compact" id="dropzone" role="button" tabindex="0">
@@ -216,23 +214,13 @@
             <button id="slideLangEn" aria-pressed="false">EN</button>
             <button id="slideLangAuto" aria-pressed="true">Auto</button>
           </div>
-          <select id="countHint" class="mono-input">
-            <option value="auto" data-i18n="countAuto"></option>
-            <option value="10">~10</option>
-            <option value="20">~20</option>
-          </select>
         </div>
-        ${experimentalControlsHtml}
+        ${illustrationControlsHtml}
         <button class="btn btn-primary btn-block" id="generateBtn" disabled data-i18n="generate"></button>
         <div class="gen-status hidden" id="genStatus" role="status">
           <div class="gen-bar" aria-hidden="true"><div></div></div>
           <span id="genStatusText"></span>
         </div>
-      </section>
-
-      <section class="side-section">
-        <h2 class="side-title" data-i18n="sideStyle"></h2>
-        <div class="preset-grid" id="presetGrid" role="group"></div>
       </section>
 
       <section class="side-section side-actions">
@@ -352,7 +340,6 @@
   const slideLangPlBtn = document.getElementById("slideLangPl");
   const slideLangEnBtn = document.getElementById("slideLangEn");
   const slideLangAutoBtn = document.getElementById("slideLangAuto");
-  const countHintEl = document.getElementById("countHint");
   const generateBtn = document.getElementById("generateBtn");
   const genStatusEl = document.getElementById("genStatus");
   const genStatusTextEl = document.getElementById("genStatusText");
@@ -374,7 +361,6 @@
   const editorCloseBtn = document.getElementById("editorCloseBtn");
   const presetGridEl = document.getElementById("presetGrid");
   const additionalPromptEl = document.getElementById("additionalPrompt");
-  const imageModelEl = document.getElementById("imageModel");
   const illustrationNoteEl = document.getElementById("illustrationNote");
   const illustrateBtn = document.getElementById("illustrateBtn");
   const illustrateBtnLabel = document.getElementById("illustrateBtnLabel");
@@ -490,7 +476,7 @@
   }
 
   function renderIllustrateControls() {
-    if (!illustrateBtn) return;               // non-experimental brands
+    if (!illustrateBtn) return;               // brands without illustrations
     const n = state.slides.length;
     const i = state.current;
     const isTitle = state.deckModel.slides[i]?.type === "title";
@@ -511,17 +497,17 @@
     const semanticSlide = state.deckModel.slides[i];
     const isTitle = semanticSlide?.type === "title";
     const title = deckTitle(state.md);
-    const eyebrow = isTitle
-      ? [BRAND.presentBrand, t("presentEyebrowWord")].filter(Boolean).join(" · ")
-      : [`${i + 1} / ${n}`, title].filter(Boolean).join(" · ");
+    // The title slide carries no eyebrow: the brand already shows in the
+    // corner logo, and an empty div would still claim its bottom margin.
+    const eyebrow = isTitle ? "" : [`${i + 1} / ${n}`, title].filter(Boolean).join(" · ");
     const image = state.images[i];
     stageEl.className = "slide" + (isTitle ? " slide--title" : "") + (image ? " slide--illustrated" : "");
     stageEl.dataset.slideType = semanticSlide?.type ?? "content";
     stageEl.dataset.warningCount = String(semanticSlide?.warnings?.length ?? 0);
-    stageEl.innerHTML = `<div class="slide-eyebrow"></div>` + (image
+    stageEl.innerHTML = (eyebrow ? `<div class="slide-eyebrow"></div>` : "") + (image
       ? `<div class="slide-layout"><div class="slide-copy">${state.slides[i]}</div><img class="slide-generated-image" alt=""></div>`
       : state.slides[i]);
-    stageEl.querySelector(".slide-eyebrow").textContent = eyebrow;
+    if (eyebrow) stageEl.querySelector(".slide-eyebrow").textContent = eyebrow;
     if (image) {
       const img = stageEl.querySelector(".slide-generated-image");
       img.src = image;
@@ -562,7 +548,9 @@
         images: state.images,
         theme: readDeckTheme(),
         logo: BRAND.logo || null,
-        brandName: BRAND.presentBrand,
+        // No brandName: the title slide uses the TITLE_PLAIN master so the
+        // deck carries no brand eyebrow. Document metadata still gets the
+        // brand through `company`.
         company: BRAND.pptx.company || BRAND.presentBrand,
         language: uiLang,
         fileName: (deckTitle(state.md) || "slides") + ".pptx",
@@ -601,7 +589,7 @@
     "\\.(workbench|chrome|panel|panel-resizer|has-panel-resizer|editor-|dropzone|preset",
     "|btn|side-|side_|file-chip|error-panel|gen-|lang-toggle|mono-input|stage-wrap",
     "|deck|hints|spacer|wordmark|nav-btns|dz-label|ai-|visually-hidden)",
-    "|#pasteArea|#editor\\b|#countHint|#view-input",
+    "|#pasteArea|#editor\\b|#view-input",
   ].join(""));
 
   function exportRuleText(rule) {
@@ -640,13 +628,14 @@
       const isTitle = index === 0 && hasTitle;
       const image = state.images[index];
       const eyebrow = isTitle
-        ? [BRAND.presentBrand, t("presentEyebrowWord")].filter(Boolean).join(" · ")
+        ? ""
         : [`${index + 1} / ${state.slides.length}`, title].filter(Boolean).join(" · ");
       const content = image
         ? `<div class="slide-layout"><div class="slide-copy">${slideHtml}</div><img class="slide-generated-image" src="${escapeHtml(image)}" alt="${escapeHtml(t("imageAlt"))}"></div>`
         : slideHtml;
+      const eyebrowHtml = eyebrow ? `<div class="slide-eyebrow">${escapeHtml(eyebrow)}</div>` : "";
       return `<section class="slide${isTitle ? " slide--title" : ""}${image ? " slide--illustrated" : ""}${index ? " hidden" : ""}" data-export-slide>
-        <div class="slide-eyebrow">${escapeHtml(eyebrow)}</div>${content}</section>`;
+        ${eyebrowHtml}${content}</section>`;
     }).join("\n");
     const logo = BRAND.logo
       ? `<img class="slide-logo" src="${escapeHtml(BRAND.logo)}" alt="" aria-hidden="true">`
@@ -767,7 +756,8 @@ ${fontLinks}
     if (state.generating) return;
     if (index < 0 || index >= state.slideSegments.length) return;
     if (state.deckModel.slides[index]?.type === "title") return;
-    const openaiKey = loadAiSettings().keys.openai?.trim();
+    const aiSettings = loadAiSettings();
+    const openaiKey = aiSettings.keys.openai?.trim();
     if (!openaiKey) return showError(t("errNoKeyTitle"), t("errNoOpenAIKey"));
 
     const previousImage = state.images[index];
@@ -780,7 +770,7 @@ ${fontLinks}
     try {
       const image = await generateOpenAIImage({
         key: openaiKey,
-        model: imageModelEl.value,
+        model: aiSettings.imageModel,
         signal: state.illustrationController.signal,
         prompt: buildSlideImagePrompt({
           slideMd: state.slideSegments[index],
@@ -841,7 +831,6 @@ ${fontLinks}
         source: state.source,
         prompt: buildPrompt({
           lang: state.slideLang,
-          countHint: countHintEl.value,
           additionalPrompt: additionalPromptEl?.value ?? "",
         }),
         signal: state.generationController.signal,
@@ -968,16 +957,12 @@ ${fontLinks}
   // ─── Init ───────────────────────────────────────
   document.querySelectorAll(".brand-logo").forEach(el => { el.src = BRAND.logo; });
   if (BRAND.wordmark) document.querySelector(".wordmark").textContent = BRAND.wordmark;
-  document.querySelector(".chrome .tag").textContent = BRAND.tag;
-  const aiSelector = mountAiSelector({ chip: aiChipEl, getLang: () => uiLang });
-  if (imageModelEl) {
-    OPENAI_IMAGE_MODELS.forEach(model => {
-      const option = document.createElement("option");
-      option.value = model;
-      option.textContent = model;
-      imageModelEl.appendChild(option);
-    });
-  }
+  if (BRAND.tag) document.querySelector(".chrome .tag").textContent = BRAND.tag;
+  const aiSelector = mountAiSelector({
+    chip: aiChipEl,
+    getLang: () => uiLang,
+    images: BRAND.illustrations,
+  });
   renderPresets();
   {
     const savedPreset = BRAND.presets.findIndex(p => p.id === readStored(BRAND.presetKey));

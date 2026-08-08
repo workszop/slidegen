@@ -7,9 +7,9 @@ const read = file => readFile(new URL(file, ROOT), "utf8");
 
 test("deck-first shells load shared model and layered styles", async () => {
   const shells = {
+    "index.html": ["deck-base.css", "theme-edulab.css", "theme-illustrated.css"],
     "edu.html": ["deck-base.css", "theme-edulab.css"],
     "quantica.html": ["deck-base.css", "theme-edulab.css", "theme-quantica.css"],
-    "experimental.html": ["deck-base.css", "theme-edulab.css", "theme-experimental.css"],
   };
 
   for (const [file, styles] of Object.entries(shells)) {
@@ -26,13 +26,34 @@ test("deck-first shells load shared model and layered styles", async () => {
 });
 
 test("controllers build one semantic model and expose the DOM contract", async () => {
-  for (const file of ["app.js", "index.html"]) {
+  for (const file of ["app.js"]) {
     const source = await read(file);
     assert.match(source, /DeckModel\.create\(/, `${file} creates the semantic model`);
     assert.match(source, /dataset\.slideType/, `${file} publishes the semantic slide type`);
     assert.match(source, /dataset\.warningCount/, `${file} publishes validation warnings`);
     assert.match(source, /deck:\s*state\.deckModel/, `${file} passes the model to PowerPoint`);
   }
+});
+
+test("the image model lives in the AI model dialog, not the side panel", async () => {
+  const app = await read("app.js");
+  const shared = await read("shared.js");
+  assert.doesNotMatch(app, /id="imageModel"/, "the side panel no longer owns an image-model select");
+  assert.match(app, /images:\s*BRAND\.illustrations/, "app.js gates the dialog field per brand");
+  assert.match(app, /model:\s*aiSettings\.imageModel/, "illustrations read the persisted image model");
+  assert.match(shared, /id="aiImageModel"/, "the dialog renders the image-model select");
+  assert.match(shared, /settings\.imageModel\s*=\s*imageSel\.value/, "the dialog persists the choice");
+});
+
+test("the title slide carries no brand eyebrow in any output", async () => {
+  const app = await read("app.js");
+  assert.doesNotMatch(app, /presentEyebrowWord/, "the eyebrow wording is gone");
+  assert.doesNotMatch(app, /brandName:\s*BRAND\.presentBrand/,
+    "PPTX export must not request the brand eyebrow master");
+  // presentBrand survives only as PPTX document metadata.
+  const uses = app.split("\n").filter(line => line.includes("BRAND.presentBrand"));
+  assert.deepEqual(uses.map(line => line.trim()),
+    ["company: BRAND.pptx.company || BRAND.presentBrand,"]);
 });
 
 test("API key persistence contract remains browser-local", async () => {

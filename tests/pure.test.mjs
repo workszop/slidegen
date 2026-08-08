@@ -83,7 +83,17 @@ test("normalizeAiSettings defaults on empty/garbage input", () => {
     assert.equal(s.provider, "gemini");
     assert.equal(s.model, H.PROVIDER_INFO.gemini.models[0]);
     assert.deepEqual(s.keys, { gemini: "", openai: "", claude: "" });
+    assert.equal(s.imageModel, H.OPENAI_IMAGE_MODELS[0]);
   }
+});
+
+test("normalizeAiSettings keeps a stored image model, including custom IDs", () => {
+  const stored = H.normalizeAiSettings(JSON.stringify({ imageModel: "gpt-image-1-mini" }), {});
+  assert.equal(stored.imageModel, "gpt-image-1-mini");
+  const custom = H.normalizeAiSettings(JSON.stringify({ imageModel: " gpt-image-next " }), {});
+  assert.equal(custom.imageModel, "gpt-image-next");
+  const blank = H.normalizeAiSettings(JSON.stringify({ imageModel: "   " }), {});
+  assert.equal(blank.imageModel, H.OPENAI_IMAGE_MODELS[0]);
 });
 
 test("normalizeAiSettings migrates legacy gemini key and model", () => {
