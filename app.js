@@ -29,7 +29,8 @@
     presets: [],
     presetKey: "eduapp_preset",
     editorWKey: "eduapp.editorW",
-    exampleMd: { pl: "", en: "" },
+    // One guide deck for every flavour; a brand may still override it.
+    exampleMd: window.EXAMPLE_DECK ?? { pl: "", en: "" },
     illustrations: false,
     pptx: {
       headingFont: "Raleway",
