@@ -16,6 +16,7 @@
 <script defer src="deck-model.js"></script>
 <script src="edulab-logo.js"></script>
 <script src="favicon.js"></script>
+<script src="example-deck.js"></script>
 <link rel="stylesheet" href="deck-base.css">
 <link rel="stylesheet" href="theme-edulab.css">
 <link rel="stylesheet" href="theme-illustrated.css">
@@ -38,122 +39,6 @@ window.APP_BRAND = {
     { id: "atrament", name: { pl: "Atrament", en: "Ink" },      bg: "#211E1A", fg: "#FBF7F0", accent: "#E8920C" },
     { id: "morski",   name: { pl: "Morski",   en: "Teal" },     bg: "#FBF7F0", fg: "#211E1A", accent: "#0E8C7F" },
   ],
-  exampleMd: {
-    pl: `# doc2slide
-Zamień dokument w gotową prezentację: tekst i ilustracje przygotuje AI, a Ty poprawisz je w edytorze.
----
-## Jak to działa?
-- Wgraj materiał źródłowy w panelu **Dokument**
-- Dodaj własne instrukcje, które rozszerzą podstawowy prompt aplikacji
-- Ilustruj wybrane slajdy pojedynczo; wynik możesz usunąć lub wygenerować ponownie
-- Domyślny styl obrazu to czarno-biały kontur w estetyce Notion
-- Sprawdź wynik, popraw tekst i wybierz styl prezentacji
-
-> Ten przewodnik możesz przeglądać przyciskami pod slajdem lub klawiszami ← i →.
----
-## 1. Dodaj materiał
-- Wgraj plik **.txt**, **.md** lub **.pdf** w panelu **Dokument**
-- Możesz też wkleić tekst bezpośrednio pod polem wyboru pliku
-- Plik .md z separatorami \`---\` otworzy się od razu jako gotowa prezentacja
-- Limit pliku PDF wynosi 19 MB
----
-## 2. Skonfiguruj model AI
-- Kliknij nazwę modelu w sekcji **Generowanie**
-- Tekst może przygotować Gemini, OpenAI albo Claude
-- Ilustracje korzystają z osobnego modelu GPT Image i wymagają klucza OpenAI
-- Klucz jest zapisany tylko w pamięci tej przeglądarki
-
-> Podczas generowania treść dokumentu jest wysyłana bezpośrednio do wybranego dostawcy AI.
----
-## 3. Dopasuj sposób generowania
-- **Auto** zachowuje język dokumentu; możesz wymusić polski lub angielski
-- W polu **Dodatkowe instrukcje dla AI** opisz ton, odbiorców lub zakres prezentacji
-- Instrukcje uzupełniają zasady doc2slide, ale nie zastępują formatu slajdów
----
-## 4. Dodaj ilustracje
-- Model obrazu wybierzesz w ustawieniach modelu AI; wskazówki do ilustracji wpiszesz w panelu
-- Przejdź do wybranego slajdu treści i kliknij **Ilustruj ten slajd** pod podglądem
-- Każdą ilustrację generujesz osobno; możesz ją usunąć albo wygenerować ponownie
-- Domyślnie powstaje czarno-biały obraz konturowy w stylu Notion
-- Ilustracje są generowane bez napisów, logo i elementów interfejsu
-- Generowanie obrazów zwiększa czas oraz koszt wywołań API
----
-## 5. Sprawdź i popraw treść
-- Przejrzyj slajdy i upewnij się, że nie brakuje ważnych informacji
-- Kliknij **Edytuj**, aby otworzyć tekst prezentacji po prawej stronie
-- Zmiany widać na bieżąco; slajdy rozdziela osobna linia \`---\`
-- Zweryfikuj tekst i obrazy wygenerowane przez AI przed udostępnieniem
----
-## 6. Wybierz styl i prezentuj
-- W sekcji **Styl** jednym kliknięciem zmienisz wygląd całej prezentacji
-- Strzałka przy nagłówku **Styl** rozwija wybór czcionki: cztery kroje lub dowolny font Google
-- Wybrany styl zostanie użyty także w pliku PowerPoint
-- Kliknij **Prezentuj**, aby uruchomić tryb prezentacji
-
-| Klawisz | Działanie |
-|---------|-----------|
-| → | następny slajd |
-| ← | poprzedni slajd |
-| Esc | powrót do edycji |
----
-## 7. Zapisz swoją pracę
-- **Pobierz html** zapisuje samodzielną prezentację do otwarcia w przeglądarce
-- **Pobierz .pptx** tworzy edytowalną prezentację PowerPoint razem z ilustracjami
-- Przed udostępnieniem sprawdź układ, fakty i dane wygenerowane przez AI
-
-Gotowe – wgraj własny dokument w panelu po lewej stronie.`,
-    en: `# doc2slide
-Turn a document into a finished deck: AI writes the slides and the illustrations, you refine them in the editor.
----
-## How it works
-- Upload a source document or paste text
-- Add your own instructions on top of the built-in slide prompt
-- Illustrate selected slides one at a time, then remove or regenerate the result
-- Images default to black-and-white contours in the style of Notion
-- Review the result, edit the text, and pick a style
----
-## Load your material
-- Upload a .txt, .md, or .pdf file in the **Document** panel
-- You can also paste text below the file control
-- A ready-made .md deck opens immediately without AI
----
-## Configure the models
-- Gemini, OpenAI, or Claude can generate the slide text
-- GPT Image models generate illustrations and require an OpenAI key
-- Keys are stored only in this browser
-
-> During generation, document content is sent directly to the selected AI providers.
----
-## Add your instructions
-- Choose the output language for the deck
-- The chevron on the **Style** heading unfolds the font picker: four faces or any Google font
-- Describe the audience, tone, emphasis, or examples in **Additional AI instructions**
-- Your instructions extend the built-in doc2slide format rules
----
-## Generate illustrations
-- Pick the image model in the AI model dialog; add illustration direction in the panel
-- Open a content slide and click **Illustrate this slide** below the preview
-- Each illustration is generated separately and can be removed or regenerated
-- The default output is a black-and-white contour image in the style of Notion
-- Image generation adds API cost and may take longer
----
-## Review and edit
-- The **Edit** button opens a markdown editor to the right of the slide
-- Changes render live; slides are separated by a \`---\` line
-- Verify both text and AI-generated imagery before sharing
----
-## Present and export
-| Key | Action |
-|-----|--------|
-| → | next slide |
-| ← | previous slide |
-| Esc | back to editing |
----
-## Save your work
-- **Download HTML** - save a standalone presentation that opens in a browser
-- **Download .pptx** - editable PowerPoint with generated illustrations
-- Happy presenting!`,
-  },
 };
 </script>
 <script defer src="app.js"></script>

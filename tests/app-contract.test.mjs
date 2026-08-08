@@ -25,6 +25,39 @@ test("deck-first shells load shared model and layered styles", async () => {
   }
 });
 
+test("one guide deck opens in every flavour, flow before options", async () => {
+  const source = await read("example-deck.js");
+  const decks = new Function(`const window = {}; ${source}; return window.EXAMPLE_DECK;`)();
+  assert.deepEqual(Object.keys(decks).sort(), ["en", "pl"]);
+
+  for (const file of ["index.html", "edu.html", "quantica.html"]) {
+    const html = await read(file);
+    assert.match(html, /src="example-deck\.js"/, `${file} loads the shared deck`);
+    assert.doesNotMatch(html, /exampleMd:/, `${file} must not carry its own copy`);
+    assert.ok(html.indexOf('src="example-deck.js"') < html.indexOf('src="app.js"'),
+      `${file} loads the deck before the controller reads it`);
+  }
+  const app = await read("app.js");
+  assert.match(app, /exampleMd: window\.EXAMPLE_DECK/);
+
+  for (const [lang, md] of Object.entries(decks)) {
+    const headings = [...md.matchAll(/^#{1,2} (.+)$/gm)].map(m => m[1]);
+    for (const heading of headings) {
+      assert.doesNotMatch(heading, /^\d+[.)]/, `${lang}: numbered slide title "${heading}"`);
+    }
+    // The deck is brand-neutral: every flavour opens the same words.
+    assert.doesNotMatch(md, /edulab|Quantica/i, `${lang} deck names a brand`);
+    // A bodyless "## Options" heading splits the flow from the settings.
+    const divider = lang === "pl" ? "\n## Opcje\n" : "\n## Options\n";
+    assert.ok(md.includes(divider), `${lang} deck has the options divider`);
+    const flow = md.slice(0, md.indexOf(divider));
+    const options = md.slice(md.indexOf(divider));
+    assert.ok(/Generuj slajdy|Generate slides/.test(flow), `${lang}: flow comes first`);
+    assert.ok(/czcionk|font/i.test(options), `${lang}: options come after the divider`);
+    assert.ok(!/czcionk|font picker/i.test(flow), `${lang}: options must not leak into the flow`);
+  }
+});
+
 test("controllers build one semantic model and expose the DOM contract", async () => {
   for (const file of ["app.js"]) {
     const source = await read(file);

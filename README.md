@@ -100,6 +100,8 @@ still be reduced to fit.
 - `app.js` contains the shared deck-first controller.
 - `shared.js` contains provider, streaming, file, and shared UI helpers.
 - `deck-model.js` is the semantic Markdown model used by HTML and PowerPoint.
+- `example-deck.js` is the guide deck every workspace opens with, shared by all
+  three shells and kept free of brand names.
 - `deck-base.css` contains the shared deck layout.
 - `theme-*.css` contains the brand and illustration-workspace visual tokens.
 - `pptx-export.js` contains the PowerPoint renderer and theme post-processing.
