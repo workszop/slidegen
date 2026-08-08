@@ -493,6 +493,16 @@
     }
   }
 
+  // Each chip is supposed to be set in the face it offers, which only works
+  // once that face is on the page. Deferred to the first time the group is
+  // opened so a workspace nobody restyles never pays for the downloads.
+  let fontsPreloaded = false;
+  function preloadPickerFonts() {
+    if (fontsPreloaded) return;
+    fontsPreloaded = true;
+    DECK_FONTS.forEach(font => loadGoogleFont(font.name));
+  }
+
   // ─── Helpers (DOM-adjacent) ─────────────────────
   // Parsed slide HTML is memoized per segment string: during streaming and
   // editing only the changed segment pays the marked+DOMPurify cost.
@@ -1073,6 +1083,7 @@ ${fontLinks}
     toggle.addEventListener("click", () => {
       const open = body.classList.toggle("hidden") === false;
       toggle.setAttribute("aria-expanded", String(open));
+      if (open && toggle.dataset.fold === "styleFold") preloadPickerFonts();
     });
   });
   renderFonts();
@@ -1080,10 +1091,17 @@ ${fontLinks}
   // choice the tokens stay unset so each brand keeps the typography its own
   // stylesheet defines.
   if (!applyFont(readStored(FONT_KEY), { store: false })) markFont(DEFAULT_FONT);
+  // Applying on every keystroke asked Google for every prefix of the name
+  // ("M", "Me", "Mer", …), leaving a dozen dead stylesheet links in the page
+  // and in every exported deck. Wait for the typing to settle instead.
+  let customFontTimer = 0;
   customFontEl.addEventListener("input", () => {
-    const value = customFontEl.value.trim();
-    if (value) applyFont(value);
-    else resetFont();
+    clearTimeout(customFontTimer);
+    customFontTimer = setTimeout(() => {
+      const value = customFontEl.value.trim();
+      if (value) applyFont(value);
+      else resetFont();
+    }, 500);
   });
   {
     const params = new URLSearchParams(location.search);

@@ -79,6 +79,21 @@ test("the deck font picker is slide-scoped and reaches every output", async () =
   assert.match(app, /if \(!FONT_NAME\.test\(clean\)\) return false/);
 });
 
+test("the custom font field never requests a partial family name", async () => {
+  const app = await read("app.js");
+  // Typing "Merriweather" used to fetch M, Me, Mer, … leaving a dozen dead
+  // stylesheet links in the page and in every exported deck.
+  assert.match(app, /clearTimeout\(customFontTimer\)/);
+  assert.match(app, /customFontTimer = setTimeout\(/);
+  const handler = /customFontEl\.addEventListener\("input"[\s\S]*?\n  \}\);/.exec(app)[0];
+  assert.ok(handler.includes("setTimeout"), "the input handler must debounce before applying");
+  assert.ok(!/^\s*if \(value\) applyFont/m.test(handler.split("setTimeout")[0]),
+    "nothing may apply the font before the debounce");
+  // Chips preview their own face, which needs the face on the page first.
+  assert.match(app, /function preloadPickerFonts\(\)/);
+  assert.match(app, /if \(open && toggle\.dataset\.fold === "styleFold"\) preloadPickerFonts\(\)/);
+});
+
 test("side-panel groups fold from their section title", async () => {
   const app = await read("app.js");
   const base = await read("deck-base.css");
