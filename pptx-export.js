@@ -344,8 +344,8 @@
   }
 
   // ─── Theme-native masters ───────────────────────
-  function masterDecoration(SC, logo) {
-    const objects = [{
+  function masterDecoration(SC) {
+    return [{
       rect: {
         x: 0, y: 0, w: W, h: 0.055,
         fill: { color: SC.accent1 },
@@ -353,21 +353,22 @@
         objectName: "Brand accent",
       },
     }];
-    if (logo) {
-      const image = typeof logo === "string" ? { data: logo } : logo;
-      // Right-aligned in the reserved corner so the mark keeps its position
-      // against the slide edge whatever its proportions.
-      const frame = containImage(image.data, { x: W - 1.66, y: 0.18, w: 1.12, h: 0.46 }, { x: "right" });
-      objects.push({
-        image: {
-          ...image,
-          ...frame,
-          altText: image.altText ?? "Brand logo",
-          objectName: "Brand logo",
-        },
-      });
-    }
-    return objects;
+  }
+
+  function addSlideLogo(slide, logo) {
+    if (!logo) return;
+    const image = typeof logo === "string" ? { data: logo } : logo;
+    const frame = containImage(
+      image.data,
+      { x: W - 1.66, y: 0.18, w: 1.12, h: 0.46 },
+      { x: "right" },
+    );
+    slide.addImage({
+      ...image,
+      ...frame,
+      altText: image.altText ?? "Brand logo",
+      objectName: "Brand logo",
+    });
   }
 
   function placeholder(name, type, x, y, w, h, options = {}) {
@@ -379,14 +380,9 @@
     };
   }
 
-  function defineMasters(pptx, SC, logo) {
+  function defineMasters(pptx, SC) {
     const common = {
       background: { color: SC.background1 },
-      slideNumber: {
-        x: 9.2, y: 5.25, w: 0.32, h: 0.18,
-        fontSize: 9, color: SC.text1, transparency: 40,
-        align: "right", margin: 0,
-      },
     };
     const title = options => placeholder(
       "title", "title", LEFT, TITLE_Y, BODY_W, TITLE_H,
@@ -408,7 +404,7 @@
       title: "TITLE",
       ...common,
       objects: [
-        ...masterDecoration(SC, logo),
+        ...masterDecoration(SC),
         titleSlideTitle(),
         placeholder("eyebrow", "body", 2, 1.25, 6, 0.26, {
           fontSize: 10, align: "center", charSpacing: 3, color: SC.accent1, valign: "top",
@@ -420,7 +416,7 @@
       title: "TITLE_PLAIN",
       ...common,
       objects: [
-        ...masterDecoration(SC, logo),
+        ...masterDecoration(SC),
         titleSlideTitle(),
         titleSlideSubtitle(),
       ],
@@ -429,7 +425,7 @@
       title: "TITLE_BODY",
       ...common,
       objects: [
-        ...masterDecoration(SC, logo),
+        ...masterDecoration(SC),
         title(),
         body("body", LEFT, BODY_Y, BODY_W, BODY_H),
       ],
@@ -438,7 +434,7 @@
       title: "TITLE_TWO_COLUMN",
       ...common,
       objects: [
-        ...masterDecoration(SC, logo),
+        ...masterDecoration(SC),
         title(),
         body("body_left", LEFT, BODY_Y, 4.18, BODY_H),
         body("body_right", 5.2, BODY_Y, 4.18, BODY_H),
@@ -448,7 +444,7 @@
       title: "TITLE_TABLE",
       ...common,
       objects: [
-        ...masterDecoration(SC, logo),
+        ...masterDecoration(SC),
         title(),
         placeholder("table", "table", LEFT, BODY_Y, BODY_W, BODY_H),
       ],
@@ -457,7 +453,7 @@
       title: "TITLE_IMAGE",
       ...common,
       objects: [
-        ...masterDecoration(SC, logo),
+        ...masterDecoration(SC),
         title(),
         body("body", LEFT, BODY_Y, 5.05, BODY_H),
         placeholder("image", "image", IMAGE_X, BODY_Y, IMAGE_W, BODY_H),
@@ -467,7 +463,7 @@
       title: "SECTION",
       ...common,
       objects: [
-        ...masterDecoration(SC, logo),
+        ...masterDecoration(SC),
         title({ x: 0.95, y: 1.9, w: 8.1, h: 1.1, fontSize: 36, align: "center", valign: "middle" }),
         body("body", 1.35, 3.12, 7.3, 0.72, { fontSize: 17, align: "center" }),
       ],
@@ -537,10 +533,12 @@
     return {
       text: toTextRuns(cell?.runs, SC, theme, {
         fontSize: header ? 11 : 12.5,
+        fontFace: theme.bodyFont,
         bold: header,
         color: header ? SC.background1 : SC.text1,
       }),
       options: {
+        fontFace: theme.bodyFont,
         align: align || "left",
         valign: "middle",
         fill: { color: header ? SC.accent1 : SC.background1 },
@@ -568,6 +566,7 @@
       border: { type: "solid", pt: 0.65, color: SC.text1, transparency: 72 },
       fill: { color: SC.background1 },
       color: SC.text1,
+      fontFace: theme.bodyFont,
       valign: "middle",
       margin: 4,
       autoFit: false,
@@ -721,6 +720,26 @@
         : shape));
   }
 
+  // PptxGenJS 4.0.1 emits another <a:pPr> before each rich-text run in a
+  // bulleted paragraph. The later properties contain <a:buNone/>, so
+  // PowerPoint applies the bullet to only part of an item. DrawingML permits
+  // one paragraph-properties element; retain the first and remove the rest.
+  function repairBulletParagraphs(xml) {
+    return xml.replace(/<a:p>([\s\S]*?)<\/a:p>/g, (paragraph, content) => {
+      if (!/<a:bu(?:Char|AutoNum)\b/.test(content)) return paragraph;
+      let seen = false;
+      const repaired = content.replace(
+        /<a:pPr\b[^>]*?(?:\/>|>[\s\S]*?<\/a:pPr>)/g,
+        properties => {
+          if (seen) return "";
+          seen = true;
+          return properties;
+        },
+      );
+      return `<a:p>${repaired}</a:p>`;
+    });
+  }
+
   function layoutPlaceholders(xml) {
     return [...xml.matchAll(/<p:ph\b([^>]*?)\/?>/g)].map(match => ({
       type: /type="(\w+)"/.exec(match[1])?.[1] ?? "body",
@@ -830,7 +849,7 @@
         const layout = rels && /slideLayout\d+\.xml/.exec(rels)?.[0];
         const layoutXml = layout && await zip.file(`ppt/slideLayouts/${layout}`)?.async("string");
         if (layoutXml) xml = bindFramePlaceholders(xml, layoutXml);
-        xml = repairTitlePlaceholderIdx(repairRunSizes(xml));
+        xml = repairBulletParagraphs(repairTitlePlaceholderIdx(repairRunSizes(xml)));
         zip.file(path, repairShapeIds(xml));
       }));
 
@@ -915,7 +934,7 @@
     const language = opts.language || "en";
 
     const SC = pptx.SchemeColor;
-    defineMasters(pptx, SC, opts.logo);
+    defineMasters(pptx, SC);
 
     const pagesBySlide = deck.slides.map(slide => paginate(slide.blocks));
     const warnings = preflight(deck, pagesBySlide);
@@ -932,6 +951,7 @@
 
       if (sourceSlide.type === "title") {
         const titleSlide = pptx.addSlide({ masterName: opts.brandName ? "TITLE" : "TITLE_PLAIN" });
+        addSlideLogo(titleSlide, opts.logo);
         addTitle(titleSlide, sourceSlide.title, SC, theme);
         titleSlide.addText(toTextRuns(sourceSlide.subtitle, SC, theme, {
           fontSize: 18, color: SC.text1,
@@ -947,6 +967,7 @@
         if (sourceSlide.notes?.length) titleSlide.addNotes(sourceSlide.notes.join("\n\n"));
         pages.filter(page => page.length).forEach((page, pageIndex) => {
           const continuation = pptx.addSlide({ masterName: "TITLE_BODY" });
+          addSlideLogo(continuation, opts.logo);
           addTitle(continuation, continuedTitle(sourceSlide.title, language), SC, theme);
           renderBodyPlaceholder(continuation, page, "body", SC, theme);
         });
@@ -963,6 +984,7 @@
         }
         if (masterName === "TITLE_BODY" && shouldUseTwoColumns(page)) masterName = "TITLE_TWO_COLUMN";
         const slide = pptx.addSlide({ masterName });
+        addSlideLogo(slide, opts.logo);
         addTitle(
           slide,
           pageIndex ? continuedTitle(sourceSlide.title, language) : sourceSlide.title,

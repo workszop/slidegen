@@ -116,7 +116,8 @@ test("exports complete OOXML with continuations and editable native content", as
 
   const explicitFonts = [...allSlides.matchAll(/typeface="([^"]+)"/g)].map(match => match[1]);
   assert.ok(explicitFonts.includes("Fira Code"), "code is allowed to use the explicit mono font");
-  assert.ok(explicitFonts.every(font => font === "Fira Code" || /^\+m[jn]-/.test(font)));
+  assert.ok(explicitFonts.includes("Poppins"), "table text must use the selected slide font");
+  assert.ok(explicitFonts.every(font => ["Fira Code", "Poppins"].includes(font) || /^\+m[jn]-/.test(font)));
 
   const mixedContentSlide = slides.find(item => item.xml.includes("Secondary heading"));
   assert.ok(mixedContentSlide);
@@ -131,7 +132,7 @@ test("exports complete OOXML with continuations and editable native content", as
     position >= 0 && (index === 0 || position > orderedContent[index - 1])));
 });
 
-test("defines semantic layouts with native placeholders and slide numbers", async () => {
+test("defines semantic layouts without logos or slide numbers", async () => {
   const { zip } = await makePackage();
   const layouts = await xmlFiles(zip, /^ppt\/slideLayouts\/slideLayout\d+\.xml$/);
   const allLayouts = layouts.map(item => item.xml).join("\n");
@@ -143,9 +144,27 @@ test("defines semantic layouts with native placeholders and slide numbers", asyn
   assert.match(allLayouts, /<p:ph[\s\S]*?type="body"/);
   assert.match(allLayouts, /<p:ph type="pic"[\s\S]*?idx="\d+"/);
   assert.match(allLayouts, /<p:ph type="tbl"[\s\S]*?idx="\d+"/);
-  assert.match(allLayouts, /<p:ph type="sldNum"/);
+  assert.doesNotMatch(allLayouts, /name="Brand logo"|descr="Test brand logo"/);
+  assert.doesNotMatch(allLayouts, /<p:ph[^>]*type="sldNum"/);
   assert.match(allLayouts, /name="Brand accent"/);
-  assert.match(allLayouts, /descr="Test brand logo"/);
+});
+
+test("exports the logo as a selectable picture on every slide", async () => {
+  const { zip } = await makePackage();
+  const slides = await xmlFiles(zip, /^ppt\/slides\/slide\d+\.xml$/);
+  assert.ok(slides.length > SLIDES.length, "fixture should include continuation slides");
+  for (const { name, xml } of slides) {
+    assert.match(xml, /<p:pic>[\s\S]*?name="Brand logo"[\s\S]*?descr="Test brand logo"[\s\S]*?<\/p:pic>/,
+      `${name}: logo must be a slide picture rather than layout artwork`);
+  }
+});
+
+test("exports no slide-number fields or placeholders", async () => {
+  const { zip } = await makePackage();
+  const files = await xmlFiles(zip, /^ppt\/(?:slides|slideLayouts|slideMasters)\/[^/]+\.xml$/);
+  const xml = files.map(item => item.xml).join("\n");
+  assert.doesNotMatch(xml, /<p:ph[^>]*type="sldNum"/);
+  assert.doesNotMatch(xml, /type="slidenum"/);
 });
 
 test("routes table and illustrated content through their native layouts", async () => {
@@ -301,14 +320,14 @@ async function picGeometry(zip, pattern, objectName) {
   return null;
 }
 
-test("the brand logo keeps its aspect ratio inside the reserved corner", async () => {
+test("the slide-level brand logo keeps its aspect ratio inside the reserved corner", async () => {
   for (const [w, h] of [[135, 108], [400, 100], [100, 400]]) {
     const deck = DeckModel.create(["# T\nsub", "## Body\n\ntext"], { marked });
     const buffer = await exportDeckToPptx({
       deck, theme: {}, logo: makePng(w, h), outputType: "nodebuffer", onWarnings() {},
     });
     const zip = await JSZip.loadAsync(buffer);
-    const box = await picGeometry(zip, /^ppt\/slideLayouts\/slideLayout\d+\.xml$/, "Brand logo");
+    const box = await picGeometry(zip, /^ppt\/slides\/slide\d+\.xml$/, "Brand logo");
     assert.ok(box, `logo ${w}x${h} should be placed`);
     assert.ok(Math.abs(box.w / box.h - w / h) < 0.02,
       `logo ${w}x${h}: expected aspect ${(w / h).toFixed(3)}, got ${(box.w / box.h).toFixed(3)}`);
@@ -328,6 +347,53 @@ test("a slide illustration keeps its aspect ratio inside its column", async () =
   assert.ok(box, "illustration should be placed");
   assert.ok(Math.abs(box.w / box.h - 1536 / 1024) < 0.02,
     `expected aspect 1.500, got ${(box.w / box.h).toFixed(3)}`);
+});
+
+test("rich-text list items retain one bullet definition for the whole paragraph", async () => {
+  const deck = DeckModel.create([
+    "# Lists\nSubtitle",
+    [
+      "## Rich lists",
+      "- A **bold** bullet with *italic* text",
+      "- A [linked](https://example.com) bullet",
+      "",
+      "1. An **ordered** item with `code`",
+      "2. Another ordered item",
+    ].join("\n"),
+  ], { marked });
+  const buffer = await exportDeckToPptx({
+    deck, theme: {}, outputType: "nodebuffer", onWarnings() {},
+  });
+  const zip = await JSZip.loadAsync(buffer);
+  const slides = await xmlFiles(zip, /^ppt\/slides\/slide\d+\.xml$/);
+  const slide = slides.find(item => item.xml.includes("Rich lists"));
+  assert.ok(slide, "rich list slide should be exported");
+
+  const paragraphs = [...slide.xml.matchAll(/<a:p>([\s\S]*?)<\/a:p>/g)]
+    .map(match => match[0])
+    .filter(paragraph => /<a:bu(?:Char|AutoNum)\b/.test(paragraph));
+  assert.equal(paragraphs.length, 4);
+  for (const paragraph of paragraphs) {
+    assert.equal((paragraph.match(/<a:pPr\b/g) ?? []).length, 1,
+      "a list paragraph must contain exactly one paragraph-properties element");
+    assert.equal((paragraph.match(/<a:bu(?:Char|AutoNum)\b/g) ?? []).length, 1,
+      "a list paragraph must contain exactly one bullet definition");
+    assert.doesNotMatch(paragraph, /<a:buNone\/>/,
+      "a rich-text run must not cancel its paragraph bullet");
+  }
+});
+
+test("every native table cell uses the selected slide font", async () => {
+  const { zip } = await makePackage();
+  const slides = await xmlFiles(zip, /^ppt\/slides\/slide\d+\.xml$/);
+  const slide = slides.find(item => item.xml.includes("<a:tbl>"));
+  assert.ok(slide, "table slide should be exported");
+  const cells = slide.xml.match(/<a:tc>[\s\S]*?<\/a:tc>/g) ?? [];
+  assert.ok(cells.length >= 4);
+  for (const cell of cells) {
+    assert.match(cell, /typeface="Poppins"/, "table cell must use the selected body font");
+    assert.doesNotMatch(cell, /typeface="Arial"/);
+  }
 });
 
 // ── Placeholder and theme-responsiveness contract (Downloads/SKILL.md checks) ──
@@ -437,7 +503,7 @@ test("body placeholders are top-anchored and title slides stay centred", async (
 test("without a brandName the title slide carries no brand eyebrow", async () => {
   const { zip } = await makePackage({ brandName: undefined });
   const slide = await zip.file("ppt/slides/slide1.xml").async("string");
-  assert.doesNotMatch(slide, /Test Brand/i, "the title slide must not print the brand");
+  assert.doesNotMatch(slide, /<a:t>TEST BRAND<\/a:t>/, "the title slide must not print the brand");
   // Metadata still identifies the deck through `company`.
   const core = await zip.file("docProps/core.xml").async("string");
   assert.match(core, /<dc:creator>Test Company<\/dc:creator>/);
