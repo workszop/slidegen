@@ -282,8 +282,12 @@ body { overflow: hidden; background: var(--slide-bg); color: var(--slide-fg); }
       ].filter(Boolean).map(name => String(name).trim().toLowerCase()));
     }
 
-    async function collectEmbeddedFontCss() {
+    async function collectEmbeddedFontCss(pageCss = "") {
+      // The exported page can use fonts beyond the PPTX config (theme tokens
+      // like --font-mono resolve to brand-specific families), so any family
+      // the collected CSS mentions must be embedded as well.
       const families = exportFontFamilies();
+      const cssFamilies = String(pageCss).toLowerCase();
       const links = [...document.querySelectorAll('link[rel="stylesheet"]')]
         .filter(link => /^https:\/\/fonts\.googleapis\.com\//.test(link.href));
       const blocks = new Set();
@@ -295,7 +299,7 @@ body { overflow: hidden; background: var(--slide-bg); color: var(--slide-fg); }
           for (const match of css.matchAll(/@font-face\s*\{[^{}]*\}/gi)) {
             const family = /font-family:\s*['"]?([^;'"}]+)['"]?\s*;/i.exec(match[0])?.[1]
               ?.trim().toLowerCase();
-            if (!family || !families.has(family)) continue;
+            if (!family || !(families.has(family) || cssFamilies.includes(family))) continue;
             try { blocks.add(await inlineCssAssets(match[0], link.href)); } catch { /* use CSS fallbacks */ }
           }
         } catch { /* an offline export remains self-contained via CSS fallbacks */ }
@@ -312,7 +316,9 @@ body { overflow: hidden; background: var(--slide-bg); color: var(--slide-fg); }
         if (!raw || /^data:/i.test(raw)) continue;
         const url = new URL(raw, document.baseURI).href;
         if (!cache.has(url)) cache.set(url, fetchDataUrl(url));
-        image.setAttribute("src", await cache.get(url));
+        try {
+          image.setAttribute("src", await cache.get(url));
+        } catch { /* keep the original src rather than failing the export */ }
       }
       return template.innerHTML;
     }
@@ -320,7 +326,7 @@ body { overflow: hidden; background: var(--slide-bg); color: var(--slide-fg); }
     async function buildStandaloneHtml() {
       const title = deckTitle(state.md) || "slides";
       const baseCss = await inlineCssAssets(await collectExportCss(), document.baseURI);
-      const fontCss = await collectEmbeddedFontCss();
+      const fontCss = await collectEmbeddedFontCss(baseCss);
       const styleText = [baseCss, fontCss, collectExportPresetCss()].filter(Boolean).join("\n");
       const hasTitle = state.deckModel.slides[0]?.type === "title";
       const renderedSlides = await Promise.all(state.slides.map(async (slideHtml, index) => {

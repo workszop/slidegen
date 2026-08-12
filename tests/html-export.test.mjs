@@ -46,12 +46,13 @@ class TestTemplate {
   }
 }
 
-function makeController({ localCssAvailable = true } = {}) {
+function makeController({ localCssAvailable = true, slides, pageRules = [], googleCss } = {}) {
   const fontLink = { href: "https://fonts.googleapis.com/css2?family=Raleway:wght@400;700" };
   const document = {
     baseURI: "https://example.test/app/",
     styleSheets: [
       { cssRules: [
+        ...pageRules,
         {
           selectorText: ".slide",
           cssText: ".slide { color: var(--slide-fg); }",
@@ -88,12 +89,21 @@ function makeController({ localCssAvailable = true } = {}) {
   };
   const fetch = async url => {
     if (String(url).startsWith("https://fonts.googleapis.com/")) {
-      return new Response("@font-face { font-family: 'Raleway'; src: url(https://fonts.gstatic.com/raleway.woff2) format('woff2'); font-weight: 400; }");
+      return new Response(googleCss
+        ?? "@font-face { font-family: 'Raleway'; src: url(https://fonts.gstatic.com/raleway.woff2) format('woff2'); font-weight: 400; }");
     }
     if (url === "https://fonts.gstatic.com/raleway.woff2") {
       return new Response(new Uint8Array([1, 2, 3]), {
         headers: { "Content-Type": "font/woff2" },
       });
+    }
+    if (url === "https://fonts.gstatic.com/space-grotesk.woff2") {
+      return new Response(new Uint8Array([4, 5, 6]), {
+        headers: { "Content-Type": "font/woff2" },
+      });
+    }
+    if (url === "https://assets.example.test/missing.png") {
+      return new Response("not found", { status: 404 });
     }
     if (url === "https://example.test/app/deck-base.css") {
       if (!localCssAvailable) throw new TypeError("Failed to fetch");
@@ -120,7 +130,7 @@ function makeController({ localCssAvailable = true } = {}) {
     state: {
       md: "# Offline deck",
       deckModel: { slides: [{ type: "title" }, { type: "content" }, { type: "content" }] },
-      slides: [
+      slides: slides ?? [
         '<h1>Offline deck</h1><p>Ready to present.</p><img src="https://assets.example.test/chart.png" alt="Chart">',
         "<h2>Second slide</h2><p>Only one slide should be visible.</p>",
         "<h2>Third slide</h2><p>Navigation must reach this slide.</p>",
@@ -199,6 +209,42 @@ test("standalone HTML embeds presentation CSS, fonts, images, and navigation", a
   assert.doesNotMatch(html, /<link\b/i);
   assert.doesNotMatch(html, /https:\/\/fonts\.(?:googleapis|gstatic)\.com/);
   assert.doesNotMatch(html, /https:\/\/assets\.example\.test/);
+});
+
+test("an unfetchable slide image keeps its original src instead of failing the export", async () => {
+  const exporter = makeController({
+    slides: [
+      '<h1>Offline deck</h1><img src="https://assets.example.test/chart.png" alt="Chart"><img src="https://assets.example.test/missing.png" alt="Broken">',
+      "<h2>Second slide</h2>",
+      "<h2>Third slide</h2>",
+    ],
+  });
+  const { html } = await exporter.buildStandaloneHtml();
+
+  assert.match(html, /data:image\/png;base64,iVBORw==/,
+    "reachable images must still be inlined");
+  assert.match(html, /src="https:\/\/assets\.example\.test\/missing\.png"/,
+    "an unfetchable image must keep its original src");
+});
+
+test("embedded fonts cover families used by the page CSS, not just the PPTX config", async () => {
+  const exporter = makeController({
+    pageRules: [{
+      selectorText: ".present-counter",
+      cssText: '.present-counter { font-family: "Space Grotesk", monospace; }',
+      style: { cssText: 'font-family: "Space Grotesk", monospace;' },
+    }],
+    googleCss: [
+      "@font-face { font-family: 'Raleway'; src: url(https://fonts.gstatic.com/raleway.woff2) format('woff2'); font-weight: 400; }",
+      "@font-face { font-family: 'Space Grotesk'; src: url(https://fonts.gstatic.com/space-grotesk.woff2) format('woff2'); }",
+    ].join("\n"),
+  });
+  const { html } = await exporter.buildStandaloneHtml();
+
+  assert.match(html, /data:font\/woff2;base64,AQID/,
+    "configured fonts must still be embedded");
+  assert.match(html, /@font-face \{ font-family: 'Space Grotesk'; src: url\("data:font\/woff2;base64,BAUG"\)/,
+    "fonts referenced only by the collected CSS must be embedded too");
 });
 
 test("standalone HTML keeps presentation styling when file CSS cannot be read", async () => {
