@@ -202,6 +202,12 @@
       resetLogo();
     }
 
+    // True when every visual still matches the brand default: first preset,
+    // default font, and no stored logo override (null means "never touched").
+    function isDefault() {
+      return activePreset === 0 && activeFont === DEFAULT_FONT && logoMode === null;
+    }
+
     function bindLogoControls() {
       if (!logoBtnEl || !logoInputEl) return;
       logoBtnEl.addEventListener("click", () => logoInputEl.click());
@@ -237,6 +243,7 @@
       applyFont,
       resetFont,
       resetToDefaults,
+      isDefault,
       preloadPickerFonts,
       refreshLogo,
       effectiveLogo,

@@ -767,8 +767,19 @@ Drop your own document in the panel on the left.`,
   // ─── Reset (chrome logo) ────────────────────────
   // Returns the workspace to its first-visit state: the guide deck, no loaded
   // document, brand visuals. Language, API settings, and panel widths stay.
+  // Anything the reset would throw away: the user's own deck, a loaded or
+  // pasted document (even before slides are generated), generated
+  // illustrations, or styling changed from the brand defaults.
+  function resetWouldDiscard() {
+    return !state.deckIsExample
+      || state.source != null
+      || pasteAreaEl.value.trim() !== ""
+      || state.images.some(Boolean)
+      || !style.isDefault();
+  }
+
   function resetToDefault() {
-    if (!state.deckIsExample && !confirm(t("confirmReset"))) return;
+    if (resetWouldDiscard() && !confirm(t("confirmReset"))) return;
     state.generationController?.abort(new DOMException("Generation cancelled", "AbortError"));
     state.illustrationController?.abort(new DOMException("Illustration cancelled", "AbortError"));
     pasteAreaEl.value = "";

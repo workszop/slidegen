@@ -113,10 +113,19 @@ test("the chrome logo resets the app to its default state", async () => {
   assert.match(app, /getElementById\("brandHomeBtn"\)/);
   assert.match(app, /brandHomeBtn\.addEventListener\("click", resetToDefault\)/);
 
-  // Discarding a user's deck needs consent; the example deck resets silently.
+  // Discarding anything of the user's needs consent — their own deck, a
+  // loaded or pasted document, generated illustrations, or changed styling.
+  // Only a truly pristine app resets silently.
   const reset = /function resetToDefault\(\) \{[\s\S]*?\n  \}/.exec(app)?.[0] ?? "";
   assert.ok(reset, "app.js defines resetToDefault");
-  assert.match(reset, /if \(!state\.deckIsExample && !confirm\(t\("confirmReset"\)\)\) return;/);
+  assert.match(reset, /if \(resetWouldDiscard\(\) && !confirm\(t\("confirmReset"\)\)\) return;/);
+  const dirty = /function resetWouldDiscard\(\) \{[\s\S]*?\n  \}/.exec(app)?.[0] ?? "";
+  assert.ok(dirty, "app.js defines resetWouldDiscard");
+  assert.match(dirty, /!state\.deckIsExample/, "the user's own deck must trigger the confirm");
+  assert.match(dirty, /state\.source/, "a loaded document must trigger the confirm");
+  assert.match(dirty, /pasteAreaEl\.value/, "pasted text must trigger the confirm");
+  assert.match(dirty, /state\.images\.some\(Boolean\)/, "generated illustrations must trigger the confirm");
+  assert.match(dirty, /!style\.isDefault\(\)/, "changed style settings must trigger the confirm");
   assert.match(reset, /setSource\(null\)/, "reset clears the loaded document");
   assert.match(reset, /resetToDefaults\(\)/, "reset restores the brand visuals");
   assert.match(reset, /setDeck\(exampleDeck\(uiLang\), \{ example: true \}\)/,
@@ -130,6 +139,15 @@ test("the chrome logo resets the app to its default state", async () => {
   // reset must clear the stored override ("" means user-removed, not default).
   assert.match(style, /function resetToDefaults\(\)/);
   assert.match(style, /removeStored\(LOGO_KEY\)/);
+
+  // It also reports whether the visuals still match those defaults, so the
+  // reset knows when nothing would be lost.
+  const styleDefault = /function isDefault\(\) \{[\s\S]*?\n    \}/.exec(style)?.[0] ?? "";
+  assert.ok(styleDefault, "app-style.js defines isDefault");
+  assert.match(styleDefault, /activePreset === 0/);
+  assert.match(styleDefault, /activeFont === DEFAULT_FONT/);
+  assert.match(styleDefault, /logoMode === null/);
+  assert.match(style, /\n      isDefault,\n/, "isDefault must be part of the controller API");
 
   // The button reads as plain chrome and never leaks into standalone exports.
   assert.match(base, /\.brand-home \{[^}]*cursor: pointer/s);
