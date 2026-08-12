@@ -143,6 +143,16 @@ function reconcileSlideImages(previousSegments, previousImages, nextSegments) {
   return (nextSegments ?? []).map(segment => imagesBySegment.get(segment)?.shift());
 }
 
+// Markup for a slide with a generated illustration. The leading h1/h2 is the
+// slide title and stays above the image grid at full width — only the body
+// copy shares its row with the picture (mirrors the PPTX TITLE_IMAGE layout).
+function illustratedSlideHtml(slideHtml, imageHtml) {
+  const html = String(slideHtml ?? "");
+  const heading = html.match(/^\s*<h([12])[^>]*>[\s\S]*?<\/h\1>/i)?.[0] ?? "";
+  const body = html.slice(heading.length);
+  return `${heading}<div class="slide-layout"><div class="slide-copy">${body}</div>${imageHtml}</div>`;
+}
+
 // First family name from a CSS font-family list, unquoted.
 function firstFont(ff) {
   return ff.split(",")[0].trim().replace(/^["']|["']$/g, "");

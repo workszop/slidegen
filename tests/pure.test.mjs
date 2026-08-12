@@ -8,7 +8,7 @@ const catalogSrc = readFileSync(new URL("../ai-models.js", import.meta.url), "ut
 const src = readFileSync(new URL("../shared.js", import.meta.url), "utf8");
 const section = src.split("/* pure-helpers:start */")[1].split("/* pure-helpers:end */")[0];
 const H = new Function(`${catalogSrc}\n${section}; return {
-  stripOuterFence, splitSlides, detectLang, buildPrompt, deckTitle, isTitleSlide, reconcileSlideImages, firstFont,
+  stripOuterFence, splitSlides, detectLang, buildPrompt, deckTitle, isTitleSlide, reconcileSlideImages, illustratedSlideHtml, firstFont,
   clampPanelWidth,
   PROVIDER_INFO, DEFAULT_PROVIDER, OPENAI_IMAGE_MODELS, validateModelCatalog, normalizeAiSettings,
   buildGeminiRequest, buildOpenAIRequest, buildClaudeRequest,
@@ -45,6 +45,30 @@ test("reconcileSlideImages drops images for edited slides and preserves duplicat
   assert.deepEqual(
     H.reconcileSlideImages(["same", "same", "old"], [undefined, "second.jpg", "old.jpg"], ["same", "same", "new"]),
     [undefined, "second.jpg", undefined],
+  );
+});
+
+test("illustratedSlideHtml keeps the slide heading full-width above the image row", () => {
+  const img = '<img class="slide-generated-image" alt="">';
+  assert.equal(
+    H.illustratedSlideHtml('<h2 id="s">Head</h2>\n<p>Body</p>', img),
+    '<h2 id="s">Head</h2><div class="slide-layout"><div class="slide-copy">\n<p>Body</p></div>' + img + "</div>",
+  );
+  assert.equal(
+    H.illustratedSlideHtml("<h1>Deck</h1>\n<p>Sub</p>", img),
+    '<h1>Deck</h1><div class="slide-layout"><div class="slide-copy">\n<p>Sub</p></div>' + img + "</div>",
+  );
+});
+
+test("illustratedSlideHtml wraps the whole slide when it has no leading heading", () => {
+  const img = '<img class="slide-generated-image" alt="">';
+  assert.equal(
+    H.illustratedSlideHtml("<p>Body</p>\n<h2>Later</h2>", img),
+    '<div class="slide-layout"><div class="slide-copy"><p>Body</p>\n<h2>Later</h2></div>' + img + "</div>",
+  );
+  assert.equal(
+    H.illustratedSlideHtml("<h3>Minor</h3><p>Body</p>", img),
+    '<div class="slide-layout"><div class="slide-copy"><h3>Minor</h3><p>Body</p></div>' + img + "</div>",
   );
 });
 

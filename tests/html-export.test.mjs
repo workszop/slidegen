@@ -5,6 +5,14 @@ import vm from "node:vm";
 
 const SOURCE = await readFile(new URL("../app-export.js", import.meta.url), "utf8");
 
+// The real illustrated-slide markup helper from shared.js's pure section: the
+// export must lay out illustrated slides exactly like the live preview does.
+// ai-models.js comes along because the section validates the catalogue on load.
+const catalogSrc = await readFile(new URL("../ai-models.js", import.meta.url), "utf8");
+const sharedSrc = await readFile(new URL("../shared.js", import.meta.url), "utf8");
+const pureSection = sharedSrc.split("/* pure-helpers:start */")[1].split("/* pure-helpers:end */")[0];
+const { illustratedSlideHtml } = new Function(`${catalogSrc}\n${pureSection}; return { illustratedSlideHtml };`)();
+
 class TestFileReader {
   readAsDataURL(blob) {
     blob.arrayBuffer().then(buffer => {
@@ -47,7 +55,7 @@ class TestTemplate {
 }
 
 function makeController({
-  localCssAvailable = true, slides, pageRules = [], googleCss, extraSheets = [], fetchLog = [],
+  localCssAvailable = true, slides, images = [], pageRules = [], googleCss, extraSheets = [], fetchLog = [],
 } = {}) {
   const fontLink = { href: "https://fonts.googleapis.com/css2?family=Raleway:wght@400;700" };
   const document = {
@@ -142,7 +150,7 @@ function makeController({
         "<h2>Second slide</h2><p>Only one slide should be visible.</p>",
         "<h2>Third slide</h2><p>Navigation must reach this slide.</p>",
       ],
-      images: [],
+      images,
     },
     t: key => key,
     uiLang: () => "en",
@@ -154,6 +162,7 @@ function makeController({
     deckTitle: () => "Offline deck",
     splitSlides: () => [],
     stripOuterFence: value => value,
+    illustratedSlideHtml,
     ensurePptxDeps: async () => {},
     showError() {},
   });
@@ -306,6 +315,21 @@ test("an image repeated across slides is fetched once for the whole export", asy
     "both slides must inline the image");
   assert.equal(fetchLog.filter(url => url === "https://assets.example.test/chart.png").length, 1,
     "a repeated image must be fetched once per export");
+});
+
+test("an illustrated slide keeps its heading full-width above the image grid", async () => {
+  const exporter = makeController({
+    slides: [
+      "<h1>Offline deck</h1><p>Ready to present.</p>",
+      "<h2>Second slide</h2><p>Body copy.</p>",
+      "<h2>Third slide</h2><p>More copy.</p>",
+    ],
+    images: [undefined, "data:image/png;base64,iVBORw==", undefined],
+  });
+  const { html } = await exporter.buildStandaloneHtml();
+
+  assert.match(html, /<h2>Second slide<\/h2><div class="slide-layout"><div class="slide-copy"><p>Body copy\.<\/p><\/div><img class="slide-generated-image"/,
+    "the slide title must sit outside the image grid so it keeps full width");
 });
 
 test("STANDALONE_FALLBACK_CSS stays in sync with the real presentation CSS", async () => {

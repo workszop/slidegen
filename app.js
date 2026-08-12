@@ -580,7 +580,7 @@ Drop your own document in the panel on the left.`,
   });
   const exporter = createExportController({
     BRAND, state, t, uiLang: () => uiLang, style,
-    deckTitle, splitSlides, stripOuterFence, ensurePptxDeps, showError, downloadBtn, pptxBtn,
+    deckTitle, splitSlides, stripOuterFence, illustratedSlideHtml, ensurePptxDeps, showError, downloadBtn, pptxBtn,
   });
   const applyPreset = style.applyPreset;
   const applyFont = style.applyFont;
@@ -659,7 +659,7 @@ Drop your own document in the panel on the left.`,
     wsStageEl.dataset.slideType = semanticSlide?.type ?? "content";
     wsStageEl.dataset.warningCount = String(semanticSlide?.warnings?.length ?? 0);
     wsStageEl.innerHTML = image
-      ? `<div class="slide-layout"><div class="slide-copy">${state.slides[state.current]}</div><img class="slide-generated-image" alt=""></div>`
+      ? illustratedSlideHtml(state.slides[state.current], '<img class="slide-generated-image" alt="">')
       : state.slides[state.current];
     if (image) {
       const img = wsStageEl.querySelector(".slide-generated-image");
@@ -699,7 +699,7 @@ Drop your own document in the panel on the left.`,
     stageEl.dataset.slideType = semanticSlide?.type ?? "content";
     stageEl.dataset.warningCount = String(semanticSlide?.warnings?.length ?? 0);
     stageEl.innerHTML = (eyebrow ? `<div class="slide-eyebrow"></div>` : "") + (image
-      ? `<div class="slide-layout"><div class="slide-copy">${state.slides[i]}</div><img class="slide-generated-image" alt=""></div>`
+      ? illustratedSlideHtml(state.slides[i], '<img class="slide-generated-image" alt="">')
       : state.slides[i]);
     if (eyebrow) stageEl.querySelector(".slide-eyebrow").textContent = eyebrow;
     if (image) {

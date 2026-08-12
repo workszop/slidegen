@@ -122,7 +122,7 @@ body { overflow: hidden; background: var(--slide-bg); color: var(--slide-fg); }
   function createExportController(ctx) {
     const {
       BRAND, state, t, uiLang, style, deckTitle, splitSlides, stripOuterFence,
-      ensurePptxDeps, showError, downloadBtn, pptxBtn,
+      illustratedSlideHtml, ensurePptxDeps, showError, downloadBtn, pptxBtn,
     } = ctx;
 
     function escapeHtml(value) {
@@ -350,7 +350,7 @@ body { overflow: hidden; background: var(--slide-bg); color: var(--slide-fg); }
           ? ""
           : [`${index + 1} / ${state.slides.length}`, title].filter(Boolean).join(" · ");
         const content = image
-          ? `<div class="slide-layout"><div class="slide-copy">${slideHtml}</div><img class="slide-generated-image" src="${escapeHtml(image)}" alt="${escapeHtml(t("imageAlt"))}"></div>`
+          ? illustratedSlideHtml(slideHtml, `<img class="slide-generated-image" src="${escapeHtml(image)}" alt="${escapeHtml(t("imageAlt"))}">`)
           : slideHtml;
         const eyebrowHtml = eyebrow ? `<div class="slide-eyebrow">${escapeHtml(eyebrow)}</div>` : "";
         return inlineHtmlImages(`<section class="slide${isTitle ? " slide--title" : ""}${image ? " slide--illustrated" : ""}${index ? " hidden" : ""}" data-export-slide>
