@@ -20,7 +20,8 @@
 :root {
   --export-muted: color-mix(in srgb, var(--slide-fg) 72%, var(--slide-bg));
   --export-surface: color-mix(in srgb, var(--slide-fg) 8%, var(--slide-bg));
-  --export-line: color-mix(in srgb, var(--slide-fg) 24%, var(--slide-bg));
+  --export-line: color-mix(in srgb, var(--slide-fg) 22%, var(--slide-bg));
+  --export-link: color-mix(in srgb, var(--slide-accent) 62%, var(--slide-fg));
   --export-radius: 14px;
   --export-body-font: var(--slide-body-font, system-ui, sans-serif);
   --export-heading-font: var(--slide-heading-font, system-ui, sans-serif);
@@ -44,7 +45,7 @@ body { overflow: hidden; background: var(--slide-bg); color: var(--slide-fg); }
 }
 .present-bar {
   position: absolute; top: 0; left: 0; width: 0%; height: 4px; z-index: 5;
-  background: var(--slide-accent); transition: width 450ms ease;
+  background: var(--slide-accent); transition: width 450ms cubic-bezier(.2,.6,.2,1);
 }
 .slide-logo {
   position: absolute; top: calc(4px + 2.5vh); right: 3vw; z-index: 4;
@@ -72,7 +73,8 @@ body { overflow: hidden; background: var(--slide-bg); color: var(--slide-fg); }
 .slide p, .slide li { color: var(--export-muted); font-size: var(--export-body-size); line-height: 1.55; }
 .slide p { margin: 0 0 .6em; }
 .slide li { margin-bottom: .45em; }
-.slide li::marker, .slide a { color: var(--slide-accent); }
+.slide li::marker { color: var(--slide-accent); }
+.slide a { color: var(--export-link); }
 .slide strong, .slide em { color: var(--slide-fg); }
 .slide code, .slide pre { font-family: var(--export-mono-font); }
 .slide code { padding: .1em .4em; border-radius: 6px; background: var(--export-surface); }
@@ -103,6 +105,7 @@ body { overflow: hidden; background: var(--slide-bg); color: var(--slide-fg); }
 .slide-generated-image {
   display: block; width: 100%; max-height: 52vh; object-fit: cover;
   border-radius: var(--export-radius);
+  box-shadow: var(--shadow-image, 0 12px 34px rgba(33,30,26,.14));
 }
 .present-footer {
   display: flex; align-items: center; justify-content: space-between;
@@ -212,8 +215,11 @@ body { overflow: hidden; background: var(--slide-bg); color: var(--slide-fg); }
       const styles = await Promise.all([...document.styleSheets].map(async sheet => {
         if (/^https:\/\/fonts\.googleapis\.com\//.test(sheet.href || "")) return "";
         try {
-          const css = [...sheet.cssRules].map(exportRuleText).filter(Boolean).join("\n");
-          if (css || !sheet.href) return css;
+          // A readable sheet is authoritative even when every rule was
+          // chrome-filtered; only a sheet exposing no rules needs the fetch.
+          const rules = [...sheet.cssRules];
+          const css = rules.map(exportRuleText).filter(Boolean).join("\n");
+          if (rules.length || !sheet.href) return css;
         } catch { /* fall through to fetching the applied stylesheet */ }
         // Some browsers expose an applied linked stylesheet but deny CSSOM
         // access to its rules. Fetch the same-origin source instead; without
@@ -249,6 +255,13 @@ body { overflow: hidden; background: var(--slide-bg); color: var(--slide-fg); }
       return blobDataUrl(await response.blob());
     }
 
+    // One cache spans a whole export so an asset shared by CSS and any
+    // number of slides is fetched and encoded exactly once.
+    function fetchDataUrlCached(url, assetCache) {
+      if (!assetCache.has(url)) assetCache.set(url, fetchDataUrl(url));
+      return assetCache.get(url);
+    }
+
     async function replaceAsync(source, pattern, replacer) {
       const matches = [...source.matchAll(pattern)];
       if (!matches.length) return source;
@@ -262,14 +275,12 @@ body { overflow: hidden; background: var(--slide-bg); color: var(--slide-fg); }
       return output + source.slice(cursor);
     }
 
-    async function inlineCssAssets(css, baseUrl) {
-      const cache = new Map();
+    async function inlineCssAssets(css, baseUrl, assetCache = new Map()) {
       return replaceAsync(css, /url\(\s*(?:"([^"]*)"|'([^']*)'|([^)]*?))\s*\)/gi, async match => {
         const raw = String(match[1] ?? match[2] ?? match[3] ?? "").trim();
         if (!raw || /^(?:data:|#)/i.test(raw)) return match[0];
         const url = new URL(raw, baseUrl).href;
-        if (!cache.has(url)) cache.set(url, fetchDataUrl(url));
-        return `url("${await cache.get(url)}")`;
+        return `url("${await fetchDataUrlCached(url, assetCache)}")`;
       });
     }
 
@@ -282,7 +293,7 @@ body { overflow: hidden; background: var(--slide-bg); color: var(--slide-fg); }
       ].filter(Boolean).map(name => String(name).trim().toLowerCase()));
     }
 
-    async function collectEmbeddedFontCss(pageCss = "") {
+    async function collectEmbeddedFontCss(pageCss = "", assetCache = new Map()) {
       // The exported page can use fonts beyond the PPTX config (theme tokens
       // like --font-mono resolve to brand-specific families), so any family
       // the collected CSS mentions must be embedded as well.
@@ -296,40 +307,43 @@ body { overflow: hidden; background: var(--slide-bg); color: var(--slide-fg); }
           const response = await fetch(link.href);
           if (!response.ok) return;
           const css = await response.text();
-          for (const match of css.matchAll(/@font-face\s*\{[^{}]*\}/gi)) {
+          const inlined = await Promise.all([...css.matchAll(/@font-face\s*\{[^{}]*\}/gi)].map(async match => {
             const family = /font-family:\s*['"]?([^;'"}]+)['"]?\s*;/i.exec(match[0])?.[1]
               ?.trim().toLowerCase();
-            if (!family || !(families.has(family) || cssFamilies.includes(family))) continue;
-            try { blocks.add(await inlineCssAssets(match[0], link.href)); } catch { /* use CSS fallbacks */ }
-          }
+            if (!family || !(families.has(family) || cssFamilies.includes(family))) return "";
+            try { return await inlineCssAssets(match[0], link.href, assetCache); } catch { return ""; /* use CSS fallbacks */ }
+          }));
+          for (const block of inlined) if (block) blocks.add(block);
         } catch { /* an offline export remains self-contained via CSS fallbacks */ }
       }));
       return [...blocks].join("\n");
     }
 
-    async function inlineHtmlImages(html) {
+    async function inlineHtmlImages(html, assetCache = new Map()) {
       const template = document.createElement("template");
       template.innerHTML = html;
-      const cache = new Map();
-      for (const image of template.content.querySelectorAll("img[src]")) {
+      await Promise.all([...template.content.querySelectorAll("img[src]")].map(async image => {
         const raw = image.getAttribute("src");
-        if (!raw || /^data:/i.test(raw)) continue;
+        if (!raw || /^data:/i.test(raw)) return;
         const url = new URL(raw, document.baseURI).href;
-        if (!cache.has(url)) cache.set(url, fetchDataUrl(url));
         try {
-          image.setAttribute("src", await cache.get(url));
+          image.setAttribute("src", await fetchDataUrlCached(url, assetCache));
         } catch { /* keep the original src rather than failing the export */ }
-      }
+      }));
       return template.innerHTML;
     }
 
     async function buildStandaloneHtml() {
       const title = deckTitle(state.md) || "slides";
-      const baseCss = await inlineCssAssets(await collectExportCss(), document.baseURI);
-      const fontCss = await collectEmbeddedFontCss(baseCss);
-      const styleText = [baseCss, fontCss, collectExportPresetCss()].filter(Boolean).join("\n");
       const hasTitle = state.deckModel.slides[0]?.type === "title";
-      const renderedSlides = await Promise.all(state.slides.map(async (slideHtml, index) => {
+      const assetCache = new Map();
+      // The CSS pipeline (collect → inline assets / pick fonts) and the
+      // slide-image inlining are independent; run them concurrently.
+      const cssPromise = collectExportCss().then(collected => Promise.all([
+        inlineCssAssets(collected, document.baseURI, assetCache),
+        collectEmbeddedFontCss(collected, assetCache),
+      ]));
+      const slidesPromise = Promise.all(state.slides.map(async (slideHtml, index) => {
         const isTitle = index === 0 && hasTitle;
         const image = state.images[index];
         const eyebrow = isTitle
@@ -340,8 +354,10 @@ body { overflow: hidden; background: var(--slide-bg); color: var(--slide-fg); }
           : slideHtml;
         const eyebrowHtml = eyebrow ? `<div class="slide-eyebrow">${escapeHtml(eyebrow)}</div>` : "";
         return inlineHtmlImages(`<section class="slide${isTitle ? " slide--title" : ""}${image ? " slide--illustrated" : ""}${index ? " hidden" : ""}" data-export-slide>
-        ${eyebrowHtml}${content}</section>`);
+        ${eyebrowHtml}${content}</section>`, assetCache);
       }));
+      const [[baseCss, fontCss], renderedSlides] = await Promise.all([cssPromise, slidesPromise]);
+      const styleText = [baseCss, fontCss, collectExportPresetCss()].filter(Boolean).join("\n");
       const slides = renderedSlides.join("\n");
       const exportLogo = style.effectiveLogo();
       const logo = exportLogo

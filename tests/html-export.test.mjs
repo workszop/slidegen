@@ -46,7 +46,9 @@ class TestTemplate {
   }
 }
 
-function makeController({ localCssAvailable = true, slides, pageRules = [], googleCss } = {}) {
+function makeController({
+  localCssAvailable = true, slides, pageRules = [], googleCss, extraSheets = [], fetchLog = [],
+} = {}) {
   const fontLink = { href: "https://fonts.googleapis.com/css2?family=Raleway:wght@400;700" };
   const document = {
     baseURI: "https://example.test/app/",
@@ -73,6 +75,7 @@ function makeController({ localCssAvailable = true, slides, pageRules = [], goog
         href: "https://example.test/app/deck-base.css",
         get cssRules() { throw new DOMException("Stylesheet rules are unavailable", "SecurityError"); },
       },
+      ...extraSheets,
     ],
     documentElement: { style: { getPropertyValue: name => ({
       "--slide-bg": "#ffffff",
@@ -88,6 +91,7 @@ function makeController({ localCssAvailable = true, slides, pageRules = [], goog
     },
   };
   const fetch = async url => {
+    fetchLog.push(String(url));
     if (String(url).startsWith("https://fonts.googleapis.com/")) {
       return new Response(googleCss
         ?? "@font-face { font-family: 'Raleway'; src: url(https://fonts.gstatic.com/raleway.woff2) format('woff2'); font-weight: 400; }");
@@ -104,6 +108,9 @@ function makeController({ localCssAvailable = true, slides, pageRules = [], goog
     }
     if (url === "https://assets.example.test/missing.png") {
       return new Response("not found", { status: 404 });
+    }
+    if (url === "https://example.test/app/chrome.css") {
+      return new Response(".workbench { color: red; }");
     }
     if (url === "https://example.test/app/deck-base.css") {
       if (!localCssAvailable) throw new TypeError("Failed to fetch");
@@ -264,6 +271,78 @@ test("standalone HTML keeps presentation styling when file CSS cannot be read", 
   assert.equal(sections[0].includes("hidden"), false, "the first slide starts visible");
   assert.ok(sections.slice(1).every(classes => classes.includes("hidden")),
     "every later slide starts hidden");
+});
+
+test("a stylesheet whose rules were all chrome-filtered is not refetched raw", async () => {
+  const exporter = makeController({
+    extraSheets: [{
+      href: "https://example.test/app/chrome.css",
+      cssRules: [{
+        selectorText: ".workbench",
+        cssText: ".workbench { color: red; }",
+        style: { cssText: "color: red;" },
+      }],
+    }],
+  });
+  const { html } = await exporter.buildStandaloneHtml();
+
+  assert.doesNotMatch(html, /\.workbench/,
+    "rules filtered from a readable stylesheet must not re-enter via the raw fetch fallback");
+});
+
+test("an image repeated across slides is fetched once for the whole export", async () => {
+  const fetchLog = [];
+  const exporter = makeController({
+    fetchLog,
+    slides: [
+      '<h1>Offline deck</h1><img src="https://assets.example.test/chart.png" alt="Chart">',
+      '<h2>Second slide</h2><img src="https://assets.example.test/chart.png" alt="Chart again">',
+      "<h2>Third slide</h2>",
+    ],
+  });
+  const { html } = await exporter.buildStandaloneHtml();
+
+  assert.equal((html.match(/data:image\/png;base64,iVBORw==/g) || []).length, 2,
+    "both slides must inline the image");
+  assert.equal(fetchLog.filter(url => url === "https://assets.example.test/chart.png").length, 1,
+    "a repeated image must be fetched once per export");
+});
+
+test("STANDALONE_FALLBACK_CSS stays in sync with the real presentation CSS", async () => {
+  const deckCss = await readFile(new URL("../deck-base.css", import.meta.url), "utf8");
+  const fallback = /const STANDALONE_FALLBACK_CSS = `([^`]*)`/.exec(SOURCE)?.[1];
+  assert.ok(fallback, "app-export.js must define the fallback CSS block");
+
+  // Real CSS carries brand-token defaults (var(--slide-fg, var(--ink))) and
+  // writes leading zeros; strip both so only genuine value drift fails.
+  const normalize = value => value
+    .replace(/var\((--[\w-]+),\s*var\((--[\w-]+)\)\)/g, "var($1)")
+    .replace(/(^|[\s(,])0\./g, "$1.")
+    .replace(/\s+/g, " ")
+    .trim();
+  const token = (css, name) => normalize(new RegExp(`${name}:\\s*([^;]+);`).exec(css)?.[1] ?? "");
+  const declaration = (css, selector, property) => {
+    const block = new RegExp(`${selector}\\s*\\{([^}]*)\\}`).exec(css)?.[1] ?? "";
+    return normalize(new RegExp(`(?:^|[;\\s])${property}:\\s*([^;]+)`).exec(block)?.[1] ?? "");
+  };
+
+  for (const [exportToken, deckToken] of [
+    ["--export-muted", "--slide-fg-muted"],
+    ["--export-surface", "--slide-surface"],
+    ["--export-line", "--slide-line"],
+    ["--export-link", "--slide-link"],
+  ]) {
+    assert.equal(token(fallback, exportToken), token(deckCss, deckToken),
+      `${exportToken} must match deck-base.css ${deckToken}`);
+  }
+  assert.equal(token(fallback, "--export-slide-size"), declaration(deckCss, "\\.slide", "font-size"),
+    "--export-slide-size must match the deck-base.css .slide font-size");
+  assert.equal(declaration(fallback, "\\.present-bar", "transition"), declaration(deckCss, "\\.present-bar", "transition"),
+    "the progress bar must keep the deck-base.css easing");
+  assert.match(fallback, /\.slide a \{ color: var\(--export-link\); \}/,
+    "links must use the contrast-mixed link color, not the raw accent");
+  assert.match(declaration(fallback, "\\.slide-generated-image", "box-shadow"), /^var\(--shadow-image/,
+    "generated images must keep the theme shadow token");
 });
 
 test("standalone navigation shows exactly one slide and updates progress", async () => {
