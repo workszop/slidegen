@@ -4,7 +4,7 @@
   "version": "0.0.0",
   "description": "Zero-build document-to-slide browser apps with editable PowerPoint export.",
   "scripts": {
-    "check": "node --check ai-models.js && node --check deck-model.js && node --check shared.js && node --check app.js && node --check pptx-export.js",
+    "check": "node --check ai-models.js && node --check deck-model.js && node --check shared.js && node --check app-style.js && node --check app-export.js && node --check app.js && node --check pptx-export.js",
     "test": "node --test tests/*.test.mjs"
   },
   "devDependencies": {

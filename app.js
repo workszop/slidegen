@@ -213,6 +213,9 @@ Drop your own document in the panel on the left.`,
       sideActions: "Akcje",
       customFont: "Inna czcionka Google",
       customFontPh: "np. Merriweather",
+      logoLabel: "Logo na slajdach",
+      uploadLogo: "Wgraj logo",
+      removeLogo: "Usuń logo",
       edit: "Edytuj",
       additionalPrompt: "Dodatkowe instrukcje dla AI",
       additionalPromptPh: "np. użyj konkretnych przykładów i krótkich nagłówków",
@@ -260,6 +263,9 @@ Drop your own document in the panel on the left.`,
       sideActions: "Actions",
       customFont: "Another Google font",
       customFontPh: "e.g. Merriweather",
+      logoLabel: "Logo on slides",
+      uploadLogo: "Upload logo",
+      removeLogo: "Remove logo",
       edit: "Edit",
       additionalPrompt: "Additional AI instructions",
       additionalPromptPh: "e.g. use concrete examples and short headings",
@@ -355,6 +361,15 @@ Drop your own document in the panel on the left.`,
           <label class="side-fold-label" for="customFont" data-i18n="customFont"></label>
           <input id="customFont" class="mono-input" type="text" autocomplete="off"
                  spellcheck="false" data-i18n-placeholder="customFontPh" />
+          <div class="logo-controls">
+            <span class="side-fold-label" data-i18n="logoLabel"></span>
+            <input type="file" id="logoInput" class="visually-hidden"
+                   accept="image/png,image/jpeg,image/svg+xml,image/webp" />
+            <div class="side-row">
+              <button class="btn btn-ghost btn-sm" id="logoBtn" data-i18n="uploadLogo"></button>
+              <button class="btn btn-ghost btn-sm" id="logoClear" data-i18n="removeLogo"></button>
+            </div>
+          </div>
         </div>
       </section>
 
@@ -539,120 +554,26 @@ Drop your own document in the panel on the left.`,
 
   mountPanelResizer({ panel: editorPanelEl, storageKey: BRAND.editorWKey });
 
-  // ─── Style presets ──────────────────────────────
-  let activePreset = 0;
-  function applyPreset(i) {
-    const p = BRAND.presets[i];
-    if (!p) return;
-    activePreset = i;
-    const rs = document.documentElement.style;
-    rs.setProperty("--slide-bg", p.bg);
-    rs.setProperty("--slide-fg", p.fg);
-    rs.setProperty("--slide-accent", p.accent);
-    writeStored(BRAND.presetKey, p.id);
-    document.querySelectorAll(".preset").forEach((b, j) =>
-      b.setAttribute("aria-pressed", String(j === activePreset)));
-  }
-  function renderPresets() {
-    presetGridEl.innerHTML = "";
-    BRAND.presets.forEach((p, i) => {
-      const b = document.createElement("button");
-      b.type = "button";
-      b.className = "preset";
-      b.innerHTML = `<span class="dots"><span style="background:${p.bg}"></span><span style="background:${p.fg}"></span><span style="background:${p.accent}"></span></span><span class="name"></span>`;
-      b.querySelector(".name").textContent = p.name[uiLang] ?? p.name.pl;
-      b.addEventListener("click", () => applyPreset(i));
-      presetGridEl.appendChild(b);
-    });
-  }
-
-  // ─── Deck font ──────────────────────────────────
-  // The picker drives slide-scoped tokens only, so the app chrome keeps the
-  // brand font no matter what the user selects for the deck.
-  const DECK_FONTS = [
-    { name: "Raleway", stack: "system-ui, sans-serif" },
-    { name: "Lato", stack: "system-ui, sans-serif" },
-    { name: "Poppins", stack: "system-ui, sans-serif" },
-    { name: "PT Serif", stack: "Georgia, serif" },
-  ];
-  const FONT_KEY = `${BRAND.presetKey}_font`;
-  const DEFAULT_FONT = BRAND.pptx.headingFont || DECK_FONTS[0].name;
-  // Google's CSS API takes the family verbatim, so anything outside this
-  // shape is a typo (or an injection attempt) rather than a font.
-  const FONT_NAME = /^[A-Za-z0-9][A-Za-z0-9 ]{0,48}$/;
-  let activeFont = DEFAULT_FONT;
-
-  function loadGoogleFont(name) {
-    const family = name.trim().replace(/\s+/g, "+");
-    const href = `https://fonts.googleapis.com/css2?family=${family}:wght@400;500;600;700;800&display=swap`;
-    if (document.querySelector(`link[href="${href}"]`)) return;
-    const link = document.createElement("link");
-    link.rel = "stylesheet";
-    link.href = href;
-    document.head.appendChild(link);
-  }
-
-  function markFont(name) {
-    activeFont = name;
-    const known = DECK_FONTS.find(f => f.name.toLowerCase() === name.toLowerCase());
-    document.querySelectorAll(".font-chip").forEach(b =>
-      b.setAttribute("aria-pressed", String(b.dataset.font.toLowerCase() === name.toLowerCase())));
-    if (customFontEl && customFontEl !== document.activeElement) {
-      customFontEl.value = known ? "" : name;
-    }
-  }
-
-  function applyFont(name, { store = true } = {}) {
-    const clean = String(name ?? "").trim();
-    if (!FONT_NAME.test(clean)) return false;
-    const known = DECK_FONTS.find(f => f.name.toLowerCase() === clean.toLowerCase());
-    // Unquoted multi-word families are valid CSS and keep the value inside the
-    // character set collectExportPresetCss is willing to inline.
-    const stack = `${clean}, ${known?.stack ?? "system-ui, sans-serif"}`;
-    loadGoogleFont(clean);
-    const rs = document.documentElement.style;
-    rs.setProperty("--slide-heading-font", stack);
-    rs.setProperty("--slide-body-font", stack);
-    if (store) writeStored(FONT_KEY, clean);
-    markFont(clean);
-    return true;
-  }
-
-  // Clearing the picker hands typography back to the brand's own stylesheet,
-  // which is not the same as picking the brand's default family: Quantica
-  // pairs Poppins headings with a different body face, and only the CSS
-  // knows that pairing.
-  function resetFont() {
-    const rs = document.documentElement.style;
-    rs.removeProperty("--slide-heading-font");
-    rs.removeProperty("--slide-body-font");
-    writeStored(FONT_KEY, "");
-    markFont(DEFAULT_FONT);
-  }
-
-  function renderFonts() {
-    fontGridEl.innerHTML = "";
-    for (const font of DECK_FONTS) {
-      const b = document.createElement("button");
-      b.type = "button";
-      b.className = "font-chip";
-      b.dataset.font = font.name;
-      b.textContent = font.name;
-      b.style.fontFamily = `${font.name}, ${font.stack}`;
-      b.addEventListener("click", () => applyFont(font.name));
-      fontGridEl.appendChild(b);
-    }
-  }
-
-  // Each chip is supposed to be set in the face it offers, which only works
-  // once that face is on the page. Deferred to the first time the group is
-  // opened so a workspace nobody restyles never pays for the downloads.
-  let fontsPreloaded = false;
-  function preloadPickerFonts() {
-    if (fontsPreloaded) return;
-    fontsPreloaded = true;
-    DECK_FONTS.forEach(font => loadGoogleFont(font.name));
-  }
+  // ─── Style + export controllers (app-style.js / app-export.js) ──
+  // Both are factories that receive the shared context; the split keeps this
+  // file to deck state, rendering, streaming, and event wiring.
+  const logoInputEl = document.getElementById("logoInput");
+  const logoBtnEl = document.getElementById("logoBtn");
+  const logoClearEl = document.getElementById("logoClear");
+  const style = createStyleController({
+    BRAND, state, t, uiLang: () => uiLang, readStored, writeStored,
+    presetGridEl, fontGridEl, customFontEl,
+    logoInputEl, logoBtnEl, logoClearEl,
+    onLogoChange: () => { if (state.view === "present") renderPresent(); else renderStage(); },
+  });
+  const exporter = createExportController({
+    BRAND, state, t, uiLang: () => uiLang, style,
+    deckTitle, splitSlides, stripOuterFence, ensurePptxDeps, showError, pptxBtn,
+  });
+  const applyPreset = style.applyPreset;
+  const applyFont = style.applyFont;
+  const resetFont = style.resetFont;
+  const preloadPickerFonts = style.preloadPickerFonts;
 
   // ─── Helpers (DOM-adjacent) ─────────────────────
   // Parsed slide HTML is memoized per segment string: during streaming and
@@ -781,185 +702,6 @@ Drop your own document in the panel on the left.`,
     renderPresent();
   }
 
-  // ─── PPTX export (deps lazy-loaded via shared.js) ───
-  // Keep export colors in canonical hex form. Reading computed CSS is brittle:
-  // modern browsers may serialize derived colors as `color(srgb ...)`, and
-  // those values are not suitable PowerPoint theme inputs.
-  function readDeckTheme() {
-    const preset = BRAND.presets[activePreset] ?? BRAND.presets[0];
-    return {
-      bg: preset?.bg ?? "#FFFFFF",
-      fg: preset?.fg ?? "#111111",
-      accent: preset?.accent ?? "#4472C4",
-      headingFont: activeFont,
-      bodyFont: activeFont,
-      monoFont: BRAND.pptx.monoFont,
-    };
-  }
-
-  async function downloadPptx() {
-    try {
-      pptxBtn.disabled = true;
-      await ensurePptxDeps();
-      await exportDeckToPptx({
-        slidesMd: splitSlides(stripOuterFence(state.md)),
-        deck: state.deckModel,
-        images: state.images,
-        theme: readDeckTheme(),
-        logo: BRAND.logo || null,
-        // No brandName: the title slide uses the TITLE_PLAIN master so the
-        // deck carries no brand eyebrow. Document metadata still gets the
-        // brand through `company`.
-        company: BRAND.pptx.company || BRAND.presentBrand,
-        language: uiLang,
-        fileName: (deckTitle(state.md) || "slides") + ".pptx",
-      });
-    } catch (err) {
-      showError(t("errPptxTitle"), String(err.message ?? err));
-    } finally {
-      pptxBtn.disabled = false;
-    }
-  }
-
-  function escapeHtml(value) {
-    return String(value).replace(/[&<>"']/g, char => ({
-      "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
-    })[char]);
-  }
-
-  // The active preset lives as inline custom properties on <html>, which
-  // collectExportCss cannot reach: it only walks stylesheet rules. Without
-  // this the export falls back to the default preset on every var().
-  function collectExportPresetCss() {
-    const inline = document.documentElement.style;
-    const declarations = ["--slide-bg", "--slide-fg", "--slide-accent",
-      "--slide-heading-font", "--slide-body-font"]
-      .map(name => [name, inline.getPropertyValue(name).trim()])
-      .filter(([, value]) => value && /^[#\w(),.%\s-]+$/.test(value))
-      .map(([name, value]) => `${name}: ${value};`);
-    return declarations.length ? `:root { ${declarations.join(" ")} }` : "";
-  }
-
-  // Workbench-only selectors. A standalone deck contains none of these
-  // elements, so shipping their rules inside every exported presentation is
-  // pure weight — including the AI key dialog and the panel resizer that
-  // shared.js injects at runtime. Everything else is kept, so a rule the deck
-  // does need can never be dropped by accident.
-  const EXPORT_CHROME_SELECTOR = new RegExp([
-    "\\.(workbench|chrome|panel|panel-resizer|has-panel-resizer|editor-|dropzone|preset",
-    "|btn|side-|side_|file-chip|error-panel|gen-|lang-toggle|mono-input|stage-wrap",
-    "|font-grid|font-chip",
-    "|deck|hints|spacer|wordmark|nav-btns|dz-label|ai-|visually-hidden)",
-    "|#pasteArea|#editor\\b|#view-input",
-  ].join(""));
-
-  function exportRuleText(rule) {
-    if (rule.cssRules && /^@(media|supports|layer)/i.test(rule.cssText)) {
-      const inner = [...rule.cssRules].map(exportRuleText).filter(Boolean).join("\n");
-      if (!inner) return "";
-      return `${rule.cssText.slice(0, rule.cssText.indexOf("{") + 1)}\n${inner}\n}`;
-    }
-    if (typeof rule.selectorText !== "string") return rule.cssText; // @font-face, @keyframes
-    const selectors = rule.selectorText.split(",").map(part => part.trim())
-      .filter(part => part && !EXPORT_CHROME_SELECTOR.test(part));
-    if (!selectors.length) return "";
-    return `${selectors.join(", ")} { ${rule.style.cssText} }`;
-  }
-
-  function collectExportCss() {
-    return [...document.styleSheets].map(sheet => {
-      try {
-        return [...sheet.cssRules].map(exportRuleText).filter(Boolean).join("\n");
-      } catch {
-        // Cross-origin font stylesheets cannot be inspected. Their <link>
-        // elements are preserved separately below.
-        return "";
-      }
-    }).filter(Boolean).join("\n");
-  }
-
-  function downloadHtml() {
-    const title = deckTitle(state.md) || "slides";
-    const styleText = [collectExportCss(), collectExportPresetCss()].filter(Boolean).join("\n");
-    const fontLinks = [...document.querySelectorAll('link[rel="stylesheet"]')]
-      .filter(link => /^https:\/\/fonts\.googleapis\.com\//.test(link.href))
-      .map(link => `<link rel="stylesheet" href="${escapeHtml(link.href)}">`).join("\n");
-    const hasTitle = state.deckModel.slides[0]?.type === "title";
-    const slides = state.slides.map((slideHtml, index) => {
-      const isTitle = index === 0 && hasTitle;
-      const image = state.images[index];
-      const eyebrow = isTitle
-        ? ""
-        : [`${index + 1} / ${state.slides.length}`, title].filter(Boolean).join(" · ");
-      const content = image
-        ? `<div class="slide-layout"><div class="slide-copy">${slideHtml}</div><img class="slide-generated-image" src="${escapeHtml(image)}" alt="${escapeHtml(t("imageAlt"))}"></div>`
-        : slideHtml;
-      const eyebrowHtml = eyebrow ? `<div class="slide-eyebrow">${escapeHtml(eyebrow)}</div>` : "";
-      return `<section class="slide${isTitle ? " slide--title" : ""}${image ? " slide--illustrated" : ""}${index ? " hidden" : ""}" data-export-slide>
-        ${eyebrowHtml}${content}</section>`;
-    }).join("\n");
-    const logo = BRAND.logo
-      ? `<img class="slide-logo" src="${escapeHtml(BRAND.logo)}" alt="" aria-hidden="true">`
-      : "";
-    const html = `<!DOCTYPE html>
-<html lang="${escapeHtml(uiLang)}">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>${escapeHtml(title)}</title>
-${fontLinks}
-<style>${styleText}
-.export-nav { display: flex; align-items: center; gap: 8px; }
-.export-nav button { border: 1px solid var(--line-2, currentColor); border-radius: 999px; padding: 4px 14px; background: transparent; color: inherit; font: inherit; cursor: pointer; }
-</style>
-</head>
-<body class="presenting">
-<main id="app">
-  <section id="view-present">
-    <div class="present-bar" id="presentBar" aria-hidden="true"></div>
-    ${logo}
-    <div class="stage">${slides}</div>
-    <div class="present-footer">
-      <div class="export-nav">
-        <button id="prevBtn" type="button" aria-label="${uiLang === "pl" ? "Poprzedni slajd" : "Previous slide"}">←</button>
-        <button id="nextBtn" type="button" aria-label="${uiLang === "pl" ? "Następny slajd" : "Next slide"}">→</button>
-      </div>
-      <div class="present-counter" id="presentCounter"></div>
-    </div>
-  </section>
-</main>
-<script>
-(() => {
-  const slides = [...document.querySelectorAll("[data-export-slide]")];
-  const bar = document.getElementById("presentBar");
-  const counter = document.getElementById("presentCounter");
-  let current = 0;
-  function show(index) {
-    current = Math.max(0, Math.min(index, slides.length - 1));
-    slides.forEach((slide, i) => slide.classList.toggle("hidden", i !== current));
-    bar.style.width = slides.length ? ((current + 1) / slides.length * 100) + "%" : "0%";
-    counter.textContent = slides.length ? (current + 1) + " / " + slides.length : "";
-  }
-  document.getElementById("prevBtn").addEventListener("click", () => show(current - 1));
-  document.getElementById("nextBtn").addEventListener("click", () => show(current + 1));
-  document.addEventListener("keydown", event => {
-    if (["ArrowRight", " ", "PageDown"].includes(event.key)) { event.preventDefault(); show(current + 1); }
-    else if (["ArrowLeft", "PageUp"].includes(event.key)) { event.preventDefault(); show(current - 1); }
-    else if (event.key === "Home") { event.preventDefault(); show(0); }
-    else if (event.key === "End") { event.preventDefault(); show(slides.length - 1); }
-  });
-  show(0);
-})();
-<\/script>
-</body>
-</html>`;
-    const blob = new Blob([html], { type: "text/html;charset=utf-8" });
-    const a = document.createElement("a");
-    a.href = URL.createObjectURL(blob);
-    a.download = title + ".html";
-    a.click();
-    URL.revokeObjectURL(a.href);
-  }
 
   function renderSidebar() {
     const src = state.source;
@@ -1177,8 +919,8 @@ ${fontLinks}
       setView("present");
     }
   });
-  downloadBtn.addEventListener("click", downloadHtml);
-  pptxBtn.addEventListener("click", downloadPptx);
+  downloadBtn.addEventListener("click", () => exporter.downloadHtml());
+  pptxBtn.addEventListener("click", () => exporter.downloadPptx());
   presentBtn.addEventListener("click", () => setView("present"));
   editToggleBtn.addEventListener("click", () => setEditorOpen(!state.editorOpen));
   editorCloseBtn.addEventListener("click", () => setEditorOpen(false));
@@ -1224,11 +966,9 @@ ${fontLinks}
     getLang: () => uiLang,
     images: BRAND.illustrations,
   });
-  renderPresets();
-  {
-    const savedPreset = BRAND.presets.findIndex(p => p.id === readStored(BRAND.presetKey));
-    applyPreset(savedPreset >= 0 ? savedPreset : 0);
-  }
+  // Presets, fonts, and logo all live in the style controller; init wires
+  // the controls, applies the stored preset/font, and restores the logo.
+  style.init();
   document.querySelectorAll(".side-fold-toggle").forEach(toggle => {
     const body = document.getElementById(toggle.dataset.fold);
     toggle.addEventListener("click", () => {
@@ -1237,11 +977,6 @@ ${fontLinks}
       if (open && toggle.dataset.fold === "styleFold") preloadPickerFonts();
     });
   });
-  renderFonts();
-  // A stored value can be anything; applyFont rejects it. With no stored
-  // choice the tokens stay unset so each brand keeps the typography its own
-  // stylesheet defines.
-  if (!applyFont(readStored(FONT_KEY), { store: false })) markFont(DEFAULT_FONT);
   // Applying on every keystroke asked Google for every prefix of the name
   // ("M", "Me", "Mer", …), leaving a dozen dead stylesheet links in the page
   // and in every exported deck. Wait for the typing to settle instead.

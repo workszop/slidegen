@@ -82,13 +82,12 @@ test("an empty example deck is reported instead of rendering a blank stage", asy
 });
 
 test("controllers build one semantic model and expose the DOM contract", async () => {
-  for (const file of ["app.js"]) {
-    const source = await read(file);
-    assert.match(source, /DeckModel\.create\(/, `${file} creates the semantic model`);
-    assert.match(source, /dataset\.slideType/, `${file} publishes the semantic slide type`);
-    assert.match(source, /dataset\.warningCount/, `${file} publishes validation warnings`);
-    assert.match(source, /deck:\s*state\.deckModel/, `${file} passes the model to PowerPoint`);
-  }
+  const app = await read("app.js");
+  const exporter = await read("app-export.js");
+  assert.match(app, /DeckModel\.create\(/, "app.js creates the semantic model");
+  assert.match(app, /dataset\.slideType/, "app.js publishes the semantic slide type");
+  assert.match(app, /dataset\.warningCount/, "app.js publishes validation warnings");
+  assert.match(exporter, /deck:\s*state\.deckModel/, "app-export.js passes the model to PowerPoint");
 });
 
 test("the image model lives in the AI model dialog, not the side panel", async () => {
@@ -102,41 +101,43 @@ test("the image model lives in the AI model dialog, not the side panel", async (
 });
 
 test("the title slide carries no brand eyebrow in any output", async () => {
-  const app = await read("app.js");
-  assert.doesNotMatch(app, /presentEyebrowWord/, "the eyebrow wording is gone");
-  assert.doesNotMatch(app, /brandName:\s*BRAND\.presentBrand/,
+  const exporter = await read("app-export.js");
+  assert.doesNotMatch(exporter, /presentEyebrowWord/, "the eyebrow wording is gone");
+  assert.doesNotMatch(exporter, /brandName:\s*BRAND\.presentBrand/,
     "PPTX export must not request the brand eyebrow master");
   // presentBrand survives only as PPTX document metadata.
-  const uses = app.split("\n").filter(line => line.includes("BRAND.presentBrand"));
+  const uses = exporter.split("\n").filter(line => line.includes("BRAND.presentBrand"));
   assert.deepEqual(uses.map(line => line.trim()),
     ["company: BRAND.pptx.company || BRAND.presentBrand,"]);
 });
 
 test("the deck font picker is slide-scoped and reaches every output", async () => {
-  const app = await read("app.js");
+  const style = await read("app-style.js");
+  const exporter = await read("app-export.js");
   const base = await read("deck-base.css");
   const edulab = await read("theme-edulab.css");
 
   for (const font of ["Raleway", "Lato", "Poppins", "PT Serif"]) {
-    assert.ok(app.includes(`"${font}"`), `${font} is offered in the picker`);
+    assert.ok(style.includes(`"${font}"`), `${font} is offered in the picker`);
   }
   // Slide-scoped tokens: the picker must not restyle the app chrome.
   assert.match(base, /font-family: var\(--slide-body-font, var\(--font-sans\)\)/);
   assert.match(edulab, /var\(--slide-heading-font, var\(--font-display\)\)/);
-  assert.match(app, /setProperty\("--slide-heading-font", stack\)/);
-  assert.match(app, /setProperty\("--slide-body-font", stack\)/);
+  assert.match(style, /setProperty\("--slide-heading-font", stack\)/);
+  assert.match(style, /setProperty\("--slide-body-font", stack\)/);
   // The choice has to survive into both exports.
-  assert.match(app, /"--slide-heading-font", "--slide-body-font"/,
+  assert.match(exporter, /"--slide-heading-font", "--slide-body-font"/,
     "standalone HTML must inline the font tokens");
-  assert.match(app, /headingFont: activeFont/);
-  assert.match(app, /bodyFont: activeFont/);
+  assert.match(exporter, /headingFont: style\.activeFont/);
+  assert.match(exporter, /bodyFont: style\.activeFont/);
   // A stored or typed family is untrusted input before it reaches a URL.
-  assert.match(app, /const FONT_NAME = \/\^\[A-Za-z0-9\]/);
-  assert.match(app, /if \(!FONT_NAME\.test\(clean\)\) return false/);
+  assert.match(style, /const FONT_NAME = \/\^\[A-Za-z0-9\]/);
+  assert.match(style, /if \(!FONT_NAME\.test\(clean\)\) return false/);
 });
 
 test("the custom font field never requests a partial family name", async () => {
   const app = await read("app.js");
+  const style = await read("app-style.js");
   // Typing "Merriweather" used to fetch M, Me, Mer, … leaving a dozen dead
   // stylesheet links in the page and in every exported deck.
   assert.match(app, /clearTimeout\(customFontTimer\)/);
@@ -146,8 +147,35 @@ test("the custom font field never requests a partial family name", async () => {
   assert.ok(!/^\s*if \(value\) applyFont/m.test(handler.split("setTimeout")[0]),
     "nothing may apply the font before the debounce");
   // Chips preview their own face, which needs the face on the page first.
-  assert.match(app, /function preloadPickerFonts\(\)/);
+  assert.match(style, /function preloadPickerFonts\(\)/);
   assert.match(app, /if \(open && toggle\.dataset\.fold === "styleFold"\) preloadPickerFonts\(\)/);
+});
+
+test("logo management is restored: upload/remove UI, storage, and both exports", async () => {
+  const app = await read("app.js");
+  const style = await read("app-style.js");
+  const exporter = await read("app-export.js");
+  // The sidebar exposes upload/remove controls and a hidden image file input.
+  assert.match(app, /id="logoInput"[^>]*accept="image\/png,image\/jpeg,image\/svg\+xml,image\/webp"/);
+  assert.match(app, /id="logoBtn"/);
+  assert.match(app, /id="logoClear"/);
+  for (const key of ["logoLabel", "uploadLogo", "removeLogo"]) {
+    assert.ok(app.includes(`${key}:`), `i18n string ${key}`);
+  }
+  // The controller reads a FileReader data-URL, stores it per brand, and can
+  // fall back to the brand default or a removed state.
+  assert.match(style, /reader\.readAsDataURL\(file\)/);
+  assert.match(style, /writeStored\(LOGO_KEY, logoMode\)/);
+  assert.match(style, /if \(logoMode === ""\) return null/);
+  assert.match(style, /return BRAND\.logo \|\| null/);
+  assert.match(style, /addEventListener\("click", \(\) => logoInputEl\.click\(\)\)/);
+  // A dark preset inverts the default ink mark but never a user upload.
+  assert.match(style, /logo === BRAND\.logo\) \? "invert\(1\)"/);
+  // The chosen logo reaches both exports and the on-screen deck corner.
+  assert.match(exporter, /logo:\s*style\.effectiveLogo\(\) \|\| null/);
+  assert.match(exporter, /const exportLogo = style\.effectiveLogo\(\)/);
+  // The per-brand storage key derives from presetKey, like the font key.
+  assert.match(style, /const LOGO_KEY = `\$\{BRAND\.presetKey\}_logo`/);
 });
 
 test("side-panel groups fold from their section title", async () => {
@@ -215,7 +243,7 @@ test("API key persistence contract remains browser-local", async () => {
 });
 
 test("standalone HTML export inlines readable stylesheets", async () => {
-  const source = await read("app.js");
+  const source = await read("app-export.js");
   assert.match(source, /function collectExportCss\(\)/);
   assert.match(source, /sheet\.cssRules/);
   assert.ok(source.includes("fonts\\.googleapis\\.com"));
@@ -254,7 +282,7 @@ test("the slide query parameter rejects non-numeric input", async () => {
 });
 
 test("standalone HTML export drops workbench-only rules", async () => {
-  const source = await read("app.js");
+  const source = await read("app-export.js");
   assert.match(source, /EXPORT_CHROME_SELECTOR/);
   assert.match(source, /function exportRuleText\(/);
   for (const chrome of ["workbench", "dropzone", "editor-", "panel-resizer", "ai-"]) {

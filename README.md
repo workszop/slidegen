@@ -13,9 +13,13 @@ edulab workspace with AI illustrations, a plain edulab one, and Quantica Lab.
 ## Features
 
 - Four editable style presets in each app.
-- Google Fonts and optional logo upload.
+- Google Fonts and optional logo upload (per-brand, persisted, dark-preset aware).
 - Responsive, full-viewport workbench and presentation mode.
 - Gemini, OpenAI, and Claude slide generation with streamed preview.
+- Live model discovery: each provider's list endpoint is queried with the saved
+  key, so models added after the last app update appear in the AI model dialog
+  without waiting for a catalogue refresh. Discovery is best-effort and never
+  blocks the curated list.
 - PL, EN, and automatic source-language output.
 - Standalone HTML and editable PowerPoint export, both carrying the selected
   style preset.
@@ -94,11 +98,28 @@ Long content is retained. The exporter uses continuation slides and content
 preflight instead of silently dropping blocks; unusually dense blocks may
 still be reduced to fit.
 
+## Logo management
+
+The Style fold carries upload/remove controls for the slide corner logo. An
+uploaded mark is read as a data URL, stored per brand in localStorage, and
+feeds the on-screen deck, the standalone HTML export, and the PowerPoint
+masters. Removing the logo hides it everywhere; clearing browser storage
+restores the brand default. On dark presets the default ink-coloured brand
+mark is inverted for legibility — a user-uploaded logo is never filtered.
+
 ## Architecture
 
 - `index.html`, `edu.html`, and `quantica.html` are thin brand shells.
-- `app.js` contains the shared deck-first controller.
-- `shared.js` contains provider, streaming, file, and shared UI helpers.
+- `app.js` contains the shared deck-first controller: state, rendering,
+  streaming, and event wiring.
+- `app-style.js` is the style controller (presets, deck fonts, logo
+  management) built by `app.js` through `createStyleController(ctx)`.
+- `app-export.js` is the export controller (standalone HTML and PowerPoint)
+  built through `createExportController(ctx)`. Both controllers are classic
+  scripts that receive the shared context explicitly, so load order is
+  `shared.js` → `app-style.js` → `app-export.js` → `deck-model.js` → `app.js`.
+- `shared.js` contains provider, streaming, file, model-discovery, and shared
+  UI helpers.
 - `deck-model.js` is the semantic Markdown model used by HTML and PowerPoint.
 The guide deck every workspace opens with lives in `app.js` as `EXAMPLE_DECK`,
 shared by all three shells and kept free of brand names. It stays in the file
@@ -142,6 +163,14 @@ empty response.
 The provider and model catalogue lives in `ai-models.js`. Update model IDs
 there. On startup, `shared.js` validates required providers, unique model IDs,
 and HTTPS key URLs. Custom model IDs remain supported.
+
+Each provider also carries optional discovery metadata (`listUrl`, `listAuth`,
+`listPath`, and for Gemini `listStrip`). When the AI model dialog opens with a
+saved key, `shared.js` queries that provider's list endpoint and appends any
+live IDs the catalogue does not know — tagged "(discovered)" — after the
+curated list. A discovered ID receives no per-model API parameters (the same
+safe-default rule as custom IDs), so it may behave slightly differently from a
+catalogued model until someone adds it here with the right flags.
 
 The first model listed for a provider is the one a new visitor gets; the
 current default is `gemini-3.6-flash`. A model already saved in the browser

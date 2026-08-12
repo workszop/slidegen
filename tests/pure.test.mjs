@@ -16,6 +16,17 @@ const H = new Function(`${catalogSrc}\n${section}; return {
   geminiChunk, openaiChunk, claudeChunk, parseSseFrames, providerStopReason, claudeThinking,
 };`)();
 
+// The model-discovery block sits outside the pure helpers (it can fetch), but
+// providerModelIds itself is pure and worth unit-testing against the catalog.
+// Split on the marker text, then drop the leftover dashes of the marker line.
+// PROVIDER_INFO is a top-level const outside this slice, so pass it in.
+const discoverySrc = src.split("// ─── Model discovery")[1]
+  .split("// ─── Per-provider request builders")[0]
+  .split("\n").slice(1).join("\n");
+const D = new Function("PROVIDER_INFO", `${discoverySrc}; return {
+  providerModelIds, discoverProviderModels, PROVIDER_INFO,
+};`)(H.PROVIDER_INFO);
+
 // ── existing helpers keep working ──
 test("splitSlides splits on --- outside fences", () => {
   assert.deepEqual(H.splitSlides("# a\n---\n## b"), ["# a", "## b"]);
@@ -381,4 +392,80 @@ test("OpenAI requests carry no sampling parameters to deprecate", () => {
     key: "K", model: "gpt-5.6-sol", source: { kind: "text", text: "d" }, prompt: "p",
   }).body;
   assert.deepEqual(Object.keys(body).sort(), ["input", "model", "stream"]);
+});
+
+// ── model discovery ──
+test("every provider declares discovery metadata with a matching auth shape", () => {
+  for (const [id, info] of Object.entries(D.PROVIDER_INFO)) {
+    assert.ok(info.listUrl.startsWith("https://"), `${id} needs an HTTPS list endpoint`);
+    assert.ok(["query-key", "bearer", "anthropic"].includes(info.listAuth), `${id} auth shape`);
+    assert.ok(typeof info.listPath === "string" && info.listPath, `${id} needs a list path`);
+  }
+  // Gemini names arrive prefixed; the others use bare ids.
+  assert.ok(D.PROVIDER_INFO.gemini.listStrip instanceof RegExp);
+});
+
+test("providerModelIds reads each provider's list shape and strips prefixes", () => {
+  assert.deepEqual(
+    D.providerModelIds("gemini", { models: [{ name: "models/gemini-9-flash" }, { name: "models/gemini-9-pro" }] }),
+    ["gemini-9-flash", "gemini-9-pro"],
+  );
+  assert.deepEqual(
+    D.providerModelIds("openai", { data: [{ id: "gpt-9" }, { id: "gpt-9-mini" }] }),
+    ["gpt-9", "gpt-9-mini"],
+  );
+  assert.deepEqual(
+    D.providerModelIds("claude", { data: [{ id: "claude-9" }] }),
+    ["claude-9"],
+  );
+});
+
+test("providerModelIds drops blanks, whitespace ids, and malformed rows", () => {
+  assert.deepEqual(
+    D.providerModelIds("openai", { data: [{ id: "ok" }, { id: "has space" }, { id: "  " }, {}, { id: 42 }] }),
+    ["ok", "42"],
+  );
+  assert.deepEqual(D.providerModelIds("openai", null), []);
+  assert.deepEqual(D.providerModelIds("openai", { wrong: [] }), []);
+});
+
+test("discoverProviderModels returns the curated list without a key", async () => {
+  const curated = D.PROVIDER_INFO.openai.models;
+  assert.deepEqual(await D.discoverProviderModels("openai", ""), curated.slice());
+  assert.deepEqual(await D.discoverProviderModels("openai", null), curated.slice());
+  assert.deepEqual(await D.discoverProviderModels("openai"), curated.slice());
+});
+
+test("discoverProviderModels merges live ids after the curated order", async () => {
+  const curated = D.PROVIDER_INFO.openai.models;
+  const payload = { data: [...curated.map(id => ({ id })), { id: "gpt-9-new" }, { id: "gpt-9-new" }] };
+  const realFetch = globalThis.fetch;
+  globalThis.fetch = async (url, opts) => ({
+    ok: true,
+    json: async () => payload,
+  });
+  try {
+    const merged = await D.discoverProviderModels("openai", "sk-x");
+    // Curated leads, the unknown live id follows, duplicates collapse.
+    assert.deepEqual(merged, [...curated, "gpt-9-new"]);
+  } finally {
+    globalThis.fetch = realFetch;
+  }
+});
+
+test("discoverProviderModels is best-effort on HTTP and parse failures", async () => {
+  const curated = D.PROVIDER_INFO.openai.models;
+  const realFetch = globalThis.fetch;
+  globalThis.fetch = async () => ({ ok: false, json: async () => ({}) });
+  try {
+    assert.deepEqual(await D.discoverProviderModels("openai", "sk-x"), curated.slice());
+  } finally {
+    globalThis.fetch = realFetch;
+  }
+  globalThis.fetch = async () => { throw new Error("offline"); };
+  try {
+    assert.deepEqual(await D.discoverProviderModels("openai", "sk-x"), curated.slice());
+  } finally {
+    globalThis.fetch = realFetch;
+  }
 });
