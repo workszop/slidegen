@@ -100,6 +100,42 @@ test("the image model lives in the AI model dialog, not the side panel", async (
   assert.match(shared, /settings\.imageModel\s*=\s*imageSel\.value/, "the dialog persists the choice");
 });
 
+test("the chrome logo resets the app to its default state", async () => {
+  const app = await read("app.js");
+  const style = await read("app-style.js");
+  const exporter = await read("app-export.js");
+  const base = await read("deck-base.css");
+
+  // A real button wraps the mark, so the reset is keyboard- and
+  // screen-reader-reachable without extra ARIA wiring.
+  assert.match(app, /<button type="button" class="brand-home" id="brandHomeBtn">\s*<img class="chrome-mark brand-logo"/,
+    "the chrome mark must live inside the reset button");
+  assert.match(app, /getElementById\("brandHomeBtn"\)/);
+  assert.match(app, /brandHomeBtn\.addEventListener\("click", resetToDefault\)/);
+
+  // Discarding a user's deck needs consent; the example deck resets silently.
+  const reset = /function resetToDefault\(\) \{[\s\S]*?\n  \}/.exec(app)?.[0] ?? "";
+  assert.ok(reset, "app.js defines resetToDefault");
+  assert.match(reset, /if \(!state\.deckIsExample && !confirm\(t\("confirmReset"\)\)\) return;/);
+  assert.match(reset, /setSource\(null\)/, "reset clears the loaded document");
+  assert.match(reset, /resetToDefaults\(\)/, "reset restores the brand visuals");
+  assert.match(reset, /setDeck\(exampleDeck\(uiLang\), \{ example: true \}\)/,
+    "reset must go through the guarded example-deck read");
+  for (const lang of ["pl", "en"]) {
+    assert.match(app, new RegExp(`${lang}: \\{[\\s\\S]*?confirmReset:`), `${lang} confirm copy`);
+    assert.match(app, new RegExp(`${lang}: \\{[\\s\\S]*?resetApp:`), `${lang} button label`);
+  }
+
+  // The style controller can return every visual to brand defaults; the logo
+  // reset must clear the stored override ("" means user-removed, not default).
+  assert.match(style, /function resetToDefaults\(\)/);
+  assert.match(style, /removeStored\(LOGO_KEY\)/);
+
+  // The button reads as plain chrome and never leaks into standalone exports.
+  assert.match(base, /\.brand-home \{[^}]*cursor: pointer/s);
+  assert.match(exporter, /\|brand-home/, "export CSS filter must cover .brand-home");
+});
+
 test("the title slide carries no brand eyebrow in any output", async () => {
   const exporter = await read("app-export.js");
   assert.doesNotMatch(exporter, /presentEyebrowWord/, "the eyebrow wording is gone");
@@ -266,7 +302,7 @@ test("every localStorage access is guarded so blocked storage cannot blank the a
     .filter(line => line.includes("localStorage") && !line.trim().startsWith("//"));
   assert.ok(touches.length, "expected at least one storage call site");
   for (const line of touches) {
-    assert.match(line, /try\s*\{[^}]*localStorage\.(getItem|setItem)/,
+    assert.match(line, /try\s*\{[^}]*localStorage\.(getItem|setItem|removeItem)/,
       `unguarded localStorage access: ${line.trim()}`);
   }
   assert.match(source, /function readStored\(/);

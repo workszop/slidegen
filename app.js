@@ -232,6 +232,8 @@ Drop your own document in the panel on the left.`,
       imageAlt: "Ilustracja wygenerowana przez AI",
       errExampleDeck: "Nie udało się wczytać przewodnika. Odśwież stronę z pominięciem pamięci podręcznej (Ctrl+Shift+R).",
       errNetwork: "Nie udało się połączyć z {host}. Sprawdź połączenie, blokowanie przez rozszerzenia lub zaporę sieciową i spróbuj ponownie.",
+      resetApp: "Wróć do prezentacji startowej",
+      confirmReset: "Powrót do domyślnych ustawień, wprowadzone zmiany zostaną skasowane",
     },
     en: {
       appTitle: "doc2slide",
@@ -283,6 +285,8 @@ Drop your own document in the panel on the left.`,
       imageAlt: "AI-generated illustration",
       errExampleDeck: "The guide deck could not be loaded. Reload the page bypassing the cache (Ctrl+Shift+R).",
       errNetwork: "Could not connect to {host}. Check your connection, browser extensions, or network firewall and try again.",
+      resetApp: "Back to the intro deck",
+      confirmReset: "Back to default settings, your changes will be discarded",
     },
   };
   // localStorage throws in Chrome with cookies blocked and in a cross-site
@@ -293,6 +297,9 @@ Drop your own document in the panel on the left.`,
   }
   function writeStored(key, value) {
     try { localStorage.setItem(key, value); } catch { /* storage unavailable */ }
+  }
+  function removeStored(key) {
+    try { localStorage.removeItem(key); } catch { /* storage unavailable */ }
   }
   // LS_LANG is shared with sibling apps, so it can hold anything; fall back
   // rather than throwing on T[undefined].
@@ -339,8 +346,10 @@ Drop your own document in the panel on the left.`,
         <button class="btn btn-ghost btn-sm hidden" id="removeIllustrationBtn" data-i18n="removeIllustration"></button>` : "";
   document.body.insertAdjacentHTML("afterbegin", `
 <header class="chrome">
-  <img class="chrome-mark brand-logo" alt="" aria-hidden="true">
-  ${wordmarkHtml}
+  <button type="button" class="brand-home" id="brandHomeBtn">
+    <img class="chrome-mark brand-logo" alt="" aria-hidden="true">
+    ${wordmarkHtml}
+  </button>
   ${tagHtml}
   <div class="spacer"></div>
   <div class="lang-toggle" role="group" aria-label="Język interfejsu / UI language">
@@ -512,6 +521,7 @@ Drop your own document in the panel on the left.`,
     present: document.getElementById("view-present"),
   };
   const workspaceEl = viewEls.workspace;
+  const brandHomeBtn = document.getElementById("brandHomeBtn");
   const langPlBtn = document.getElementById("langPl");
   const langEnBtn = document.getElementById("langEn");
   const stageEl = document.getElementById("stage");
@@ -563,7 +573,7 @@ Drop your own document in the panel on the left.`,
   const logoBtnEl = document.getElementById("logoBtn");
   const logoClearEl = document.getElementById("logoClear");
   const style = createStyleController({
-    BRAND, state, t, uiLang: () => uiLang, readStored, writeStored,
+    BRAND, state, t, uiLang: () => uiLang, readStored, writeStored, removeStored,
     presetGridEl, fontGridEl, customFontEl,
     logoInputEl, logoBtnEl, logoClearEl,
     onLogoChange: () => { if (state.view === "present") renderPresent(); else renderStage(); },
@@ -609,6 +619,8 @@ Drop your own document in the panel on the left.`,
   // ─── Render functions ───────────────────────────
   // Text-only refresh (language toggle) — no slide re-parse, no preview rebuild.
   function renderTexts() {
+    brandHomeBtn.title = t("resetApp");
+    brandHomeBtn.setAttribute("aria-label", t("resetApp"));
     langPlBtn.setAttribute("aria-pressed", String(uiLang === "pl"));
     langEnBtn.setAttribute("aria-pressed", String(uiLang === "en"));
     document.querySelectorAll("[data-i18n]").forEach(el => {
@@ -752,6 +764,21 @@ Drop your own document in the panel on the left.`,
       .catch(err => showError(err.message === "size" ? t("errTooBig") : t("errFileType"), file.name));
   }
 
+  // ─── Reset (chrome logo) ────────────────────────
+  // Returns the workspace to its first-visit state: the guide deck, no loaded
+  // document, brand visuals. Language, API settings, and panel widths stay.
+  function resetToDefault() {
+    if (!state.deckIsExample && !confirm(t("confirmReset"))) return;
+    state.generationController?.abort(new DOMException("Generation cancelled", "AbortError"));
+    state.illustrationController?.abort(new DOMException("Illustration cancelled", "AbortError"));
+    pasteAreaEl.value = "";
+    style.resetToDefaults();
+    setEditorOpen(false);
+    state.current = 0;
+    setSource(null);
+    setDeck(exampleDeck(uiLang), { example: true });
+  }
+
   // ─── Illustration (single slide, on demand) ─────
   async function illustrateSlide(index) {
     if (state.illustrating != null) {
@@ -877,6 +904,7 @@ Drop your own document in the panel on the left.`,
   }
 
   // ─── Event listeners ────────────────────────────
+  brandHomeBtn.addEventListener("click", resetToDefault);
   langPlBtn.addEventListener("click", () => setUiLang("pl"));
   langEnBtn.addEventListener("click", () => setUiLang("en"));
 

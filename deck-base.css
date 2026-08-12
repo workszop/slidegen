@@ -26,6 +26,13 @@ kbd {
   background: var(--chrome-surface); backdrop-filter: blur(10px);
   border-bottom: 1px solid var(--line);
 }
+/* The logo doubles as the "back to defaults" button; strip the button chrome
+   so the header looks unchanged, and keep the layout gap it inherited. */
+.brand-home {
+  display: flex; align-items: center; gap: var(--sp-3);
+  padding: 0; border: 0; background: none;
+  color: inherit; font: inherit; cursor: pointer;
+}
 .chrome-mark { height: 30px; width: auto; }
 .chrome .wordmark { font-family: var(--font-display); font-weight: 800; font-size: var(--h4); }
 .chrome .tag {

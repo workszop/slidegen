@@ -193,7 +193,7 @@ body { overflow: hidden; background: var(--slide-bg); color: var(--slide-fg); }
     const EXPORT_CHROME_SELECTOR = new RegExp([
       "\\.(workbench|chrome|panel|panel-resizer|has-panel-resizer|editor-|dropzone|preset",
       "|btn|side-|side_|file-chip|error-panel|gen-|lang-toggle|mono-input|stage-wrap",
-      "|font-grid|font-chip|logo-controls",
+      "|font-grid|font-chip|logo-controls|brand-home",
       "|deck|hints|spacer|wordmark|nav-btns|dz-label|ai-|visually-hidden)",
       "|#pasteArea|#editor\\b|#view-input",
     ].join(""));

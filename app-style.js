@@ -5,7 +5,7 @@
    controller inside its own IIFE and hand over the shared context:
 
      const style = createStyleController(ctx);
-     // ctx: { BRAND, state, t, uiLang(), readStored, writeStored,
+     // ctx: { BRAND, state, t, uiLang(), readStored, writeStored, removeStored,
      //        presetGridEl, fontGridEl, customFontEl,
      //        logoInputEl, logoBtnEl, logoClearEl, onLogoChange }
 
@@ -29,7 +29,7 @@
 
   function createStyleController(ctx) {
     const {
-      BRAND, state, t, uiLang, readStored, writeStored,
+      BRAND, state, t, uiLang, readStored, writeStored, removeStored,
       presetGridEl, fontGridEl, customFontEl,
       logoInputEl, logoBtnEl, logoClearEl, onLogoChange,
     } = ctx;
@@ -188,6 +188,20 @@
       refreshLogo();
     }
 
+    // Back to "never stored": the brand mark returns, unlike setLogo("")
+    // which records that the user removed the logo on purpose.
+    function resetLogo() {
+      logoMode = null;
+      removeStored(LOGO_KEY);
+      refreshLogo();
+    }
+
+    function resetToDefaults() {
+      applyPreset(0);
+      resetFont();
+      resetLogo();
+    }
+
     function bindLogoControls() {
       if (!logoBtnEl || !logoInputEl) return;
       logoBtnEl.addEventListener("click", () => logoInputEl.click());
@@ -222,6 +236,7 @@
       applyPreset,
       applyFont,
       resetFont,
+      resetToDefaults,
       preloadPickerFonts,
       refreshLogo,
       effectiveLogo,
