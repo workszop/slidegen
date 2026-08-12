@@ -131,9 +131,10 @@ an empty workspace with no error.
 - `pptx-export.js` contains the PowerPoint renderer and theme post-processing.
 
 There is no production build step. A standalone HTML download inlines the deck
-stylesheets and the active style preset; workbench-only rules such as the
-sidebar, editor panel, and model dialog are filtered out so an exported deck
-carries only what it renders.
+stylesheets, active style preset, used web fonts, and image assets. It has no
+runtime dependency on this app or a network connection. Workbench-only rules
+such as the sidebar, editor panel, and model dialog are filtered out so an
+exported deck carries only what it renders.
 
 ## Development
 

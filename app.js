@@ -205,6 +205,7 @@ Drop your own document in the panel on the left.`,
       genWaiting: "Generuję slajdy…",
       downloadHtml: "Pobierz html",
       downloadPptx: "Pobierz .pptx",
+      errHtmlTitle: "Eksport HTML nie powiódł się",
       errPptxTitle: "Eksport PPTX nie powiódł się",
       present: "Prezentuj",
       sideDoc: "Dokument",
@@ -255,6 +256,7 @@ Drop your own document in the panel on the left.`,
       genWaiting: "Generating slides…",
       downloadHtml: "Download HTML",
       downloadPptx: "Download .pptx",
+      errHtmlTitle: "HTML export failed",
       errPptxTitle: "PPTX export failed",
       present: "Present",
       sideDoc: "Document",
@@ -568,7 +570,7 @@ Drop your own document in the panel on the left.`,
   });
   const exporter = createExportController({
     BRAND, state, t, uiLang: () => uiLang, style,
-    deckTitle, splitSlides, stripOuterFence, ensurePptxDeps, showError, pptxBtn,
+    deckTitle, splitSlides, stripOuterFence, ensurePptxDeps, showError, downloadBtn, pptxBtn,
   });
   const applyPreset = style.applyPreset;
   const applyFont = style.applyFont;

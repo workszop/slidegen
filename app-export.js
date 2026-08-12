@@ -6,7 +6,7 @@
      const exporter = createExportController(ctx);
      // ctx: { BRAND, state, t, uiLang(), style, deckTitle, splitSlides,
      //        stripOuterFence, ensurePptxDeps, exportDeckToPptx: () => fn,
-     //        showError }
+     //        showError, downloadBtn, pptxBtn }
 
    Load order: shared.js → app-style.js → app-export.js → deck-model.js → app.js
    ============================================================ */
@@ -16,7 +16,7 @@
   function createExportController(ctx) {
     const {
       BRAND, state, t, uiLang, style, deckTitle, splitSlides, stripOuterFence,
-      ensurePptxDeps, showError, pptxBtn,
+      ensurePptxDeps, showError, downloadBtn, pptxBtn,
     } = ctx;
 
     function escapeHtml(value) {
@@ -107,6 +107,7 @@
 
     function collectExportCss() {
       return [...document.styleSheets].map(sheet => {
+        if (/^https:\/\/fonts\.googleapis\.com\//.test(sheet.href || "")) return "";
         try {
           return [...sheet.cssRules].map(exportRuleText).filter(Boolean).join("\n");
         } catch {
@@ -117,14 +118,96 @@
       }).filter(Boolean).join("\n");
     }
 
-    function downloadHtml() {
+    function blobDataUrl(blob) {
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(String(reader.result || ""));
+        reader.onerror = () => reject(reader.error || new Error("Could not read an exported asset"));
+        reader.readAsDataURL(blob);
+      });
+    }
+
+    async function fetchDataUrl(url) {
+      const response = await fetch(url);
+      if (!response.ok) throw new Error(`Could not embed ${url} (${response.status})`);
+      return blobDataUrl(await response.blob());
+    }
+
+    async function replaceAsync(source, pattern, replacer) {
+      const matches = [...source.matchAll(pattern)];
+      if (!matches.length) return source;
+      const replacements = await Promise.all(matches.map(match => replacer(match)));
+      let output = "";
+      let cursor = 0;
+      matches.forEach((match, index) => {
+        output += source.slice(cursor, match.index) + replacements[index];
+        cursor = match.index + match[0].length;
+      });
+      return output + source.slice(cursor);
+    }
+
+    async function inlineCssAssets(css, baseUrl) {
+      const cache = new Map();
+      return replaceAsync(css, /url\(\s*(?:"([^"]*)"|'([^']*)'|([^)]*?))\s*\)/gi, async match => {
+        const raw = String(match[1] ?? match[2] ?? match[3] ?? "").trim();
+        if (!raw || /^(?:data:|#)/i.test(raw)) return match[0];
+        const url = new URL(raw, baseUrl).href;
+        if (!cache.has(url)) cache.set(url, fetchDataUrl(url));
+        return `url("${await cache.get(url)}")`;
+      });
+    }
+
+    function exportFontFamilies() {
+      return new Set([
+        style.activeFont,
+        BRAND.pptx.headingFont,
+        BRAND.pptx.bodyFont,
+        BRAND.pptx.monoFont,
+      ].filter(Boolean).map(name => String(name).trim().toLowerCase()));
+    }
+
+    async function collectEmbeddedFontCss() {
+      const families = exportFontFamilies();
+      const links = [...document.querySelectorAll('link[rel="stylesheet"]')]
+        .filter(link => /^https:\/\/fonts\.googleapis\.com\//.test(link.href));
+      const blocks = new Set();
+      await Promise.all(links.map(async link => {
+        try {
+          const response = await fetch(link.href);
+          if (!response.ok) return;
+          const css = await response.text();
+          for (const match of css.matchAll(/@font-face\s*\{[^{}]*\}/gi)) {
+            const family = /font-family:\s*['"]?([^;'"}]+)['"]?\s*;/i.exec(match[0])?.[1]
+              ?.trim().toLowerCase();
+            if (!family || !families.has(family)) continue;
+            try { blocks.add(await inlineCssAssets(match[0], link.href)); } catch { /* use CSS fallbacks */ }
+          }
+        } catch { /* an offline export remains self-contained via CSS fallbacks */ }
+      }));
+      return [...blocks].join("\n");
+    }
+
+    async function inlineHtmlImages(html) {
+      const template = document.createElement("template");
+      template.innerHTML = html;
+      const cache = new Map();
+      for (const image of template.content.querySelectorAll("img[src]")) {
+        const raw = image.getAttribute("src");
+        if (!raw || /^data:/i.test(raw)) continue;
+        const url = new URL(raw, document.baseURI).href;
+        if (!cache.has(url)) cache.set(url, fetchDataUrl(url));
+        image.setAttribute("src", await cache.get(url));
+      }
+      return template.innerHTML;
+    }
+
+    async function buildStandaloneHtml() {
       const title = deckTitle(state.md) || "slides";
-      const styleText = [collectExportCss(), collectExportPresetCss()].filter(Boolean).join("\n");
-      const fontLinks = [...document.querySelectorAll('link[rel="stylesheet"]')]
-        .filter(link => /^https:\/\/fonts\.googleapis\.com\//.test(link.href))
-        .map(link => `<link rel="stylesheet" href="${escapeHtml(link.href)}">`).join("\n");
+      const baseCss = await inlineCssAssets(collectExportCss(), document.baseURI);
+      const fontCss = await collectEmbeddedFontCss();
+      const styleText = [baseCss, fontCss, collectExportPresetCss()].filter(Boolean).join("\n");
       const hasTitle = state.deckModel.slides[0]?.type === "title";
-      const slides = state.slides.map((slideHtml, index) => {
+      const renderedSlides = await Promise.all(state.slides.map(async (slideHtml, index) => {
         const isTitle = index === 0 && hasTitle;
         const image = state.images[index];
         const eyebrow = isTitle
@@ -134,9 +217,10 @@
           ? `<div class="slide-layout"><div class="slide-copy">${slideHtml}</div><img class="slide-generated-image" src="${escapeHtml(image)}" alt="${escapeHtml(t("imageAlt"))}"></div>`
           : slideHtml;
         const eyebrowHtml = eyebrow ? `<div class="slide-eyebrow">${escapeHtml(eyebrow)}</div>` : "";
-        return `<section class="slide${isTitle ? " slide--title" : ""}${image ? " slide--illustrated" : ""}${index ? " hidden" : ""}" data-export-slide>
-        ${eyebrowHtml}${content}</section>`;
-      }).join("\n");
+        return inlineHtmlImages(`<section class="slide${isTitle ? " slide--title" : ""}${image ? " slide--illustrated" : ""}${index ? " hidden" : ""}" data-export-slide>
+        ${eyebrowHtml}${content}</section>`);
+      }));
+      const slides = renderedSlides.join("\n");
       const exportLogo = style.effectiveLogo();
       const logo = exportLogo
         ? `<img class="slide-logo" src="${escapeHtml(exportLogo)}" alt="" aria-hidden="true">`
@@ -147,7 +231,6 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>${escapeHtml(title)}</title>
-${fontLinks}
 <style>${styleText}
 .export-nav { display: flex; align-items: center; gap: 8px; }
 .export-nav button { border: 1px solid var(--line-2, currentColor); border-radius: 999px; padding: 4px 14px; background: transparent; color: inherit; font: inherit; cursor: pointer; }
@@ -193,15 +276,34 @@ ${fontLinks}
 <\/script>
 </body>
 </html>`;
-      const blob = new Blob([html], { type: "text/html;charset=utf-8" });
-      const a = document.createElement("a");
-      a.href = URL.createObjectURL(blob);
-      a.download = title + ".html";
-      a.click();
-      URL.revokeObjectURL(a.href);
+      return { html, title };
     }
 
-    return { downloadPptx, downloadHtml, readDeckTheme, collectExportCss, collectExportPresetCss, EXPORT_CHROME_SELECTOR };
+    async function downloadHtml() {
+      try {
+        if (downloadBtn) downloadBtn.disabled = true;
+        const { html, title } = await buildStandaloneHtml();
+        const blob = new Blob([html], { type: "text/html;charset=utf-8" });
+        const a = document.createElement("a");
+        const url = URL.createObjectURL(blob);
+        a.href = url;
+        a.download = title + ".html";
+        a.style.display = "none";
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        setTimeout(() => URL.revokeObjectURL(url), 1000);
+      } catch (err) {
+        showError(t("errHtmlTitle"), String(err.message ?? err));
+      } finally {
+        if (downloadBtn) downloadBtn.disabled = false;
+      }
+    }
+
+    return {
+      downloadPptx, downloadHtml, buildStandaloneHtml,
+      readDeckTheme, collectExportCss, collectExportPresetCss, EXPORT_CHROME_SELECTOR,
+    };
   }
 
   root.createExportController = createExportController;
