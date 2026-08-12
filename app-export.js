@@ -13,6 +13,109 @@
 (function (root) {
   "use strict";
 
+  // A file:// page can apply sibling stylesheets while still denying both
+  // CSSOM and fetch access to them. Keep a compact presentation-only fallback
+  // so an export never degrades into an unstyled document in that environment.
+  const STANDALONE_FALLBACK_CSS = `
+:root {
+  --export-muted: color-mix(in srgb, var(--slide-fg) 72%, var(--slide-bg));
+  --export-surface: color-mix(in srgb, var(--slide-fg) 8%, var(--slide-bg));
+  --export-line: color-mix(in srgb, var(--slide-fg) 24%, var(--slide-bg));
+  --export-radius: 14px;
+  --export-body-font: var(--slide-body-font, system-ui, sans-serif);
+  --export-heading-font: var(--slide-heading-font, system-ui, sans-serif);
+  --export-mono-font: ui-monospace, monospace;
+  --export-slide-size: clamp(15px, 1.55vw + .9vh, 46px);
+  --export-h1-size: 3em;
+  --export-h2-size: 2.1em;
+  --export-h3-size: 1.35em;
+  --export-title-size: 3.6em;
+  --export-body-size: 1em;
+  --export-caption-size: 13px;
+  --export-title-align: center;
+}
+* { box-sizing: border-box; }
+html, body { width: 100%; height: 100%; margin: 0; }
+body { overflow: hidden; background: var(--slide-bg); color: var(--slide-fg); }
+.hidden { display: none !important; }
+#view-present {
+  position: fixed; inset: 0; display: flex; flex-direction: column;
+  background: var(--slide-bg);
+}
+.present-bar {
+  position: absolute; top: 0; left: 0; width: 0%; height: 4px; z-index: 5;
+  background: var(--slide-accent); transition: width 450ms ease;
+}
+.slide-logo {
+  position: absolute; top: calc(4px + 2.5vh); right: 3vw; z-index: 4;
+  width: auto; height: clamp(36px, 4vh + 1.8vw, 88px); opacity: .9;
+}
+.stage {
+  flex: 1; display: grid; place-items: start center;
+  padding: 14vh 4vw 3vh; overflow: hidden;
+}
+.slide {
+  width: min(1600px, 90vw); max-height: 88vh; overflow: auto;
+  font-family: var(--export-body-font);
+  font-size: var(--export-slide-size); color: var(--slide-fg);
+}
+.slide .slide-eyebrow {
+  margin-bottom: .9em; color: var(--slide-accent); font-size: .55em;
+  font-weight: 600; letter-spacing: .12em; text-transform: uppercase;
+}
+.slide h1, .slide h2, .slide h3 {
+  font-family: var(--export-heading-font); color: var(--slide-fg);
+}
+.slide h1 { margin: 0 0 .35em; font-size: var(--export-h1-size); line-height: 1.05; }
+.slide h2 { margin: 0 0 .6em; font-size: var(--export-h2-size); line-height: 1.1; }
+.slide h3 { margin: 1em 0 .5em; font-size: var(--export-h3-size); }
+.slide p, .slide li { color: var(--export-muted); font-size: var(--export-body-size); line-height: 1.55; }
+.slide p { margin: 0 0 .6em; }
+.slide li { margin-bottom: .45em; }
+.slide li::marker, .slide a { color: var(--slide-accent); }
+.slide strong, .slide em { color: var(--slide-fg); }
+.slide code, .slide pre { font-family: var(--export-mono-font); }
+.slide code { padding: .1em .4em; border-radius: 6px; background: var(--export-surface); }
+.slide pre {
+  padding: .8em; overflow-x: auto; border: 1px solid var(--export-line);
+  border-radius: var(--export-radius); background: var(--export-surface);
+}
+.slide pre code { padding: 0; background: none; }
+.slide blockquote {
+  margin: .9em 0; padding: .6em 1em; color: var(--slide-fg);
+  border-left: .18em solid var(--slide-accent); background: var(--export-surface);
+}
+.slide blockquote p { margin: 0; color: inherit; }
+.slide table { width: 100%; border-collapse: collapse; font-size: .92em; }
+.slide th, .slide td { padding: .55em .7em; border-bottom: 1px solid var(--export-line); }
+.slide th { text-align: left; color: var(--slide-fg); }
+.slide td { color: var(--export-muted); }
+.slide--title { align-self: center; text-align: var(--export-title-align); }
+.slide--title h1 { font-size: var(--export-title-size); }
+.slide--title p { color: var(--export-muted); font-size: 1.3em; }
+.export-brand--quantica .slide--title h1 { color: var(--slide-accent); }
+.slide--illustrated { width: min(1600px, 94vw); }
+.slide-layout {
+  display: grid; grid-template-columns: minmax(0, 1.08fr) minmax(260px, .92fr);
+  gap: 1.4em; align-items: center;
+}
+.slide-copy { min-width: 0; }
+.slide-generated-image {
+  display: block; width: 100%; max-height: 52vh; object-fit: cover;
+  border-radius: var(--export-radius);
+}
+.present-footer {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 12px 24px; color: var(--export-muted);
+  font-family: var(--export-mono-font); font-size: var(--export-caption-size);
+}
+@media (max-width: 768px) {
+  .stage { padding: 64px 16px 16px; }
+  .slide-layout { grid-template-columns: 1fr; }
+  .slide-generated-image { max-height: 34vh; }
+}
+`;
+
   function createExportController(ctx) {
     const {
       BRAND, state, t, uiLang, style, deckTitle, splitSlides, stripOuterFence,
@@ -87,7 +190,7 @@
     const EXPORT_CHROME_SELECTOR = new RegExp([
       "\\.(workbench|chrome|panel|panel-resizer|has-panel-resizer|editor-|dropzone|preset",
       "|btn|side-|side_|file-chip|error-panel|gen-|lang-toggle|mono-input|stage-wrap",
-      "|font-grid|font-chip|logo-",
+      "|font-grid|font-chip|logo-controls",
       "|deck|hints|spacer|wordmark|nav-btns|dz-label|ai-|visually-hidden)",
       "|#pasteArea|#editor\\b|#view-input",
     ].join(""));
@@ -105,17 +208,30 @@
       return `${selectors.join(", ")} { ${rule.style.cssText} }`;
     }
 
-    function collectExportCss() {
-      return [...document.styleSheets].map(sheet => {
+    async function collectExportCss() {
+      const styles = await Promise.all([...document.styleSheets].map(async sheet => {
         if (/^https:\/\/fonts\.googleapis\.com\//.test(sheet.href || "")) return "";
         try {
-          return [...sheet.cssRules].map(exportRuleText).filter(Boolean).join("\n");
+          const css = [...sheet.cssRules].map(exportRuleText).filter(Boolean).join("\n");
+          if (css || !sheet.href) return css;
+        } catch { /* fall through to fetching the applied stylesheet */ }
+        // Some browsers expose an applied linked stylesheet but deny CSSOM
+        // access to its rules. Fetch the same-origin source instead; without
+        // this fallback the export contains only fonts and renders as raw
+        // HTML. Raw workbench rules are harmless because their elements are
+        // absent from a standalone presentation.
+        if (!sheet.href) return "";
+        try {
+          const response = await fetch(sheet.href);
+          return response.ok ? await response.text() : "";
         } catch {
-          // Cross-origin font stylesheets cannot be inspected. Their <link>
-          // elements are preserved separately below.
           return "";
         }
-      }).filter(Boolean).join("\n");
+      }));
+      const css = styles.filter(Boolean).join("\n");
+      const hasPresentationCore = [".hidden", "#view-present", ".stage", ".slide-logo"]
+        .every(selector => css.includes(selector));
+      return hasPresentationCore ? css : [css, STANDALONE_FALLBACK_CSS].filter(Boolean).join("\n");
     }
 
     function blobDataUrl(blob) {
@@ -203,7 +319,7 @@
 
     async function buildStandaloneHtml() {
       const title = deckTitle(state.md) || "slides";
-      const baseCss = await inlineCssAssets(collectExportCss(), document.baseURI);
+      const baseCss = await inlineCssAssets(await collectExportCss(), document.baseURI);
       const fontCss = await collectEmbeddedFontCss();
       const styleText = [baseCss, fontCss, collectExportPresetCss()].filter(Boolean).join("\n");
       const hasTitle = state.deckModel.slides[0]?.type === "title";
@@ -225,6 +341,7 @@
       const logo = exportLogo
         ? `<img class="slide-logo" src="${escapeHtml(exportLogo)}" alt="" aria-hidden="true">`
         : "";
+      const brandClass = /quantica/i.test(BRAND.presetKey || "") ? " export-brand--quantica" : "";
       const html = `<!DOCTYPE html>
 <html lang="${escapeHtml(uiLang())}">
 <head>
@@ -236,7 +353,7 @@
 .export-nav button { border: 1px solid var(--line-2, currentColor); border-radius: 999px; padding: 4px 14px; background: transparent; color: inherit; font: inherit; cursor: pointer; }
 </style>
 </head>
-<body class="presenting">
+<body class="presenting${brandClass}">
 <main id="app">
   <section id="view-present">
     <div class="present-bar" id="presentBar" aria-hidden="true"></div>
