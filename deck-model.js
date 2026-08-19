@@ -65,15 +65,6 @@
     };
   }
 
-  function validate(deck, limits = {}) {
-    const mergedLimits = Object.assign({}, DEFAULT_LIMITS, limits);
-    const warnings = [];
-    (deck?.slides ?? []).forEach(slide => {
-      warnings.push(...validateSlide(slide, mergedLimits).map(warning => ({ ...warning, slide: slide.index })));
-    });
-    return warnings;
-  }
-
   // ─── Lexer and source helpers ───────────────────
   function resolveLexer(options) {
     if (typeof options.lexer === "function") return options.lexer;
@@ -282,6 +273,5 @@
     create,
     fromTokens,
     inlineRuns,
-    validate,
   });
 });

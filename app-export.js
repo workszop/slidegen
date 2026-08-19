@@ -156,7 +156,7 @@ body { overflow: hidden; background: var(--slide-bg); color: var(--slide-fg); }
           deck: state.deckModel,
           images: state.images,
           theme: readDeckTheme(),
-          logo: style.effectiveLogo() || null,
+          logo: await logoDataUrl(),
           // No brandName: the title slide uses the TITLE_PLAIN master so the
           // deck carries no brand eyebrow. Document metadata still gets the
           // brand through `company`.
@@ -262,6 +262,17 @@ body { overflow: hidden; background: var(--slide-bg); color: var(--slide-fg); }
       return assetCache.get(url);
     }
 
+    // The brand logo is usually a data URL, but a brand may ship a plain image
+    // file (Quantica's PNG wordmarks). Both exports need an embeddable data
+    // URL, so fetch-and-encode the file when it isn't already one.
+    async function logoDataUrl() {
+      const logo = style.effectiveLogo();
+      if (!logo) return null;
+      if (/^data:/i.test(logo)) return logo;
+      try { return await fetchDataUrl(new URL(logo, document.baseURI).href); }
+      catch { return logo; /* keep the path rather than failing the export */ }
+    }
+
     async function replaceAsync(source, pattern, replacer) {
       const matches = [...source.matchAll(pattern)];
       if (!matches.length) return source;
@@ -359,7 +370,7 @@ body { overflow: hidden; background: var(--slide-bg); color: var(--slide-fg); }
       const [[baseCss, fontCss], renderedSlides] = await Promise.all([cssPromise, slidesPromise]);
       const styleText = [baseCss, fontCss, collectExportPresetCss()].filter(Boolean).join("\n");
       const slides = renderedSlides.join("\n");
-      const exportLogo = style.effectiveLogo();
+      const exportLogo = await logoDataUrl();
       const logo = exportLogo
         ? `<img class="slide-logo" src="${escapeHtml(exportLogo)}" alt="" aria-hidden="true">`
         : "";

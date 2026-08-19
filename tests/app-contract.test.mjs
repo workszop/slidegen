@@ -225,9 +225,11 @@ test("logo management is restored: upload/remove UI, storage, and both exports",
   assert.match(style, /addEventListener\("click", \(\) => logoInputEl\.click\(\)\)/);
   // A dark preset inverts the default ink mark but never a user upload.
   assert.match(style, /logo === BRAND\.logo\) \? "invert\(1\)"/);
-  // The chosen logo reaches both exports and the on-screen deck corner.
-  assert.match(exporter, /logo:\s*style\.effectiveLogo\(\) \|\| null/);
-  assert.match(exporter, /const exportLogo = style\.effectiveLogo\(\)/);
+  // The chosen logo reaches both exports and the on-screen deck corner. A
+  // plain image-file logo is fetched and encoded once before export.
+  assert.match(exporter, /logo:\s*await logoDataUrl\(\)/);
+  assert.match(exporter, /const exportLogo = await logoDataUrl\(\)/);
+  assert.match(exporter, /async function logoDataUrl\(\)/);
   // The per-brand storage key derives from presetKey, like the font key.
   assert.match(style, /const LOGO_KEY = `\$\{BRAND\.presetKey\}_logo`/);
 });

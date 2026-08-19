@@ -5,13 +5,9 @@ import vm from "node:vm";
 
 const SOURCE = await readFile(new URL("../app-export.js", import.meta.url), "utf8");
 
-// The real illustrated-slide markup helper from shared.js's pure section: the
-// export must lay out illustrated slides exactly like the live preview does.
-// ai-models.js comes along because the section validates the catalogue on load.
-const catalogSrc = await readFile(new URL("../ai-models.js", import.meta.url), "utf8");
-const sharedSrc = await readFile(new URL("../shared.js", import.meta.url), "utf8");
-const pureSection = sharedSrc.split("/* pure-helpers:start */")[1].split("/* pure-helpers:end */")[0];
-const { illustratedSlideHtml } = new Function(`${catalogSrc}\n${pureSection}; return { illustratedSlideHtml };`)();
+// The real illustrated-slide markup helper from pure.js: the export must lay
+// out illustrated slides exactly like the live preview does.
+const { illustratedSlideHtml } = (await import("../pure.js")).default;
 
 class TestFileReader {
   readAsDataURL(blob) {

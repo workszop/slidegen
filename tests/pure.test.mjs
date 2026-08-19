@@ -1,31 +1,11 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
 
-// ai-models.js + shared.js are classic scripts; evaluate the catalogue and
-// just the pure-helpers section together.
-const catalogSrc = readFileSync(new URL("../ai-models.js", import.meta.url), "utf8");
-const src = readFileSync(new URL("../shared.js", import.meta.url), "utf8");
-const section = src.split("/* pure-helpers:start */")[1].split("/* pure-helpers:end */")[0];
-const H = new Function(`${catalogSrc}\n${section}; return {
-  stripOuterFence, splitSlides, detectLang, buildPrompt, deckTitle, isTitleSlide, reconcileSlideImages, illustratedSlideHtml, firstFont,
-  clampPanelWidth,
-  PROVIDER_INFO, DEFAULT_PROVIDER, OPENAI_IMAGE_MODELS, validateModelCatalog, normalizeAiSettings,
-  buildGeminiRequest, buildOpenAIRequest, buildClaudeRequest,
-  buildOpenAIImageRequest, buildSlideImagePrompt,
-  geminiChunk, openaiChunk, claudeChunk, parseSseFrames, providerStopReason, claudeThinking,
-};`)();
+import H from "../pure.js";
 
-// The model-discovery block sits outside the pure helpers (it can fetch), but
-// providerModelIds itself is pure and worth unit-testing against the catalog.
-// Split on the marker text, then drop the leftover dashes of the marker line.
-// PROVIDER_INFO is a top-level const outside this slice, so pass it in.
-const discoverySrc = src.split("// ─── Model discovery")[1]
-  .split("// ─── Per-provider request builders")[0]
-  .split("\n").slice(1).join("\n");
-const D = new Function("PROVIDER_INFO", `${discoverySrc}; return {
-  providerModelIds, discoverProviderModels, PROVIDER_INFO,
-};`)(H.PROVIDER_INFO);
+// The model-discovery helpers share the same export object; D is a
+// convenience alias so discovery-focused tests read alongside the rest.
+const D = H;
 
 // ── existing helpers keep working ──
 test("splitSlides splits on --- outside fences", () => {

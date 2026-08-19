@@ -1,0 +1,14 @@
+{
+  "compilerOptions": {
+    "target": "ES2020",
+    "lib": ["ES2020", "DOM", "DOM.Iterable"],
+    "allowJs": true,
+    "checkJs": true,
+    "noEmit": true,
+    "strict": false,
+    "skipLibCheck": true,
+    "module": "ESNext",
+    "types": []
+  },
+  "include": ["pure.js", "ai-models.js", "deck-model.js", "globals.d.ts"]
+}

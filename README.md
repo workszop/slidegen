@@ -117,9 +117,15 @@ mark is inverted for legibility — a user-uploaded logo is never filtered.
 - `app-export.js` is the export controller (standalone HTML and PowerPoint)
   built through `createExportController(ctx)`. Both controllers are classic
   scripts that receive the shared context explicitly, so load order is
-  `shared.js` → `app-style.js` → `app-export.js` → `deck-model.js` → `app.js`.
-- `shared.js` contains provider, streaming, file, model-discovery, and shared
-  UI helpers.
+  `ai-models.js` → `pure.js` → `shared.js` → `app-style.js` →
+  `app-export.js` → `deck-model.js` → `app.js`.
+- `pure.js` contains the pure string helpers, the AI provider catalogue and
+  model discovery, and the per-provider request builders / SSE extractors.
+  It is a UMD script: in the browser it attaches every export to `window`,
+  under Node it is `module.exports` so tests import it directly.
+- `shared.js` contains the transport, file intake, AI selector, panel
+  resizer, and lazy PPTX dependency loading that talk to the DOM and
+  storage; it consumes `pure.js` as globals.
 - `deck-model.js` is the semantic Markdown model used by HTML and PowerPoint.
 The guide deck every workspace opens with lives in `app.js` as `EXAMPLE_DECK`,
 shared by all three shells and kept free of brand names. It stays in the file
@@ -162,12 +168,12 @@ empty response.
 ## Updating AI models
 
 The provider and model catalogue lives in `ai-models.js`. Update model IDs
-there. On startup, `shared.js` validates required providers, unique model IDs,
+there. On startup, `pure.js` validates required providers, unique model IDs,
 and HTTPS key URLs. Custom model IDs remain supported.
 
 Each provider also carries optional discovery metadata (`listUrl`, `listAuth`,
 `listPath`, and for Gemini `listStrip`). When the AI model dialog opens with a
-saved key, `shared.js` queries that provider's list endpoint and appends any
+saved key, `pure.js` queries that provider's list endpoint and appends any
 live IDs the catalogue does not know — tagged "(discovered)" — after the
 curated list. A discovered ID receives no per-model API parameters (the same
 safe-default rule as custom IDs), so it may behave slightly differently from a

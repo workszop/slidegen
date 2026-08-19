@@ -160,6 +160,7 @@ Drop your own document in the panel on the left.`,
   // ─── Brand config ───────────────────────────────
   const BRAND = Object.assign({
     logo: "",
+    logoDark: null,           // optional dark-preset mark (see app-style.js)
     wordmark: null,
     tag: "doc2slide",
     presentBrand: "",
@@ -645,6 +646,28 @@ Drop your own document in the panel on the left.`,
     if (state.view === "workspace") renderStage();
   }
 
+  // One slide renderer shared by the workspace and present views. The two
+  // chrome wrappers differ only in their frame (counter, progress bar,
+  // eyebrow), not in how a slide is drawn — splitting them duplicated the
+  // slide-class/dataset/image wiring and let the two views drift apart.
+  function renderSlideInto(el, { eyebrow = "" } = {}) {
+    const i = state.current;
+    const semanticSlide = state.deckModel.slides[i];
+    const isTitle = semanticSlide?.type === "title";
+    const image = state.images[i];
+    el.className = "slide" + (isTitle ? " slide--title" : "") + (image ? " slide--illustrated" : "");
+    el.dataset.slideType = semanticSlide?.type ?? "content";
+    el.dataset.warningCount = String(semanticSlide?.warnings?.length ?? 0);
+    el.innerHTML = (eyebrow ? `<div class="slide-eyebrow"></div>` : "")
+      + (image ? illustratedSlideHtml(state.slides[i], '<img class="slide-generated-image" alt="">') : state.slides[i]);
+    if (eyebrow) el.querySelector(".slide-eyebrow").textContent = eyebrow;
+    if (image) {
+      const img = el.querySelector(".slide-generated-image");
+      img.src = image;
+      img.alt = t("imageAlt");
+    }
+  }
+
   function renderStage() {
     const n = state.slides.length;
     wsCounterEl.textContent = n ? `${state.current + 1} / ${n}` : "";
@@ -652,20 +675,7 @@ Drop your own document in the panel on the left.`,
     wsNextBtn.disabled = state.current >= n - 1;
     deckBarEl.style.width = n ? `${((state.current + 1) / n) * 100}%` : "0%";
     if (!n) { wsStageEl.innerHTML = ""; return; }
-    const semanticSlide = state.deckModel.slides[state.current];
-    const isTitle = semanticSlide?.type === "title";
-    const image = state.images[state.current];
-    wsStageEl.className = "slide" + (isTitle ? " slide--title" : "") + (image ? " slide--illustrated" : "");
-    wsStageEl.dataset.slideType = semanticSlide?.type ?? "content";
-    wsStageEl.dataset.warningCount = String(semanticSlide?.warnings?.length ?? 0);
-    wsStageEl.innerHTML = image
-      ? illustratedSlideHtml(state.slides[state.current], '<img class="slide-generated-image" alt="">')
-      : state.slides[state.current];
-    if (image) {
-      const img = wsStageEl.querySelector(".slide-generated-image");
-      img.src = image;
-      img.alt = t("imageAlt");
-    }
+    renderSlideInto(wsStageEl);
     renderIllustrateControls();
   }
 
@@ -688,25 +698,12 @@ Drop your own document in the panel on the left.`,
     const n = state.slides.length;
     if (!n) return;
     const i = state.current;
-    const semanticSlide = state.deckModel.slides[i];
-    const isTitle = semanticSlide?.type === "title";
+    const isTitle = state.deckModel.slides[i]?.type === "title";
     const title = deckTitle(state.md);
     // The title slide carries no eyebrow: the brand already shows in the
     // corner logo, and an empty div would still claim its bottom margin.
     const eyebrow = isTitle ? "" : [`${i + 1} / ${n}`, title].filter(Boolean).join(" · ");
-    const image = state.images[i];
-    stageEl.className = "slide" + (isTitle ? " slide--title" : "") + (image ? " slide--illustrated" : "");
-    stageEl.dataset.slideType = semanticSlide?.type ?? "content";
-    stageEl.dataset.warningCount = String(semanticSlide?.warnings?.length ?? 0);
-    stageEl.innerHTML = (eyebrow ? `<div class="slide-eyebrow"></div>` : "") + (image
-      ? illustratedSlideHtml(state.slides[i], '<img class="slide-generated-image" alt="">')
-      : state.slides[i]);
-    if (eyebrow) stageEl.querySelector(".slide-eyebrow").textContent = eyebrow;
-    if (image) {
-      const img = stageEl.querySelector(".slide-generated-image");
-      img.src = image;
-      img.alt = t("imageAlt");
-    }
+    renderSlideInto(stageEl, { eyebrow });
     presentBarEl.style.width = `${((i + 1) / n) * 100}%`;
     presentCounterEl.textContent = `${i + 1} / ${n}`;
   }

@@ -149,9 +149,20 @@
     // mark, remove it, or fall back to the brand default. Stored per brand in
     // localStorage; a data-URL survives a reload and feeds both the on-screen
     // deck corner and the PowerPoint/HTML export.
+    function isDarkPreset() {
+      const preset = BRAND.presets[activePreset] ?? BRAND.presets[0];
+      const bg = String(preset?.bg ?? "#FFFFFF");
+      const rgb = [1, 3, 5].map(i => parseInt(bg.slice(i, i + 2), 16));
+      return rgb.every(Number.isFinite)
+        && (0.2126 * rgb[0] + 0.7152 * rgb[1] + 0.0722 * rgb[2]) < 128;
+    }
+
     function effectiveLogo() {
       if (logoMode === "") return null;               // user removed it
       if (typeof logoMode === "string" && logoMode.startsWith("data:")) return logoMode;
+      // A brand may ship a distinct dark-preset mark (e.g. a white wordmark)
+      // instead of relying on refreshLogo's invert filter.
+      if (BRAND.logoDark && isDarkPreset()) return BRAND.logoDark;
       return BRAND.logo || null;                       // brand default
     }
 
@@ -168,12 +179,10 @@
         if (logo) {
           el.src = logo;
           // A dark preset under an ink-coloured default mark swallows it, so
-          // invert the brand mark there; never filter a user-uploaded logo.
-          const preset = BRAND.presets[activePreset] ?? BRAND.presets[0];
-          const bg = String(preset?.bg ?? "#FFFFFF");
-          const rgb = [1, 3, 5].map(i => parseInt(bg.slice(i, i + 2), 16));
-          const dark = rgb.every(Number.isFinite)
-            && (0.2126 * rgb[0] + 0.7152 * rgb[1] + 0.0722 * rgb[2]) < 128;
+          // invert the brand mark there; a brand with a dedicated dark mark
+          // (logoDark) has already swapped it in via effectiveLogo. Never
+          // filter a user-uploaded logo.
+          const dark = isDarkPreset();
           el.style.filter = (dark && logo === BRAND.logo) ? "invert(1)" : "";
         } else {
           el.style.filter = "";
