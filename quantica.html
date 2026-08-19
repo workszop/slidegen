@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <meta http-equiv="Content-Security-Policy" content="default-src 'self' blob:; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: blob: https:; connect-src 'self' https://generativelanguage.googleapis.com https://api.openai.com https://api.anthropic.com https://fonts.googleapis.com https://fonts.gstatic.com; object-src 'none'; base-uri 'self';">
 <title>doc2slide</title>
-<link rel="icon" type="image/png" href="quantica-q-mark-white.png">
+<link rel="icon" type="image/png" href="quantica-q-mark-square.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Raleway:wght@400;500;600;700;800&family=DM+Mono:wght@400;500&family=Poppins:wght@400;500;600;700&family=Geist+Mono:wght@400;500;600&display=swap">
@@ -19,6 +19,7 @@
 <script defer src="app-style.js"></script>
 <script defer src="app-export.js"></script>
 <script defer src="deck-model.js"></script>
+<script src="quantica-logo.js"></script>
 <link rel="stylesheet" href="deck-base.css">
 <link rel="stylesheet" href="theme-edulab.css">
 <link rel="stylesheet" href="theme-quantica.css">
@@ -27,8 +28,8 @@
 <body>
 <script>
 window.APP_BRAND = {
-  logo: "quantica-logo-color.png",
-  logoDark: "quantica-logo-white.png",
+  logo: window.QUANTICA_LOGO_COLOR,
+  logoDark: window.QUANTICA_LOGO_WHITE,
   wordmark: null,
   tag: "doc2slide",
   presentBrand: "Quantica Lab",
