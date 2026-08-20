@@ -103,7 +103,8 @@ body { overflow: hidden; background: var(--slide-bg); color: var(--slide-fg); }
 }
 .slide-copy { min-width: 0; }
 .slide-generated-image {
-  display: block; width: 100%; max-height: 52vh; object-fit: cover;
+  display: block; max-width: 100%; max-height: 52vh; width: auto; height: auto;
+  justify-self: center;
   border-radius: var(--export-radius);
   box-shadow: var(--shadow-image, 0 12px 34px rgba(33,30,26,.14));
 }

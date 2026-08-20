@@ -6,7 +6,9 @@
 .slide--illustrated { width: min(1600px, 94vw); }
 .slide-layout { display: grid; grid-template-columns: minmax(0, 1.08fr) minmax(260px, .92fr); gap: 1.4em; align-items: center; }
 .slide-copy { min-width: 0; }
-.slide-generated-image { display: block; width: 100%; max-height: 52vh; object-fit: cover; border-radius: var(--r-md); box-shadow: var(--shadow-image); }
+/* Never crop the picture: it scales down to whichever bound bites first
+   (column width or max height) at its own aspect ratio. */
+.slide-generated-image { display: block; max-width: 100%; max-height: 52vh; width: auto; height: auto; justify-self: center; border-radius: var(--r-md); box-shadow: var(--shadow-image); }
 
 @media (max-width: 768px) {
   .slide-layout { grid-template-columns: 1fr; }
