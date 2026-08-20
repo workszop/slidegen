@@ -99,7 +99,7 @@ body { overflow: hidden; background: var(--slide-bg); color: var(--slide-fg); }
 .slide--illustrated { width: min(1600px, 94vw); }
 .slide-layout {
   display: grid; grid-template-columns: minmax(0, 1.08fr) minmax(260px, .92fr);
-  gap: 1.4em; align-items: center;
+  gap: 1.4em; align-items: center; padding: 0 1.1em .9em 0;
 }
 .slide-copy { min-width: 0; }
 .slide-generated-image {

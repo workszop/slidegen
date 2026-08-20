@@ -4,7 +4,9 @@
 .illustration-note { margin: 0; color: var(--ink-3); font-size: var(--caption); line-height: 1.45; }
 
 .slide--illustrated { width: min(1600px, 94vw); }
-.slide-layout { display: grid; grid-template-columns: minmax(0, 1.08fr) minmax(260px, .92fr); gap: 1.4em; align-items: center; }
+/* The slide box itself has no padding, so without this the picture runs
+   dead flush into the slide's right and bottom edges and reads as cropped. */
+.slide-layout { display: grid; grid-template-columns: minmax(0, 1.08fr) minmax(260px, .92fr); gap: 1.4em; align-items: center; padding: 0 1.1em .9em 0; }
 .slide-copy { min-width: 0; }
 /* Never crop the picture: it scales down to whichever bound bites first
    (column width or max height) at its own aspect ratio. */
