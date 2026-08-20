@@ -244,6 +244,7 @@ Drop your own document in the panel on the left.`,
       removeFromLibrary: "Usuń z biblioteki",
       imageDialogClose: "Zamknij",
       errImageReadTitle: "Nie udało się wczytać obrazu",
+      titleSlideNoImage: "Niedostępne na slajdzie tytułowym – przejdź do slajdu treści",
       errExampleDeck: "Nie udało się wczytać przewodnika. Odśwież stronę z pominięciem pamięci podręcznej (Ctrl+Shift+R).",
       errNetwork: "Nie udało się połączyć z {host}. Sprawdź połączenie, blokowanie przez rozszerzenia lub zaporę sieciową i spróbuj ponownie.",
       resetApp: "Wróć do prezentacji startowej",
@@ -305,6 +306,7 @@ Drop your own document in the panel on the left.`,
       removeFromLibrary: "Remove from library",
       imageDialogClose: "Close",
       errImageReadTitle: "Could not read the image",
+      titleSlideNoImage: "Not available on the title slide – open a content slide",
       errExampleDeck: "The guide deck could not be loaded. Reload the page bypassing the cache (Ctrl+Shift+R).",
       errNetwork: "Could not connect to {host}. Check your connection, browser extensions, or network firewall and try again.",
       resetApp: "Back to the intro deck",
@@ -739,6 +741,10 @@ ${imageDialogHtml}`);
     removeIllustrationBtn.classList.toggle("hidden", !hasImage || busy);
     addImageBtn.classList.toggle("hidden", n === 0);
     addImageBtn.disabled = isTitle || busy || n === 0;
+    // A disabled ghost button is easy to read as broken; say why it is off.
+    const titleHint = isTitle ? t("titleSlideNoImage") : "";
+    illustrateBtn.title = busy ? "" : titleHint;
+    addImageBtn.title = titleHint;
   }
 
   function renderPresent() {

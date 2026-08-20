@@ -65,6 +65,8 @@ kbd {
 .btn-primary:disabled { background: var(--line-2); color: var(--ink-3); box-shadow: none; cursor: not-allowed; }
 .btn-ghost { background: transparent; color: var(--ink-2); border: 1px solid var(--line-2); }
 .btn-ghost:hover { background: var(--paper-2); color: var(--ink); }
+.btn-ghost:disabled { color: var(--ink-3); border-color: var(--line); background: transparent; cursor: not-allowed; opacity: .55; }
+.btn-ghost:disabled:hover { background: transparent; color: var(--ink-3); }
 
 .hints { display: flex; gap: var(--sp-5); justify-content: center; margin-top: var(--sp-8); color: var(--ink-3); font-size: var(--caption); }
 .hints span { display: inline-flex; align-items: center; gap: var(--sp-2); }

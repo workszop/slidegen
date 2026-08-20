@@ -369,8 +369,12 @@ test("uploaded images reuse the generated-illustration slot and are session stat
   const reset = /function resetToDefault\(\) \{[\s\S]*?\n  \}/.exec(app)?.[0] ?? "";
   assert.match(reset, /state\.uploads = \[\]/, "reset clears the upload library");
 
+  // The title-slide rule disables the button; the tooltip says why, so the
+  // silent no-op does not read as a broken control.
+  assert.match(app, /addImageBtn\.title = titleHint/, "the disabled Add image button explains itself");
+
   for (const lang of ["pl", "en"]) {
-    for (const key of ["addImage", "imageLibraryTitle", "uploadImages", "removeFromLibrary", "errImageReadTitle"]) {
+    for (const key of ["addImage", "imageLibraryTitle", "uploadImages", "removeFromLibrary", "errImageReadTitle", "titleSlideNoImage"]) {
       assert.match(app, new RegExp(`${lang}: \\{[\\s\\S]*?${key}:`), `${lang} has ${key} copy`);
     }
   }
