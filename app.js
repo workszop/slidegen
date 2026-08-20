@@ -87,6 +87,7 @@ Zamień dokument w gotową prezentację: tekst i ilustracje przygotuje AI, a Ty 
 - Przejdź do slajdu treści i kliknij **Ilustruj ten slajd** pod podglądem
 - Każdą ilustrację generujesz osobno; możesz ją usunąć albo powtórzyć
 - Generowanie obrazów zwiększa czas i koszt wywołań API
+- Własne obrazy dodasz przyciskiem **Dodaj obraz** – wgrane pliki wybierasz z biblioteki i wstawiasz na slajd
 ---
 ## Gotowe
 Wgraj własny dokument w panelu po lewej stronie.`,
@@ -152,6 +153,7 @@ Turn a document into a finished deck: AI writes the slides and the illustrations
 - Open a content slide and click **Illustrate this slide** below the preview
 - Each illustration is generated on its own and can be removed or repeated
 - Image generation adds API cost and takes longer
+- Add your own pictures with **Add image** – uploaded files sit in a library and can be placed on any slide
 ---
 ## Ready when you are
 Drop your own document in the panel on the left.`,
@@ -180,6 +182,9 @@ Drop your own document in the panel on the left.`,
   }, window.APP_BRAND);
 
   // ─── Constants (LS_* etc. come from shared.js) ───
+  // Long-edge cap for uploaded slide images — matches the size class of
+  // generated illustrations and keeps HTML/PPTX exports lean.
+  const UPLOAD_MAX_EDGE = 1600;
 
   // ─── Translations (T + t) ───────────────────────
   const T = {
@@ -230,7 +235,15 @@ Drop your own document in the panel on the left.`,
       genImageOne: "Ilustruję slajd {n}…",
       errNoOpenAIKey: "Aby generować ilustracje, zapisz klucz OpenAI w ustawieniach modelu.",
       errImageTitle: "Nie udało się wygenerować ilustracji",
-      imageAlt: "Ilustracja wygenerowana przez AI",
+      imageAlt: "Ilustracja slajdu",
+      addImage: "Dodaj obraz",
+      imageLibraryTitle: "Twoje obrazy",
+      imageLibraryEmpty: "Brak wgranych obrazów – wgraj pliki i kliknij miniaturę, aby dodać obraz do bieżącego slajdu.",
+      uploadImages: "Wgraj obrazy",
+      imagePickAria: "Wstaw obraz: {name}",
+      removeFromLibrary: "Usuń z biblioteki",
+      imageDialogClose: "Zamknij",
+      errImageReadTitle: "Nie udało się wczytać obrazu",
       errExampleDeck: "Nie udało się wczytać przewodnika. Odśwież stronę z pominięciem pamięci podręcznej (Ctrl+Shift+R).",
       errNetwork: "Nie udało się połączyć z {host}. Sprawdź połączenie, blokowanie przez rozszerzenia lub zaporę sieciową i spróbuj ponownie.",
       resetApp: "Wróć do prezentacji startowej",
@@ -283,7 +296,15 @@ Drop your own document in the panel on the left.`,
       genImageOne: "Illustrating slide {n}…",
       errNoOpenAIKey: "Save an OpenAI key in the model settings to generate illustrations.",
       errImageTitle: "Could not generate the illustration",
-      imageAlt: "AI-generated illustration",
+      imageAlt: "Slide illustration",
+      addImage: "Add image",
+      imageLibraryTitle: "Your images",
+      imageLibraryEmpty: "No uploaded images yet – upload files and click a thumbnail to place it on the current slide.",
+      uploadImages: "Upload images",
+      imagePickAria: "Place image: {name}",
+      removeFromLibrary: "Remove from library",
+      imageDialogClose: "Close",
+      errImageReadTitle: "Could not read the image",
       errExampleDeck: "The guide deck could not be loaded. Reload the page bypassing the cache (Ctrl+Shift+R).",
       errNetwork: "Could not connect to {host}. Check your connection, browser extensions, or network firewall and try again.",
       resetApp: "Back to the intro deck",
@@ -344,7 +365,22 @@ Drop your own document in the panel on the left.`,
         </div>` : "";
   const illustrateControlsHtml = BRAND.illustrations ? `
         <button class="btn btn-ghost btn-sm hidden" id="illustrateBtn">✦ <span id="illustrateBtnLabel"></span></button>
+        <button class="btn btn-ghost btn-sm hidden" id="addImageBtn" data-i18n="addImage"></button>
         <button class="btn btn-ghost btn-sm hidden" id="removeIllustrationBtn" data-i18n="removeIllustration"></button>` : "";
+  // Session-only library of uploaded slide images; placing one reuses the
+  // generated-illustration slot, layout, and exports.
+  const imageDialogHtml = BRAND.illustrations ? `
+<dialog class="image-dialog" id="imageDialog">
+  <h2 data-i18n="imageLibraryTitle"></h2>
+  <p class="image-lib-empty" id="imageLibraryEmpty" data-i18n="imageLibraryEmpty"></p>
+  <div class="image-lib-grid" id="imageLibraryGrid"></div>
+  <input type="file" id="imageUploadInput" class="visually-hidden" accept="image/*" multiple />
+  <div class="image-dialog-actions">
+    <button class="btn btn-ghost btn-sm" id="imageUploadBtn" data-i18n="uploadImages"></button>
+    <span class="spacer"></span>
+    <button class="btn btn-ghost btn-sm" id="imageDialogClose" data-i18n="imageDialogClose"></button>
+  </div>
+</dialog>` : "";
   document.body.insertAdjacentHTML("afterbegin", `
 <header class="chrome">
   <button type="button" class="brand-home" id="brandHomeBtn">
@@ -473,7 +509,8 @@ Drop your own document in the panel on the left.`,
       <div class="present-counter" id="presentCounter"></div>
     </div>
   </section>
-</main>`);
+</main>
+${imageDialogHtml}`);
 
   // ─── State ──────────────────────────────────────
   const state = {
@@ -486,6 +523,7 @@ Drop your own document in the panel on the left.`,
     slideSegments: [],
     deckModel: { slides: [], warnings: [], stats: {} },
     images: [],
+    uploads: [],            // session-only image library: [{name, dataUrl}]
     current: 0,
     generating: false,
     generationController: null,
@@ -564,6 +602,13 @@ Drop your own document in the panel on the left.`,
   const illustrateBtn = document.getElementById("illustrateBtn");
   const illustrateBtnLabel = document.getElementById("illustrateBtnLabel");
   const removeIllustrationBtn = document.getElementById("removeIllustrationBtn");
+  const addImageBtn = document.getElementById("addImageBtn");
+  const imageDialogEl = document.getElementById("imageDialog");
+  const imageLibraryEmptyEl = document.getElementById("imageLibraryEmpty");
+  const imageLibraryGridEl = document.getElementById("imageLibraryGrid");
+  const imageUploadInputEl = document.getElementById("imageUploadInput");
+  const imageUploadBtnEl = document.getElementById("imageUploadBtn");
+  const imageDialogCloseEl = document.getElementById("imageDialogClose");
 
   mountPanelResizer({ panel: editorPanelEl, storageKey: BRAND.editorWKey });
 
@@ -692,6 +737,8 @@ Drop your own document in the panel on the left.`,
       ? t("cancelIllustration")
       : hasImage ? t("regenerateSlide") : t("illustrateSlide");
     removeIllustrationBtn.classList.toggle("hidden", !hasImage || busy);
+    addImageBtn.classList.toggle("hidden", n === 0);
+    addImageBtn.disabled = isTitle || busy || n === 0;
   }
 
   function renderPresent() {
@@ -766,12 +813,14 @@ Drop your own document in the panel on the left.`,
   // document, brand visuals. Language, API settings, and panel widths stay.
   // Anything the reset would throw away: the user's own deck, a loaded or
   // pasted document (even before slides are generated), generated
-  // illustrations, or styling changed from the brand defaults.
+  // illustrations, uploaded images, or styling changed from the brand
+  // defaults.
   function resetWouldDiscard() {
     return !state.deckIsExample
       || state.source != null
       || pasteAreaEl.value.trim() !== ""
       || state.images.some(Boolean)
+      || state.uploads.length > 0
       || !style.isDefault();
   }
 
@@ -782,6 +831,7 @@ Drop your own document in the panel on the left.`,
     pasteAreaEl.value = "";
     style.resetToDefaults();
     setEditorOpen(false);
+    state.uploads = [];
     state.current = 0;
     setSource(null);
     setDeck(exampleDeck(uiLang), { example: true });
@@ -837,6 +887,98 @@ Drop your own document in the panel on the left.`,
       genStatusEl.classList.add("hidden");
       renderIllustrateControls();
     }
+  }
+
+  // ─── Uploaded images (session library + placement) ─────
+  // Uploads land in state.uploads; placing one writes state.images[current],
+  // so layout, reconciliation, removal, and both exports behave exactly like
+  // a generated illustration.
+  function renderImageLibrary() {
+    if (!imageDialogEl) return;              // brands without illustrations
+    imageLibraryEmptyEl.classList.toggle("hidden", state.uploads.length > 0);
+    imageLibraryGridEl.innerHTML = "";
+    for (const upload of state.uploads) {
+      const item = document.createElement("div");
+      item.className = "image-lib-item";
+      const pick = document.createElement("button");
+      pick.type = "button";
+      pick.className = "image-lib-pick";
+      pick.title = upload.name;
+      pick.setAttribute("aria-label", t("imagePickAria").replace("{name}", upload.name));
+      const thumb = document.createElement("img");
+      thumb.src = upload.dataUrl;
+      thumb.alt = "";
+      pick.appendChild(thumb);
+      pick.addEventListener("click", () => placeUpload(upload));
+      const remove = document.createElement("button");
+      remove.type = "button";
+      remove.className = "image-lib-remove";
+      remove.textContent = "✕";
+      remove.title = t("removeFromLibrary");
+      remove.setAttribute("aria-label", t("removeFromLibrary"));
+      remove.addEventListener("click", () => {
+        state.uploads = state.uploads.filter(u => u !== upload);
+        renderImageLibrary();
+      });
+      item.append(pick, remove);
+      imageLibraryGridEl.appendChild(item);
+    }
+  }
+
+  function placeUpload(upload) {
+    if (state.deckModel.slides[state.current]?.type === "title") return;
+    state.images[state.current] = upload.dataUrl;
+    imageDialogEl.close();
+    if (state.view === "present") renderPresent(); else renderStage();
+  }
+
+  // Decode, downscale to the generated-image size class, and re-encode one
+  // uploaded file as a data URL (JPEG unless transparency would be lost).
+  async function readUploadImage(file) {
+    const url = URL.createObjectURL(file);
+    try {
+      const img = new Image();
+      await new Promise((resolve, reject) => {
+        img.onload = resolve;
+        img.onerror = () => reject(new Error("Image decode failed"));
+        img.src = url;
+      });
+      const size = fitWithin(img.naturalWidth, img.naturalHeight, UPLOAD_MAX_EDGE);
+      if (!size) throw new Error("Image decode failed");
+      const canvas = document.createElement("canvas");
+      canvas.width = size.width;
+      canvas.height = size.height;
+      const ctx = canvas.getContext("2d");
+      ctx.drawImage(img, 0, 0, size.width, size.height);
+      const { mime, quality } = uploadEncoding(canvasHasAlpha(ctx, size, file.type));
+      return canvas.toDataURL(mime, quality);
+    } finally {
+      URL.revokeObjectURL(url);
+    }
+  }
+
+  // JPEG sources cannot carry alpha, so only other formats pay for the scan.
+  function canvasHasAlpha(ctx, { width, height }, sourceType) {
+    if (sourceType === "image/jpeg") return false;
+    const data = ctx.getImageData(0, 0, width, height).data;
+    for (let i = 3; i < data.length; i += 4) if (data[i] < 255) return true;
+    return false;
+  }
+
+  async function addUploadFiles(files) {
+    for (const file of files) {
+      if (!file.type.startsWith("image/")) {
+        showError(t("errImageReadTitle"), file.name);
+        continue;
+      }
+      try {
+        const dataUrl = await readUploadImage(file);
+        state.uploads.push({ name: file.name, dataUrl });
+      } catch {
+        showError(t("errImageReadTitle"), file.name);
+      }
+    }
+    renderImageLibrary();
   }
 
   // Streaming: markdown flows into the editor and preview as it arrives
@@ -973,6 +1115,17 @@ Drop your own document in the panel on the left.`,
     state.images[state.current] = undefined;
     renderStage();
   });
+  addImageBtn?.addEventListener("click", () => {
+    renderImageLibrary();
+    imageDialogEl.showModal();
+  });
+  imageUploadBtnEl?.addEventListener("click", () => imageUploadInputEl.click());
+  imageUploadInputEl?.addEventListener("change", () => {
+    const files = [...imageUploadInputEl.files];
+    imageUploadInputEl.value = "";
+    addUploadFiles(files);
+  });
+  imageDialogCloseEl?.addEventListener("click", () => imageDialogEl.close());
 
   wsNextBtn.addEventListener("click", () => {
     state.current = Math.min(state.slides.length - 1, state.current + 1);

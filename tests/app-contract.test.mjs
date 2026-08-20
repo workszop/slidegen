@@ -345,3 +345,33 @@ test("standalone HTML export drops workbench-only rules", async () => {
     assert.ok(source.includes(chrome), `chrome filter should cover ${chrome}`);
   }
 });
+
+test("uploaded images reuse the generated-illustration slot and are session state", async () => {
+  const app = await read("app.js");
+
+  // The library UI is gated per brand exactly like the illustrate controls.
+  assert.match(app, /const imageDialogHtml = BRAND\.illustrations \?/,
+    "the image dialog only exists for brands with illustrations");
+  assert.match(app, /id="addImageBtn"/, "the footer offers an Add image button");
+  assert.match(app, /id="imageUploadInput"[^>]*accept="image\/\*"[^>]*multiple/,
+    "uploads accept multiple image files");
+
+  // Placement writes the same per-slide slot generated illustrations use, so
+  // layout, reconciliation, removal, and both exports need no upload path.
+  assert.match(app, /state\.images\[state\.current\] = upload\.dataUrl/,
+    "picking an upload fills state.images for the current slide");
+  assert.match(app, /fitWithin\(img\.naturalWidth, img\.naturalHeight, UPLOAD_MAX_EDGE\)/,
+    "uploads are downscaled to the generated-image size class");
+
+  // Uploads are user state: they trigger the reset confirm and are cleared.
+  const dirty = /function resetWouldDiscard\(\) \{[\s\S]*?\n  \}/.exec(app)?.[0] ?? "";
+  assert.match(dirty, /state\.uploads\.length > 0/, "uploads must trigger the reset confirm");
+  const reset = /function resetToDefault\(\) \{[\s\S]*?\n  \}/.exec(app)?.[0] ?? "";
+  assert.match(reset, /state\.uploads = \[\]/, "reset clears the upload library");
+
+  for (const lang of ["pl", "en"]) {
+    for (const key of ["addImage", "imageLibraryTitle", "uploadImages", "removeFromLibrary", "errImageReadTitle"]) {
+      assert.match(app, new RegExp(`${lang}: \\{[\\s\\S]*?${key}:`), `${lang} has ${key} copy`);
+    }
+  }
+});

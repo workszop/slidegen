@@ -473,3 +473,27 @@ test("discoverProviderModels is best-effort on HTTP and parse failures", async (
     globalThis.fetch = realFetch;
   }
 });
+
+// ── uploaded-image helpers ──
+test("fitWithin downscales the long edge to the cap and keeps aspect", () => {
+  assert.deepEqual(H.fitWithin(3200, 2000, 1600), { width: 1600, height: 1000 });
+  assert.deepEqual(H.fitWithin(2000, 3200, 1600), { width: 1000, height: 1600 });
+});
+
+test("fitWithin never upscales and returns integer pixels", () => {
+  assert.deepEqual(H.fitWithin(800, 500, 1600), { width: 800, height: 500 });
+  const odd = H.fitWithin(3001, 1000, 1600);
+  assert.ok(Number.isInteger(odd.width) && Number.isInteger(odd.height));
+  assert.ok(odd.width <= 1600 && odd.height >= 1);
+});
+
+test("fitWithin rejects degenerate dimensions", () => {
+  assert.equal(H.fitWithin(0, 100, 1600), null);
+  assert.equal(H.fitWithin(100, -5, 1600), null);
+  assert.equal(H.fitWithin(NaN, 100, 1600), null);
+});
+
+test("uploadEncoding keeps PNG for transparent images, JPEG otherwise", () => {
+  assert.deepEqual(H.uploadEncoding(true), { mime: "image/png", quality: undefined });
+  assert.deepEqual(H.uploadEncoding(false), { mime: "image/jpeg", quality: 0.85 });
+});

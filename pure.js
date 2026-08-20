@@ -159,6 +159,26 @@ function illustratedSlideHtml(slideHtml, imageHtml) {
   return `${heading}<div class="slide-layout"><div class="slide-copy">${body}</div>${imageHtml}</div>`;
 }
 
+// Target pixel size for an uploaded slide image: shrink so the long edge is
+// at most maxEdge (matching the generated-image size class), never upscale.
+// null for degenerate input — caller skips the file.
+function fitWithin(width, height, maxEdge) {
+  if (!Number.isFinite(width) || !Number.isFinite(height) || width < 1 || height < 1) return null;
+  const scale = Math.min(1, maxEdge / Math.max(width, height));
+  return {
+    width: Math.max(1, Math.round(width * scale)),
+    height: Math.max(1, Math.round(height * scale)),
+  };
+}
+
+// Canvas re-encode settings for an uploaded image: PNG only when transparency
+// would be lost, JPEG otherwise to keep photo uploads export-friendly.
+function uploadEncoding(hasAlpha) {
+  return hasAlpha
+    ? { mime: "image/png", quality: undefined }
+    : { mime: "image/jpeg", quality: 0.85 };
+}
+
 // First family name from a CSS font-family list, unquoted.
 function firstFont(ff) {
   return ff.split(",")[0].trim().replace(/^["']|["']$/g, "");
@@ -506,7 +526,7 @@ function parseSseFrames(input, { final = false } = {}) {
   return {
     stripOuterFence, fencedLines, isSetextUnderline, splitSlides, detectLang,
     buildPrompt, deckTitle, reconcileSlideImages, illustratedSlideHtml,
-    firstFont, clampPanelWidth,
+    firstFont, clampPanelWidth, fitWithin, uploadEncoding,
     GEMINI_BASE, SUPPORTED_PROVIDER_IDS,
     validateModelCatalog, MODEL_CATALOG, DEFAULT_PROVIDER, PROVIDER_INFO,
     OPENAI_IMAGE_MODELS, normalizeAiSettings,
