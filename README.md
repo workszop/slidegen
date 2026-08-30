@@ -20,6 +20,9 @@ edulab workspace with AI illustrations, a plain edulab one, and Quantica Lab.
   key, so models added after the last app update appear in the AI model dialog
   without waiting for a catalogue refresh. Discovery is best-effort and never
   blocks the curated list.
+- One-click model update: the AI model dialog can walk the current provider's
+  list endpoint and refill its three capability tiers — best, balanced, and
+  cost-effective — with the newest stable model in each.
 - PL, EN, and automatic source-language output.
 - Standalone HTML and editable PowerPoint export, both carrying the selected
   style preset.
@@ -172,17 +175,50 @@ there. On startup, `pure.js` validates required providers, unique model IDs,
 and HTTPS key URLs. Custom model IDs remain supported.
 
 Each provider also carries optional discovery metadata (`listUrl`, `listAuth`,
-`listPath`, and for Gemini `listStrip`). When the AI model dialog opens with a
-saved key, `pure.js` queries that provider's list endpoint and appends any
-live IDs the catalogue does not know — tagged "(discovered)" — after the
-curated list. A discovered ID receives no per-model API parameters (the same
-safe-default rule as custom IDs), so it may behave slightly differently from a
-catalogued model until someone adds it here with the right flags.
+`listPath`, `listPaging`, and for Gemini `listStrip`). When the AI model dialog
+opens with a saved key, `pure.js` queries that provider's list endpoint and
+appends any live IDs the catalogue does not know — tagged "(discovered)" —
+after the curated list. A discovered ID receives no per-model API parameters
+(the same safe-default rule as custom IDs), so it may behave slightly
+differently from a catalogued model until someone adds it here with the right
+flags.
+
+Model lists are paged. The walk requests 50 IDs at a time and follows the
+provider's cursor (`nextPageToken` for Gemini, `has_more` / `last_id` for
+Anthropic; OpenAI returns everything in one response), capped at 20 pages so a
+cursor that never advances cannot loop. A single page is a partial answer — a
+model can sit well past the first 50 entries, behind embeddings and image
+models.
+
+### Capability tiers and the "update list" button
+
+Every provider declares one `tiers` pattern per capability tier — `best`,
+`mid`, `cheap` — because the list endpoints return IDs and never say which
+model is the flagship. First match wins, so the narrower pattern leads
+(`flash-lite` before `flash`). The patterns also act as the capability filter
+on providers whose rows carry no capability field: an ID matching no tier is
+never a tier candidate.
+
+Pressing "update list" walks the current provider's endpoint and resolves the
+three slots: stable IDs beat previews and dated snapshots, the highest version
+wins (compared segment by segment, so `3.10` outranks `3.9`), and ties fall to
+whatever recency the provider volunteers, then to the shorter ID — the alias
+over its snapshot. A tier that matches nothing keeps its curated value and the
+dialog says how many slots it filled.
+
+The result is stored per provider alongside the rest of the AI settings, not
+written back to `ai-models.js` — this is a static page with no build step. The
+overlay is re-validated on every read, so `ai-models.js` stays the seed and the
+recovery path: clearing site data returns the app to a known-good list. The
+update never changes the model the user has selected; it offers the newer one
+and lets them take it.
 
 The first model listed for a provider is the one a new visitor gets; the
-current default is `gemini-3.6-flash`. A model already saved in the browser
-keeps working and is not migrated, so changing the order here only affects
-people who have not picked a model themselves.
+current default is `gemini-3.6-flash`. Switching providers lands on that
+provider's balanced tier — deliberately not the flagship, which would quietly
+raise the bill. A model already saved in the browser keeps working and is not
+migrated, so changing the order here only affects people who have not picked a
+model themselves.
 
 Two entries mark per-model API differences, and in both the rule is that a
 model left out of the list is sent nothing. That way an unfamiliar or custom ID

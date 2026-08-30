@@ -194,6 +194,28 @@ function clampPanelWidth(x, min, maxFraction, viewportW) {
 // ─── AI provider registry ───────────────────────
 const GEMINI_BASE = "https://generativelanguage.googleapis.com/v1beta/models";
 const SUPPORTED_PROVIDER_IDS = ["gemini", "openai", "claude"];
+// Capability tiers, ordered the way the picker groups them. Every provider
+// declares one pattern per tier so a freshly listed model can be sorted into
+// "best / balanced / cost-effective" without a hand-edited release note.
+const TIER_IDS = ["best", "mid", "cheap"];
+
+function validateProviderTiers(id, tiers) {
+  if (!Array.isArray(tiers) || tiers.length !== TIER_IDS.length) {
+    throw new Error(`Invalid AI model catalogue: ${id}.tiers`);
+  }
+  const seen = new Set();
+  for (const tier of tiers) {
+    if (!tier || !TIER_IDS.includes(tier.id)) throw new Error(`Invalid AI model catalogue: ${id} tier id`);
+    if (seen.has(tier.id)) throw new Error(`Invalid AI model catalogue: ${id} duplicate tier ${tier.id}`);
+    seen.add(tier.id);
+    // A /g pattern carries lastIndex between calls, so the same ID would
+    // classify differently on a second pass. Reject it at load time.
+    if (!(tier.test instanceof RegExp) || tier.test.global) {
+      throw new Error(`Invalid AI model catalogue: ${id} tier ${tier.id} needs a non-global RegExp`);
+    }
+  }
+  return Object.freeze(tiers.map(tier => Object.freeze({ id: tier.id, test: tier.test })));
+}
 
 function validateModelCatalog(catalog) {
   if (!catalog || typeof catalog !== "object" || !catalog.providers || typeof catalog.providers !== "object") {
@@ -211,7 +233,11 @@ function validateModelCatalog(catalog) {
     if (new Set(models).size !== models.length) throw new Error(`Invalid AI model catalogue: ${id} has duplicate model IDs`);
     if (typeof p.keyPlaceholder !== "string") throw new Error(`Invalid AI model catalogue: ${id}.keyPlaceholder`);
     if (typeof p.keyUrl !== "string" || !p.keyUrl.startsWith("https://")) throw new Error(`Invalid AI model catalogue: ${id}.keyUrl`);
-    providers[id] = Object.freeze({ ...p, models: Object.freeze(models) });
+    providers[id] = Object.freeze({
+      ...p,
+      models: Object.freeze(models),
+      tiers: validateProviderTiers(id, p.tiers),
+    });
   }
   const extra = Object.keys(catalog.providers).filter(id => !SUPPORTED_PROVIDER_IDS.includes(id));
   if (extra.length) throw new Error(`Invalid AI model catalogue: unsupported provider ${extra[0]}`);
@@ -263,7 +289,64 @@ function normalizeAiSettings(raw, legacy = {}) {
   // same way custom text models are.
   let imageModel = typeof s.imageModel === "string" && s.imageModel.trim() ? s.imageModel.trim() : "";
   if (!imageModel) imageModel = OPENAI_IMAGE_MODELS[0];
-  return { provider, model, imageModel, keys };
+  return { provider, model, imageModel, keys, catalog: normalizeCatalogOverlay(s.catalog) };
+}
+
+// ─── Tier overlay (what the "update list" button writes) ─────
+// The app is a static page with no build step, so an update cannot rewrite
+// ai-models.js; it stores the three resolved IDs per provider alongside the
+// rest of the settings instead. That makes the overlay untrusted input on the
+// way back in, so it is validated exactly like the curated catalogue and
+// anything malformed is dropped. ai-models.js stays the seed and the recovery
+// path: clearing storage returns the app to a known-good list.
+function normalizeCatalogOverlay(raw) {
+  /** @type {Record<string, any>} */
+  const out = {};
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return out;
+  for (const providerId of SUPPORTED_PROVIDER_IDS) {
+    const entry = raw[providerId];
+    if (!entry || typeof entry !== "object" || Array.isArray(entry)) continue;
+    /** @type {Record<string, string>} */
+    const tiers = {};
+    for (const tier of TIER_IDS) {
+      const id = entry.tiers?.[tier];
+      if (typeof id !== "string") continue;
+      const trimmed = id.trim();
+      if (trimmed && !/\s/.test(trimmed)) tiers[tier] = trimmed;
+    }
+    if (!Object.keys(tiers).length) continue;
+    const updatedAt = Number(entry.updatedAt);
+    out[providerId] = { tiers, updatedAt: Number.isFinite(updatedAt) && updatedAt > 0 ? updatedAt : 0 };
+  }
+  return out;
+}
+
+// The tier slots the picker should show, merged per tier: the stored overlay
+// wins where an update filled a slot, and the curated list — classified on the
+// fly — backs the rest. So the groups are populated on a first visit, and an
+// update that could only resolve two tiers does not blank the third.
+function tierPicks(providerId, settings) {
+  const seeded = pickTierModels(providerId, PROVIDER_INFO[providerId]?.models ?? []);
+  const stored = settings?.catalog?.[providerId]?.tiers ?? {};
+  /** @type {Record<string, string|null>} */
+  const picks = {};
+  for (const tier of TIER_IDS) picks[tier] = stored[tier] ?? seeded[tier];
+  return picks;
+}
+
+// Every model ID the picker treats as known. Curated order still leads, so a
+// visitor who never presses update sees exactly what they see today.
+function effectiveModels(providerId, settings) {
+  const curated = PROVIDER_INFO[providerId]?.models ?? [];
+  const stored = settings?.catalog?.[providerId]?.tiers ?? {};
+  return [...new Set([...curated, ...TIER_IDS.map(tier => stored[tier]).filter(Boolean)])];
+}
+
+// Where switching providers lands. The balanced tier, not the flagship: it
+// matches the shape of the curated defaults (a flash/sonnet-class model) and
+// picking "best" for someone would quietly raise their bill.
+function defaultModelFor(providerId, settings) {
+  return settings?.catalog?.[providerId]?.tiers?.mid || PROVIDER_INFO[providerId].models[0];
 }
 
 // ─── Model discovery ─────────────────────────────
@@ -274,55 +357,237 @@ function normalizeAiSettings(raw, legacy = {}) {
 // best-effort: any failure (no key, offline, CORS, non-JSON) returns the
 // curated list unchanged, and the curated order always leads so a new visitor
 // still gets the intended default.
-function providerModelIds(providerId, payload) {
+
+// One page per request. Providers page their model lists (Gemini and Anthropic
+// both cut off well below the size of their catalogues), so a single response
+// is a partial answer, not the answer; the walk follows the cursor. The page
+// cap is the guard against a response that keeps handing back a cursor.
+const MODEL_PAGE_SIZE = 50;
+const MODEL_PAGE_LIMIT = 20;
+
+// Recency the provider volunteers, in seconds: OpenAI sends `created` as an
+// epoch, Anthropic sends `created_at` as ISO-8601, Gemini sends neither.
+// 0 means "unknown", which sorts last among equal versions.
+function modelTimestamp(row) {
+  const created = row?.created;
+  if (typeof created === "number" && Number.isFinite(created)) return created;
+  if (typeof row?.created_at === "string") {
+    const ms = Date.parse(row.created_at);
+    if (Number.isFinite(ms)) return Math.floor(ms / 1000);
+  }
+  return 0;
+}
+
+// Normalized {id, created} rows from one list payload. Gemini publishes
+// supportedGenerationMethods, so models that cannot stream slide text —
+// embeddings, image, video, TTS — are dropped here instead of being left for
+// the tier patterns to miss. Providers without that field fall through, and
+// the tier patterns are the filter of last resort.
+function providerModelRows(providerId, payload) {
   const info = PROVIDER_INFO[providerId];
   if (!info?.listPath) return [];
   const rows = payload?.[info.listPath];
   if (!Array.isArray(rows)) return [];
   const strip = info.listStrip instanceof RegExp ? info.listStrip : null;
-  return rows
-    .map(row => String(row?.id ?? row?.name ?? ""))
-    .map(id => (strip ? id.replace(strip, "") : id))
-    .map(id => id.trim())
-    .filter(id => id && !/\s/.test(id));
+  const out = [];
+  for (const row of rows) {
+    let id = String(row?.id ?? row?.name ?? "");
+    if (strip) id = id.replace(strip, "");
+    id = id.trim();
+    if (!id || /\s/.test(id)) continue;
+    const methods = row?.supportedGenerationMethods;
+    if (Array.isArray(methods) && !methods.includes("streamGenerateContent")) continue;
+    out.push({ id, created: modelTimestamp(row) });
+  }
+  return out;
 }
 
-async function discoverProviderModels(providerId, key, options = {}) {
-  const { signal, timeoutMs = 15000 } = /** @type {{ signal?: any, timeoutMs?: number }} */ (options);
-  const info = PROVIDER_INFO[providerId];
-  const curated = info?.models ?? [];
-  if (!info?.listUrl || !key) return curated.slice();
-  let url = info.listUrl;
+function providerModelIds(providerId, payload) {
+  return providerModelRows(providerId, payload).map(row => row.id);
+}
+
+// The next page's cursor, or "" when the walk is done. `more` (Anthropic's
+// has_more) gates the token: the last page still echoes a last_id, and
+// following it would fetch the same tail forever.
+function nextPageCursor(info, payload) {
+  const paging = info?.listPaging;
+  if (!paging?.token) return "";
+  if (paging.more && !payload?.[paging.more]) return "";
+  const token = payload?.[paging.token];
+  return typeof token === "string" && token ? token : "";
+}
+
+function modelListUrl(info, key, cursor) {
+  const url = new URL(info.listUrl);
+  if (info.listAuth === "query-key") url.searchParams.set("key", key);
+  if (info.listPaging?.size) url.searchParams.set(info.listPaging.size, String(MODEL_PAGE_SIZE));
+  if (cursor && info.listPaging?.cursor) url.searchParams.set(info.listPaging.cursor, cursor);
+  return url.toString();
+}
+
+function modelListHeaders(info, key) {
+  /** @type {Record<string, string>} */
   const headers = {};
-  if (info.listAuth === "query-key") {
-    url += (url.includes("?") ? "&" : "?") + "key=" + encodeURIComponent(key);
-  } else if (info.listAuth === "bearer") {
-    headers.Authorization = "Bearer " + key;
-  } else if (info.listAuth === "anthropic") {
+  if (info.listAuth === "bearer") headers.Authorization = "Bearer " + key;
+  else if (info.listAuth === "anthropic") {
     headers["x-api-key"] = key;
     headers["anthropic-version"] = "2023-06-01";
     headers["anthropic-dangerous-direct-browser-access"] = "true";
   }
+  return headers;
+}
+
+// Walks every page of a provider's model list. Resolves to {rows, error}:
+// rows are whatever arrived before the walk stopped, error is a short code
+// when it stopped early (null on a clean walk). Partial rows are kept
+// deliberately — a cursor that fails on page three still tells the caller
+// more than an empty list does.
+async function fetchProviderModelRows(providerId, key, options = {}) {
+  const { signal, timeoutMs = 15000 } = /** @type {{ signal?: any, timeoutMs?: number }} */ (options);
+  const info = PROVIDER_INFO[providerId];
+  if (!info?.listUrl) return { rows: [], error: "unsupported" };
+  if (!key) return { rows: [], error: "no-key" };
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(new DOMException("Model list timed out", "TimeoutError")), timeoutMs);
   const forwardAbort = () => controller.abort(signal.reason);
   if (signal?.aborted) forwardAbort();
   else signal?.addEventListener("abort", forwardAbort, { once: true });
+  /** @type {{id: string, created: number}[]} */
+  const rows = [];
+  const seen = new Set();
+  let error = null;
+  let cursor = "";
   try {
-    const res = await fetch(url, { headers, signal: controller.signal });
-    if (!res.ok) return curated.slice();
-    const payload = await res.json().catch(() => null);
-    const live = providerModelIds(providerId, payload);
-    // Curated order leads; live IDs the catalog does not know yet follow,
-    // deduplicated so a repeated entry in the list response appears once.
-    const extra = [...new Set(live.filter(id => !curated.includes(id)))];
-    return [...curated, ...extra];
+    for (let page = 0; page < MODEL_PAGE_LIMIT; page += 1) {
+      const res = await fetch(modelListUrl(info, key, cursor), {
+        headers: modelListHeaders(info, key),
+        signal: controller.signal,
+      });
+      if (!res.ok) { error = "http-" + res.status; break; }
+      const payload = await res.json().catch(() => null);
+      if (!payload) { error = "parse"; break; }
+      // A repeated ID across pages means the cursor is not advancing; keep
+      // the first sighting and let the cursor check below end the walk.
+      for (const row of providerModelRows(providerId, payload)) {
+        if (seen.has(row.id)) continue;
+        seen.add(row.id);
+        rows.push(row);
+      }
+      cursor = nextPageCursor(info, payload);
+      if (!cursor) break;
+      if (page === MODEL_PAGE_LIMIT - 1) error = "truncated";
+    }
   } catch {
-    return curated.slice();
+    error = "network";
   } finally {
     clearTimeout(timeoutId);
     signal?.removeEventListener("abort", forwardAbort);
   }
+  return { rows, error };
+}
+
+async function discoverProviderModels(providerId, key, options = {}) {
+  const curated = PROVIDER_INFO[providerId]?.models ?? [];
+  const { rows } = await fetchProviderModelRows(providerId, key, options);
+  if (!rows.length) return curated.slice();
+  // Curated order leads; live IDs the catalog does not know yet follow,
+  // deduplicated so a repeated entry in the list response appears once.
+  const extra = [...new Set(rows.map(row => row.id).filter(id => !curated.includes(id)))];
+  return [...curated, ...extra];
+}
+
+// ─── Tier classification ─────────────────────────
+// The list endpoints return IDs, never a tier, so "which of these is the
+// flagship" is decided by the per-provider patterns in ai-models.js plus the
+// version ordering below. Everything here is pure and offline; the network
+// half is fetchProviderModelRows above.
+
+// IDs that name a moving target or a dated snapshot rather than a stable
+// release. Preferred against, never banned: a tier whose only candidate is a
+// preview still beats an empty tier.
+const UNSTABLE_MODEL_ID = /(^|-)(preview|exp|experimental|nightly|alpha|beta|rc\d*|latest)(-|$)/;
+const SNAPSHOT_MODEL_ID = /-(\d{8}|\d{4}(-\d{2}){1,2}|\d{2}-\d{4})$/;
+
+// Every digit run in an ID, in order: "gemini-3.7-flash" and
+// "claude-opus-4-8" both reduce to [4-ish, minor]. Dots and hyphens are read
+// the same way because providers use them interchangeably as version
+// separators. Comparing the segments numerically is the point — as strings,
+// "3.9" sorts above "3.10".
+function modelVersionKey(id) {
+  return (String(id ?? "").match(/\d+/g) ?? []).map(Number);
+}
+
+// -1 stands in for a missing segment, so [3] ranks below [3, 1].
+function compareVersionKeys(a, b) {
+  const len = Math.max(a.length, b.length);
+  for (let i = 0; i < len; i += 1) {
+    const av = a[i] ?? -1;
+    const bv = b[i] ?? -1;
+    if (av !== bv) return av - bv;
+  }
+  return 0;
+}
+
+function classifyModel(providerId, id) {
+  if (typeof id !== "string" || !id) return null;
+  for (const tier of PROVIDER_INFO[providerId]?.tiers ?? []) {
+    if (tier.test.test(id)) return tier.id;
+  }
+  return null;
+}
+
+// Newest first: version, then whatever recency the provider volunteered,
+// then the shorter ID — an alias is always shorter than its dated snapshot,
+// so "claude-sonnet-5" wins over "claude-sonnet-5-20260115" on a tie.
+function compareTierCandidates(a, b) {
+  const byVersion = compareVersionKeys(modelVersionKey(b.id), modelVersionKey(a.id));
+  if (byVersion) return byVersion;
+  if (a.created !== b.created) return b.created - a.created;
+  return a.id.length - b.id.length;
+}
+
+// Resolves {best, mid, cheap} from a list of rows (or bare ID strings).
+// A tier with no candidate stays null so the caller can keep the curated
+// value and say which slots it could not fill.
+function pickTierModels(providerId, rows) {
+  /** @type {Record<string, {id: string, created: number}[]>} */
+  const buckets = { best: [], mid: [], cheap: [] };
+  for (const row of Array.isArray(rows) ? rows : []) {
+    const id = typeof row === "string" ? row : row?.id;
+    if (typeof id !== "string" || !id || /\s/.test(id)) continue;
+    const tier = classifyModel(providerId, id);
+    if (!tier) continue;
+    const created = typeof row === "string" ? 0 : Number(row?.created) || 0;
+    buckets[tier].push({ id, created });
+  }
+  /** @type {Record<string, string|null>} */
+  const picks = {};
+  for (const tier of TIER_IDS) {
+    const all = buckets[tier];
+    const stable = all.filter(row => !UNSTABLE_MODEL_ID.test(row.id) && !SNAPSHOT_MODEL_ID.test(row.id));
+    const pool = stable.length ? stable : all;
+    picks[tier] = pool.sort(compareTierCandidates)[0]?.id ?? null;
+  }
+  return picks;
+}
+
+// What the "update list" button runs. Returns the resolved tiers, the full
+// live ID list for the picker's "all models" group, and a reason code when
+// something went wrong — unlike ambient discovery, an explicit click has to
+// be able to say why nothing happened.
+async function updateProviderModels(providerId, key, options = {}) {
+  const { rows, error } = await fetchProviderModelRows(providerId, key, options);
+  const tiers = pickTierModels(providerId, rows);
+  const matched = TIER_IDS.filter(tier => tiers[tier]);
+  return {
+    tiers,
+    ids: rows.map(row => row.id),
+    total: rows.length,
+    matched,
+    // A clean walk that matched nothing is its own failure: the endpoint
+    // answered, so the tier patterns are what went stale.
+    error: error ?? (rows.length ? (matched.length ? null : "no-match") : "empty"),
+  };
 }
 
 // ─── Per-provider request builders (pure) ────────
@@ -530,7 +795,10 @@ function parseSseFrames(input, { final = false } = {}) {
     GEMINI_BASE, SUPPORTED_PROVIDER_IDS,
     validateModelCatalog, MODEL_CATALOG, DEFAULT_PROVIDER, PROVIDER_INFO,
     OPENAI_IMAGE_MODELS, normalizeAiSettings,
-    providerModelIds, discoverProviderModels,
+    TIER_IDS, normalizeCatalogOverlay, tierPicks, effectiveModels, defaultModelFor,
+    providerModelIds, providerModelRows, discoverProviderModels,
+    fetchProviderModelRows, updateProviderModels,
+    modelVersionKey, compareVersionKeys, classifyModel, pickTierModels,
     geminiGenerationConfig, buildGeminiRequest, buildOpenAIRequest,
     claudeThinking, buildClaudeRequest, buildSlideImagePrompt,
     buildOpenAIImageRequest, geminiChunk, openaiChunk, claudeChunk,

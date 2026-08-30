@@ -100,6 +100,22 @@ test("the image model lives in the AI model dialog, not the side panel", async (
   assert.match(shared, /settings\.imageModel\s*=\s*imageSel\.value/, "the dialog persists the choice");
 });
 
+test("the model dialog can refresh its tier list without shipping a release", async () => {
+  const shared = await read("shared.js");
+  const pure = await read("pure.js");
+  assert.match(shared, /class="ai-update"/, "the dialog renders an update button");
+  assert.match(shared, /updateProviderModels\(forProvider, key\)/, "the button walks the provider's list endpoint");
+  assert.match(shared, /settings\.catalog = \{/, "resolved tiers persist with the rest of the settings");
+  // A static page has no build step, so the update must not be expected to
+  // reach ai-models.js: that file stays the seed and the recovery path.
+  const catalogue = await read("ai-models.js");
+  assert.match(catalogue, /tiers: \[/, "each provider declares its tier patterns");
+  // One page at a time on purpose — the walk follows the cursor rather than
+  // asking for a bigger page.
+  assert.match(pure, /MODEL_PAGE_SIZE = 50\b/);
+  assert.match(pure, /MODEL_PAGE_LIMIT = \d+/);
+});
+
 test("the chrome logo resets the app to its default state", async () => {
   const app = await read("app.js");
   const style = await read("app-style.js");
