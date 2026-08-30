@@ -474,6 +474,296 @@ test("discoverProviderModels is best-effort on HTTP and parse failures", async (
   }
 });
 
+// ── model list paging ──
+// Every provider is walked one page at a time; a single response is a partial
+// answer, so these cover the cursor rather than the happy first page.
+async function withFetch(handler, run) {
+  const realFetch = globalThis.fetch;
+  const calls = [];
+  globalThis.fetch = async (url, opts) => {
+    calls.push(String(url));
+    return handler(String(url), opts, calls.length);
+  };
+  try { return await run(calls); } finally { globalThis.fetch = realFetch; }
+}
+const jsonOk = payload => ({ ok: true, status: 200, json: async () => payload });
+
+test("gemini paging asks for 50 at a time and follows nextPageToken", async () => {
+  const pages = [
+    { models: [{ name: "models/gemini-9-flash" }], nextPageToken: "p2" },
+    { models: [{ name: "models/gemini-9-pro" }] },
+  ];
+  const { rows, error } = await withFetch(
+    (_url, _opts, n) => jsonOk(pages[n - 1]),
+    calls => D.fetchProviderModelRows("gemini", "AIza-x").then(r => { r.calls = calls; return r; }),
+  );
+  assert.equal(error, null);
+  assert.deepEqual(rows.map(r => r.id), ["gemini-9-flash", "gemini-9-pro"]);
+});
+
+test("gemini paging sends pageSize=50 and the cursor, and keeps the key in the query", async () => {
+  let seen = [];
+  await withFetch(
+    (_url, _opts, n) => jsonOk(n === 1 ? { models: [], nextPageToken: "p2" } : { models: [] }),
+    async calls => { await D.fetchProviderModelRows("gemini", "AIza-x"); seen = calls; },
+  );
+  assert.equal(seen.length, 2);
+  assert.ok(seen[0].includes("pageSize=50"), seen[0]);
+  assert.ok(seen[0].includes("key=AIza-x"), seen[0]);
+  assert.ok(!seen[0].includes("pageToken="), "the first page carries no cursor");
+  assert.ok(seen[1].includes("pageToken=p2"), seen[1]);
+});
+
+test("anthropic paging is gated on has_more, not on last_id alone", async () => {
+  // The final page still echoes last_id; following it would loop on the tail.
+  const pages = [
+    { data: [{ id: "claude-opus-9" }], has_more: true, last_id: "claude-opus-9" },
+    { data: [{ id: "claude-haiku-9" }], has_more: false, last_id: "claude-haiku-9" },
+  ];
+  const { rows, error } = await withFetch(
+    (_url, _opts, n) => jsonOk(pages[n - 1]),
+    () => D.fetchProviderModelRows("claude", "sk-ant-x"),
+  );
+  assert.equal(error, null);
+  assert.deepEqual(rows.map(r => r.id), ["claude-opus-9", "claude-haiku-9"]);
+});
+
+test("openai is fetched in one request because it declares no paging", async () => {
+  const seen = await withFetch(
+    () => jsonOk({ data: [{ id: "gpt-9-sol" }] }),
+    async calls => { await D.fetchProviderModelRows("openai", "sk-x"); return calls; },
+  );
+  assert.equal(seen.length, 1);
+  assert.ok(!seen[0].includes("pageSize"), seen[0]);
+});
+
+test("a cursor that never advances is capped instead of looping forever", async () => {
+  const { rows, error } = await withFetch(
+    () => jsonOk({ models: [{ name: "models/gemini-9-flash" }], nextPageToken: "same" }),
+    () => D.fetchProviderModelRows("gemini", "AIza-x"),
+  );
+  assert.equal(error, "truncated");
+  // The repeated page collapses to one row rather than 20 copies.
+  assert.deepEqual(rows.map(r => r.id), ["gemini-9-flash"]);
+});
+
+test("fetchProviderModelRows reports why a walk stopped and keeps partial rows", async () => {
+  assert.deepEqual(await D.fetchProviderModelRows("openai", ""), { rows: [], error: "no-key" });
+
+  const httpFail = await withFetch(() => ({ ok: false, status: 403, json: async () => ({}) }),
+    () => D.fetchProviderModelRows("openai", "sk-x"));
+  assert.deepEqual(httpFail, { rows: [], error: "http-403" });
+
+  const offline = await withFetch(() => { throw new Error("offline"); },
+    () => D.fetchProviderModelRows("openai", "sk-x"));
+  assert.deepEqual(offline, { rows: [], error: "network" });
+
+  // Page one succeeded, page two did not: the rows already in hand are kept.
+  const partial = await withFetch(
+    (_url, _opts, n) => n === 1
+      ? jsonOk({ models: [{ name: "models/gemini-9-flash" }], nextPageToken: "p2" })
+      : { ok: false, status: 500, json: async () => ({}) },
+    () => D.fetchProviderModelRows("gemini", "AIza-x"),
+  );
+  assert.equal(partial.error, "http-500");
+  assert.deepEqual(partial.rows.map(r => r.id), ["gemini-9-flash"]);
+});
+
+test("discoverProviderModels still merges across pages and stays best-effort", async () => {
+  const curated = D.PROVIDER_INFO.gemini.models;
+  const merged = await withFetch(
+    (_url, _opts, n) => jsonOk(n === 1
+      ? { models: [{ name: "models/" + curated[0] }], nextPageToken: "p2" }
+      : { models: [{ name: "models/gemini-9-flash" }] }),
+    () => D.discoverProviderModels("gemini", "AIza-x"),
+  );
+  assert.deepEqual(merged, [...curated, "gemini-9-flash"]);
+});
+
+// ── row normalization ──
+test("providerModelRows drops models that cannot stream text", async () => {
+  const payload = { models: [
+    { name: "models/gemini-9-flash", supportedGenerationMethods: ["generateContent", "streamGenerateContent"] },
+    { name: "models/text-embedding-9", supportedGenerationMethods: ["embedContent"] },
+    { name: "models/gemini-9-pro" },
+  ] };
+  // A row without the field is kept: only providers that publish capabilities
+  // get filtered here, the rest fall through to the tier patterns.
+  assert.deepEqual(D.providerModelRows("gemini", payload).map(r => r.id),
+    ["gemini-9-flash", "gemini-9-pro"]);
+});
+
+test("providerModelRows normalizes whatever recency the provider volunteers", () => {
+  assert.equal(D.providerModelRows("openai", { data: [{ id: "gpt-9-sol", created: 1750000000 }] })[0].created,
+    1750000000);
+  assert.equal(D.providerModelRows("claude", { data: [{ id: "claude-opus-9", created_at: "2026-01-15T00:00:00Z" }] })[0].created,
+    Math.floor(Date.parse("2026-01-15T00:00:00Z") / 1000));
+  // Gemini publishes no date; unknown recency sorts last among equal versions.
+  assert.equal(D.providerModelRows("gemini", { models: [{ name: "models/gemini-9-flash" }] })[0].created, 0);
+});
+
+// ── tier classification ──
+test("every provider declares one non-global pattern per tier", () => {
+  for (const [id, info] of Object.entries(D.PROVIDER_INFO)) {
+    assert.deepEqual([...info.tiers].map(t => t.id).sort(), ["best", "cheap", "mid"], `${id} tiers`);
+    for (const tier of info.tiers) {
+      assert.ok(tier.test instanceof RegExp, `${id}.${tier.id} pattern`);
+      // A /g pattern keeps lastIndex between calls and would classify the
+      // same ID differently on a second pass.
+      assert.ok(!tier.test.global, `${id}.${tier.id} must not be global`);
+    }
+  }
+});
+
+test("modelVersionKey reads dots and hyphens as the same separator", () => {
+  assert.deepEqual(D.modelVersionKey("gemini-3.7-flash"), [3, 7]);
+  assert.deepEqual(D.modelVersionKey("claude-opus-4-8"), [4, 8]);
+  assert.deepEqual(D.modelVersionKey("gpt-5.6-sol"), [5, 6]);
+  assert.deepEqual(D.modelVersionKey("claude-sonnet-5"), [5]);
+  assert.deepEqual(D.modelVersionKey(null), []);
+});
+
+test("versions compare numerically, so 3.10 outranks 3.9", () => {
+  assert.ok(D.compareVersionKeys([3, 10], [3, 9]) > 0);
+  assert.ok(D.compareVersionKeys([3, 9], [3, 10]) < 0);
+  // A missing segment ranks below a present one: 3 < 3.1.
+  assert.ok(D.compareVersionKeys([3], [3, 1]) < 0);
+  assert.equal(D.compareVersionKeys([4, 8], [4, 8]), 0);
+});
+
+test("classifyModel claims the narrower tier first", () => {
+  assert.equal(D.classifyModel("gemini", "gemini-3.7-flash-lite"), "cheap");
+  assert.equal(D.classifyModel("gemini", "gemini-3.7-flash"), "mid");
+  assert.equal(D.classifyModel("gemini", "gemini-3.7-pro"), "best");
+  assert.equal(D.classifyModel("openai", "gpt-5.6-terra"), "mid");
+  assert.equal(D.classifyModel("claude", "claude-haiku-5"), "cheap");
+  // Non-chat models and unfamiliar names stay unclassified rather than
+  // being guessed into a tier.
+  assert.equal(D.classifyModel("gemini", "text-embedding-004"), null);
+  assert.equal(D.classifyModel("openai", "gpt-image-2"), null);
+  assert.equal(D.classifyModel("openai", "solar-9"), null, "sol must match a whole segment");
+});
+
+test("pickTierModels takes the newest stable model in each tier", () => {
+  const picks = D.pickTierModels("gemini", [
+    "gemini-3.6-flash", "gemini-3.7-flash", "gemini-3.10-flash",
+    "gemini-3.7-pro", "gemini-3.7-flash-lite",
+    "text-embedding-9",
+  ]);
+  assert.deepEqual(picks, {
+    best: "gemini-3.7-pro",
+    mid: "gemini-3.10-flash",
+    cheap: "gemini-3.7-flash-lite",
+  });
+});
+
+test("pickTierModels prefers a stable id over a newer preview or snapshot", () => {
+  assert.equal(D.pickTierModels("claude", [
+    "claude-sonnet-5", "claude-sonnet-6-preview", "claude-sonnet-5-20260115",
+  ]).mid, "claude-sonnet-5");
+  // Same version, alias vs snapshot: the alias is the shorter id and wins.
+  assert.equal(D.pickTierModels("claude", ["claude-opus-5-20260115", "claude-opus-5"]).best, "claude-opus-5");
+});
+
+test("pickTierModels falls back to a preview only when the tier is otherwise empty", () => {
+  const picks = D.pickTierModels("gemini", ["gemini-3.9-pro-preview", "gemini-3.1-flash"]);
+  assert.equal(picks.best, "gemini-3.9-pro-preview");
+  assert.equal(picks.mid, "gemini-3.1-flash");
+  // Nothing matched cost-effective; the slot stays empty rather than
+  // borrowing a model from a neighbouring tier.
+  assert.equal(picks.cheap, null);
+});
+
+test("pickTierModels breaks a version tie on provider recency", () => {
+  const picks = D.pickTierModels("openai", [
+    { id: "gpt-5.6-sol-a", created: 100 },
+    { id: "gpt-5.6-sol-b", created: 900 },
+  ]);
+  assert.equal(picks.best, "gpt-5.6-sol-b");
+});
+
+test("pickTierModels ignores malformed rows", () => {
+  assert.deepEqual(D.pickTierModels("openai", [null, {}, { id: 7 }, "has space", ""]),
+    { best: null, mid: null, cheap: null });
+  assert.deepEqual(D.pickTierModels("openai", null), { best: null, mid: null, cheap: null });
+});
+
+test("updateProviderModels separates a dead endpoint from stale tier patterns", async () => {
+  const ok = await withFetch(
+    () => jsonOk({ data: [{ id: "gpt-9-sol" }, { id: "gpt-9-luna" }] }),
+    () => D.updateProviderModels("openai", "sk-x"),
+  );
+  assert.deepEqual(ok.matched, ["best", "cheap"]);
+  assert.equal(ok.tiers.mid, null, "an unmatched tier stays empty for the caller to fall back on");
+  assert.equal(ok.error, null);
+  assert.deepEqual(ok.ids, ["gpt-9-sol", "gpt-9-luna"]);
+
+  // The endpoint answered fine, so the patterns are what went stale.
+  const noMatch = await withFetch(
+    () => jsonOk({ data: [{ id: "gpt-image-2" }, { id: "whisper-1" }] }),
+    () => D.updateProviderModels("openai", "sk-x"),
+  );
+  assert.equal(noMatch.error, "no-match");
+  assert.equal(noMatch.total, 2);
+
+  assert.equal((await D.updateProviderModels("openai", "")).error, "no-key");
+});
+
+// ── stored tier overlay ──
+test("the tier overlay survives a settings round-trip", () => {
+  const stored = JSON.stringify({
+    provider: "gemini",
+    catalog: { gemini: { updatedAt: 1756512000000, tiers: { best: "gemini-3.7-pro", mid: "gemini-3.7-flash" } } },
+  });
+  const s = D.normalizeAiSettings(stored);
+  assert.deepEqual(s.catalog.gemini.tiers, { best: "gemini-3.7-pro", mid: "gemini-3.7-flash" });
+  assert.equal(s.catalog.gemini.updatedAt, 1756512000000);
+});
+
+test("a malformed overlay is dropped rather than trusted back out of storage", () => {
+  const overlay = D.normalizeCatalogOverlay({
+    gemini: { tiers: { best: "  ", mid: "has space", cheap: 7 } },  // no usable id
+    openai: { tiers: { best: "  gpt-9-sol  " }, updatedAt: "nonsense" },
+    claude: "not an object",
+    hijack: { tiers: { best: "evil-9" } },                          // unknown provider
+  });
+  assert.deepEqual(Object.keys(overlay), ["openai"]);
+  assert.deepEqual(overlay.openai, { tiers: { best: "gpt-9-sol" }, updatedAt: 0 });
+  assert.deepEqual(D.normalizeCatalogOverlay(null), {});
+  assert.deepEqual(D.normalizeCatalogOverlay([1, 2]), {});
+});
+
+test("the overlay extends the curated list without reordering it", () => {
+  const curated = D.PROVIDER_INFO.gemini.models;
+  const settings = { catalog: { gemini: { tiers: { best: "gemini-9-pro", mid: curated[0] } } } };
+  // Curated order still leads, the overlay's unknown id follows, and the id
+  // the overlay shares with the catalogue is not duplicated.
+  assert.deepEqual(D.effectiveModels("gemini", settings), [...curated, "gemini-9-pro"]);
+  assert.deepEqual(D.effectiveModels("gemini", {}), [...curated]);
+});
+
+test("tierPicks classifies the curated list until an update overrides it", () => {
+  // No overlay: the groups are still populated, from ai-models.js.
+  const seeded = D.tierPicks("claude", {});
+  assert.equal(seeded.best, "claude-opus-4-8");
+  assert.equal(seeded.mid, "claude-sonnet-5");
+  assert.equal(seeded.cheap, "claude-haiku-4-5");
+  // An update that could only resolve one tier overrides that tier and leaves
+  // the other two on their curated values rather than blanking them.
+  const stored = { catalog: { claude: { tiers: { best: "claude-opus-9" } } } };
+  assert.deepEqual(D.tierPicks("claude", stored),
+    { best: "claude-opus-9", mid: "claude-sonnet-5", cheap: "claude-haiku-4-5" });
+});
+
+test("switching providers lands on the balanced tier, never the flagship", () => {
+  assert.equal(D.defaultModelFor("gemini", {}), D.PROVIDER_INFO.gemini.models[0]);
+  const stored = { catalog: { gemini: { tiers: { best: "gemini-9-pro", mid: "gemini-9-flash" } } } };
+  assert.equal(D.defaultModelFor("gemini", stored), "gemini-9-flash");
+  // Best alone must not become the default: that would quietly raise the bill.
+  assert.equal(D.defaultModelFor("gemini", { catalog: { gemini: { tiers: { best: "gemini-9-pro" } } } }),
+    D.PROVIDER_INFO.gemini.models[0]);
+});
+
 // ── uploaded-image helpers ──
 test("fitWithin downscales the long edge to the cap and keeps aspect", () => {
   assert.deepEqual(H.fitWithin(3200, 2000, 1600), { width: 1600, height: 1000 });

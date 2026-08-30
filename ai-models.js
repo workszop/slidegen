@@ -27,6 +27,18 @@
         listAuth: "query-key",
         listPath: "models",
         listStrip: /^models\//,
+        // One page at a time; the walk follows nextPageToken until the
+        // response stops offering one.
+        listPaging: { size: "pageSize", cursor: "pageToken", token: "nextPageToken" },
+        // Tier patterns for the "update list" button. The list endpoint
+        // returns IDs and never a tier, so membership is decided here.
+        // First match wins, so the narrower pattern leads: flash-lite has to
+        // be claimed before the plain flash rule would swallow it.
+        tiers: [
+          { id: "cheap", test: /(^|-)flash-lite(-|$)/ },
+          { id: "mid", test: /(^|-)flash(-|$)/ },
+          { id: "best", test: /(^|-)pro(-|$)/ },
+        ],
       },
       openai: {
         label: "OpenAI",
@@ -39,6 +51,14 @@
         listUrl: "https://api.openai.com/v1/models",
         listAuth: "bearer",
         listPath: "data",
+        // /v1/models returns the whole catalogue in one response — no cursor.
+        // The tier patterns double as the capability filter here, because the
+        // rows carry no field saying what a model can do.
+        tiers: [
+          { id: "best", test: /(^|-)sol(-|$)/ },
+          { id: "mid", test: /(^|-)terra(-|$)/ },
+          { id: "cheap", test: /(^|-)luna(-|$)/ },
+        ],
       },
       claude: {
         label: "Claude",
@@ -55,6 +75,13 @@
         listUrl: "https://api.anthropic.com/v1/models",
         listAuth: "anthropic",
         listPath: "data",
+        // Cursor paging: has_more gates the walk, last_id carries the cursor.
+        listPaging: { size: "limit", cursor: "after_id", token: "last_id", more: "has_more" },
+        tiers: [
+          { id: "best", test: /(^|-)opus(-|$)/ },
+          { id: "mid", test: /(^|-)sonnet(-|$)/ },
+          { id: "cheap", test: /(^|-)haiku(-|$)/ },
+        ],
       },
     },
   };
