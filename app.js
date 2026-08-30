@@ -554,6 +554,12 @@ ${imageDialogHtml}`);
     workspaceEl.classList.toggle("editing", open);
     editToggleBtn.setAttribute("aria-pressed", String(open));
     if (open) editorEl.value = state.md;
+    // Stacked (phone) layout: the toggle lives in the control panel below the
+    // deck, so opening from there would leave both the slide and the editor
+    // off-screen above. Scrolling the stage back to the top brings the pair
+    // into view together. The side-by-side layout never scrolls the page, so
+    // this is a no-op there.
+    if (open) workspaceEl.querySelector(".stage-wrap")?.scrollIntoView({ block: "start" });
   }
 
   // ─── DOM refs ───────────────────────────────────

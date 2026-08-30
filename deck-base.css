@@ -239,7 +239,11 @@ body.presenting .chrome { display: none; }
 html, body { height: 100%; }
 body { display: flex; flex-direction: column; overflow: hidden; }
 main#app { flex: 1; display: flex; min-height: 0; }
-.workbench { flex: 1; display: flex; min-height: 0; }
+/* min-width matters as much as min-height: without it the row's automatic
+   minimum size is the 280px panel plus the footer's min-content width, so
+   a tablet-width window could not shrink the workbench and the layout
+   spilled off the right edge. */
+.workbench { flex: 1; display: flex; min-width: 0; min-height: 0; }
 .panel {
   width: 280px; flex: none; overflow-y: auto;
   padding: var(--sp-5); border-right: 1px solid var(--line);
@@ -289,7 +293,11 @@ main#app { flex: 1; display: flex; min-height: 0; }
   flex: none; display: flex; align-items: center; gap: var(--sp-4);
   padding: var(--sp-2) var(--sp-5); border-top: 1px solid var(--line);
   color: var(--ink-3); font-size: 12px; background: var(--paper);
+  /* Wrap to a second row when the deck is narrow. Unwrapped, this row was the
+     widest thing in the workbench and set a floor under the whole layout. */
+  flex-wrap: wrap; row-gap: var(--sp-2);
 }
+.deck-footer .btn { white-space: nowrap; }
 .deck-footer .nav-btns { display: flex; gap: var(--sp-2); }
 .deck-footer .spacer { flex: 1; }
 .deck-counter { font-family: var(--font-mono); }
@@ -315,8 +323,37 @@ body.presenting .workbench { display: none; }
 @media (max-width: 768px) {
   body { overflow: auto; }
   .workbench { flex-direction: column; }
-  .panel { width: 100%; border-right: 0; border-bottom: 1px solid var(--line); }
-  .deck { min-height: 55vh; }
+
+  /* One column, and the slide leads it. The panel is the desktop sidebar so
+     it comes first in source order; pulling the stage (and the editor that
+     belongs with it) ahead keeps the markup unchanged. Without this the
+     ~800px-tall control stack pushes the deck past the bottom of the
+     viewport and the app opens looking like a settings form. */
+  .stage-wrap, .editor-panel { order: -1; }
+  /* .workbench already resolves to the viewport minus the chrome bar, so a
+     percentage sizes the deck to exactly the first screen and no
+     chrome-height constant has to be kept in sync here. */
+  .stage-wrap { min-height: 100%; }
+  .deck { min-height: 0; }
+
+  /* flex: none so the panel keeps its natural height instead of being
+     squashed by the stage above it, and scrolls with the page rather than
+     trapping a second scroller inside itself. */
+  .panel {
+    width: 100%; flex: none; overflow-y: visible;
+    border-right: 0; border-top: 1px solid var(--line);
+  }
+
   .deck-footer .hints { display: none; }
-  .editor-panel { position: fixed; right: 0; top: 0; bottom: 0; width: min(440px, 92vw); z-index: 30; box-shadow: var(--shadow-editor); }
+
+  /* The editor sits under the slide rather than over it. Fixed and
+     full-height, it hid the slide being edited and covered the toggle that
+     closes it, leaving the ✕ as the only way out. */
+  .editor-panel {
+    position: static; width: auto; height: 46%; min-height: 200px;
+    border-left: 0; border-top: 1px solid var(--line);
+  }
+  .workbench.editing .stage-wrap { min-height: 52%; }
+  /* Dragging a vertical edge is meaningless once the editor is a bottom pane. */
+  .editor-panel .panel-resizer { display: none; }
 }
