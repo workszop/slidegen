@@ -95,8 +95,8 @@ test("validateModelCatalog falls back to the first supported default", () => {
 test("normalizeAiSettings defaults on empty/garbage input", () => {
   for (const raw of [null, "", "not json", "42"]) {
     const s = H.normalizeAiSettings(raw, {});
-    assert.equal(s.provider, "gemini");
-    assert.equal(s.model, H.PROVIDER_INFO.gemini.models[0]);
+    assert.equal(s.provider, "openai");
+    assert.equal(s.model, "gpt-5.6-luna");
     assert.deepEqual(s.keys, { gemini: "", openai: "", claude: "" });
     assert.equal(s.imageModel, H.OPENAI_IMAGE_MODELS[0]);
   }
@@ -114,6 +114,7 @@ test("normalizeAiSettings keeps a stored image model, including custom IDs", () 
 test("normalizeAiSettings migrates legacy gemini key and model", () => {
   const s = H.normalizeAiSettings(null, { key: "AIzaLEGACY", model: "gemini-3.1-flash-lite-preview" });
   assert.equal(s.keys.gemini, "AIzaLEGACY");
+  assert.equal(s.provider, "gemini"); // a legacy Gemini key keeps the visitor on Gemini
   assert.equal(s.model, "gemini-3.1-flash-lite-preview");
 });
 
@@ -128,7 +129,7 @@ test("normalizeAiSettings keeps stored settings and custom models", () => {
 
 test("normalizeAiSettings rejects unknown provider", () => {
   const s = H.normalizeAiSettings(JSON.stringify({ provider: "grok" }), {});
-  assert.equal(s.provider, "gemini");
+  assert.equal(s.provider, "openai");
 });
 
 // ── buildPrompt language modes ──
@@ -353,10 +354,29 @@ test("splitSlides keeps this app's own format: --- straight after the intro line
 });
 
 // ── Gemini default model and sampling deprecation ──
-test("the default Gemini model is gemini-3.6-flash", () => {
+test("the first Gemini model is gemini-3.6-flash and is its default", () => {
   assert.equal(H.PROVIDER_INFO.gemini.models[0], "gemini-3.6-flash");
-  // normalizeAiSettings picks models[0] when nothing is stored.
-  assert.equal(H.normalizeAiSettings(null).model, "gemini-3.6-flash");
+  assert.equal(H.defaultModelFor("gemini"), "gemini-3.6-flash");
+});
+
+test("a fresh visitor gets OpenAI GPT Luna", () => {
+  assert.equal(H.DEFAULT_PROVIDER, "openai");
+  assert.equal(H.PROVIDER_INFO.openai.defaultModel, "gpt-5.6-luna");
+  assert.equal(H.defaultModelFor("openai"), "gpt-5.6-luna");
+  const s = H.normalizeAiSettings(null);
+  assert.equal(s.provider, "openai");
+  assert.equal(s.model, "gpt-5.6-luna");
+  assert.equal(H.defaultModelFor("nope"), "gpt-5.6-luna"); // unknown provider -> catalogue default
+});
+
+test("validateModelCatalog rejects a defaultModel outside its models list", () => {
+  const providers = Object.fromEntries(Object.entries(H.PROVIDER_INFO).map(([id, p]) => [id, {
+    ...p, models: [...p.models],
+  }]));
+  providers.openai.defaultModel = "gpt-9-nope";
+  assert.throws(() => H.validateModelCatalog({
+    defaultProvider: "openai", imageModels: [...H.OPENAI_IMAGE_MODELS], providers,
+  }), /openai\.defaultModel/);
 });
 
 test("temperature is sent only to Gemini models that still honour it", () => {
@@ -388,7 +408,8 @@ test("the Gemini model ID is URL-encoded into the endpoint", () => {
 test("the OpenAI catalogue is the GPT-5.6 frontier family, most capable first", () => {
   assert.deepEqual(H.PROVIDER_INFO.openai.models,
     ["gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna"]);
-  assert.equal(H.normalizeAiSettings(JSON.stringify({ provider: "openai" })).model, "gpt-5.6-sol");
+  // order is capability, not default: a fresh OpenAI visitor gets Luna
+  assert.equal(H.normalizeAiSettings(JSON.stringify({ provider: "openai" })).model, "gpt-5.6-luna");
 });
 
 test("OpenAI requests carry no sampling parameters to deprecate", () => {

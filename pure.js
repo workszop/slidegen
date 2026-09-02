@@ -231,6 +231,9 @@ function validateModelCatalog(catalog) {
     const models = p.models.map(model => typeof model === "string" ? model.trim() : "");
     if (models.some(model => !model || /\s/.test(model))) throw new Error(`Invalid AI model catalogue: ${id} has an invalid model ID`);
     if (new Set(models).size !== models.length) throw new Error(`Invalid AI model catalogue: ${id} has duplicate model IDs`);
+    if (p.defaultModel !== undefined && !models.includes(p.defaultModel)) {
+      throw new Error(`Invalid AI model catalogue: ${id}.defaultModel is not in its models list`);
+    }
     if (typeof p.keyPlaceholder !== "string") throw new Error(`Invalid AI model catalogue: ${id}.keyPlaceholder`);
     if (typeof p.keyUrl !== "string" || !p.keyUrl.startsWith("https://")) throw new Error(`Invalid AI model catalogue: ${id}.keyUrl`);
     providers[id] = Object.freeze({
@@ -273,7 +276,10 @@ function normalizeAiSettings(raw, legacy = {}) {
   let s = {};
   try { s = JSON.parse(raw) ?? {}; } catch { /* corrupt JSON — use defaults */ }
   if (typeof s !== "object" || Array.isArray(s)) s = {};
-  const provider = PROVIDER_INFO[s.provider] ? s.provider : DEFAULT_PROVIDER;
+  // A browser that only holds a legacy single-provider Gemini key keeps Gemini;
+  // everyone else without a stored provider gets the catalogue default.
+  const hasLegacyKey = typeof legacy.key === "string" && legacy.key.trim();
+  const provider = PROVIDER_INFO[s.provider] ? s.provider : (hasLegacyKey ? "gemini" : DEFAULT_PROVIDER);
   const keys = { gemini: "", openai: "", claude: "" };
   if (s.keys && typeof s.keys === "object") {
     for (const p of Object.keys(keys)) if (typeof s.keys[p] === "string") keys[p] = s.keys[p];
@@ -282,7 +288,7 @@ function normalizeAiSettings(raw, legacy = {}) {
   let model = typeof s.model === "string" && s.model.trim() ? s.model.trim() : "";
   if (!model) {
     model = (provider === "gemini" && typeof legacy.model === "string" && legacy.model)
-      ? legacy.model : PROVIDER_INFO[provider].models[0];
+      ? legacy.model : defaultModelFor(provider);
   }
   // Illustrations always run through OpenAI, so the image model is a single
   // setting independent of the text provider. Custom IDs are preserved the
@@ -342,11 +348,16 @@ function effectiveModels(providerId, settings) {
   return [...new Set([...curated, ...TIER_IDS.map(tier => stored[tier]).filter(Boolean)])];
 }
 
-// Where switching providers lands. The balanced tier, not the flagship: it
-// matches the shape of the curated defaults (a flash/sonnet-class model) and
-// picking "best" for someone would quietly raise their bill.
+// The model a fresh visitor gets, and where switching providers lands. An
+// explicit catalogue defaultModel wins (OpenAI: GPT Luna, the cheapest tier -
+// picking "best" for someone would quietly raise their bill); otherwise the
+// balanced tier from a discovery update, else the first curated model. An
+// unknown provider id resolves to the catalogue default provider.
 function defaultModelFor(providerId, settings) {
-  return settings?.catalog?.[providerId]?.tiers?.mid || PROVIDER_INFO[providerId].models[0];
+  const info = PROVIDER_INFO[providerId] ?? PROVIDER_INFO[DEFAULT_PROVIDER];
+  return info.defaultModel
+    ?? (PROVIDER_INFO[providerId] ? settings?.catalog?.[providerId]?.tiers?.mid : null)
+    ?? info.models[0];
 }
 
 // ─── Model discovery ─────────────────────────────

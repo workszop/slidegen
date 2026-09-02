@@ -8,7 +8,9 @@
   "use strict";
 
   const AI_MODEL_CATALOG = {
-    defaultProvider: "gemini",
+    // New visitors start on OpenAI GPT Luna (cheapest tier of the current GPT
+    // family); a browser that already holds a legacy Gemini key stays on Gemini.
+    defaultProvider: "openai",
     imageModels: ["gpt-image-2", "gpt-image-1.5", "gpt-image-1-mini"],
     providers: {
       gemini: {
@@ -44,7 +46,9 @@
         label: "OpenAI",
         // The GPT-5.6 frontier family, most capable first: Sol for complex work,
         // Terra for the intelligence/cost balance, Luna for high-volume runs.
+        // The default is Luna via defaultModel, not by reordering this list.
         models: ["gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna"],
+        defaultModel: "gpt-5.6-luna",
         keyPlaceholder: "sk-…",
         keyUrl: "https://platform.openai.com/api-keys",
         // Model discovery: GET {listUrl} with a Bearer token returns {data:[{id}]}.

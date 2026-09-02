@@ -213,12 +213,14 @@ recovery path: clearing site data returns the app to a known-good list. The
 update never changes the model the user has selected; it offers the newer one
 and lets them take it.
 
-The first model listed for a provider is the one a new visitor gets; the
-current default is `gemini-3.6-flash`. Switching providers lands on that
-provider's balanced tier — deliberately not the flagship, which would quietly
-raise the bill. A model already saved in the browser keeps working and is not
-migrated, so changing the order here only affects people who have not picked a
-model themselves.
+A new visitor starts on the catalogue's `defaultProvider` (OpenAI) and that
+provider's `defaultModel` (`gpt-5.6-luna`, the cheapest tier of the current GPT
+family). A provider without `defaultModel` lands on its balanced tier from a
+discovery update, else its first listed model - deliberately not the flagship,
+which would quietly raise the bill. A browser that only holds a legacy
+single-provider Gemini key stays on Gemini. A model already saved in the
+browser keeps working and is not migrated, so changing these only affects
+people who have not picked a model themselves.
 
 Two entries mark per-model API differences, and in both the rule is that a
 model left out of the list is sent nothing. That way an unfamiliar or custom ID
