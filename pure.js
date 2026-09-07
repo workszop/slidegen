@@ -390,24 +390,30 @@ function modelTimestamp(row) {
 }
 
 // Normalized {id, created} rows from one list payload. Gemini publishes
-// supportedGenerationMethods, so models that cannot stream slide text —
-// embeddings, image, video, TTS — are dropped here instead of being left for
-// the tier patterns to miss. Providers without that field fall through, and
-// the tier patterns are the filter of last resort.
+// supportedGenerationMethods, so models that cannot generate text at all —
+// embeddings, video, Lyria — are dropped here instead of being left for the
+// tier patterns to miss. The gate is generateContent, not streamGenerateContent:
+// since mid-2026 Google no longer advertises the streaming method in that
+// list even though every generateContent model still streams. Image and TTS
+// models advertise generateContent too and are only told apart by ID, which
+// is what the provider's listExclude pattern is for. Providers without the
+// field fall through, and the tier patterns are the filter of last resort.
 function providerModelRows(providerId, payload) {
   const info = PROVIDER_INFO[providerId];
   if (!info?.listPath) return [];
   const rows = payload?.[info.listPath];
   if (!Array.isArray(rows)) return [];
   const strip = info.listStrip instanceof RegExp ? info.listStrip : null;
+  const exclude = info.listExclude instanceof RegExp ? info.listExclude : null;
   const out = [];
   for (const row of rows) {
     let id = String(row?.id ?? row?.name ?? "");
     if (strip) id = id.replace(strip, "");
     id = id.trim();
     if (!id || /\s/.test(id)) continue;
+    if (exclude?.test(id)) continue;
     const methods = row?.supportedGenerationMethods;
-    if (Array.isArray(methods) && !methods.includes("streamGenerateContent")) continue;
+    if (Array.isArray(methods) && !methods.includes("generateContent")) continue;
     out.push({ id, created: modelTimestamp(row) });
   }
   return out;

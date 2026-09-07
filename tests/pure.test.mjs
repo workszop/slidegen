@@ -602,9 +602,9 @@ test("discoverProviderModels still merges across pages and stays best-effort", a
 });
 
 // ── row normalization ──
-test("providerModelRows drops models that cannot stream text", async () => {
+test("providerModelRows drops models that cannot generate text", async () => {
   const payload = { models: [
-    { name: "models/gemini-9-flash", supportedGenerationMethods: ["generateContent", "streamGenerateContent"] },
+    { name: "models/gemini-9-flash", supportedGenerationMethods: ["generateContent"] },
     { name: "models/text-embedding-9", supportedGenerationMethods: ["embedContent"] },
     { name: "models/gemini-9-pro" },
   ] };
@@ -612,6 +612,33 @@ test("providerModelRows drops models that cannot stream text", async () => {
   // get filtered here, the rest fall through to the tier patterns.
   assert.deepEqual(D.providerModelRows("gemini", payload).map(r => r.id),
     ["gemini-9-flash", "gemini-9-pro"]);
+});
+
+// Live shape as of 2026-09: Google stopped advertising streamGenerateContent
+// in supportedGenerationMethods (text models list only generateContent), and
+// image/TTS models share that same method list, so they are told apart by ID.
+test("providerModelRows keeps today's Gemini text models and drops image/TTS/media rows", () => {
+  const gen = ["generateContent", "countTokens", "batchGenerateContent"];
+  const payload = { models: [
+    { name: "models/gemini-3.8-flash", supportedGenerationMethods: gen },
+    { name: "models/gemini-3.7-flash", supportedGenerationMethods: gen },
+    { name: "models/gemini-3.1-pro-preview", supportedGenerationMethods: gen },
+    { name: "models/gemini-3-pro-image", supportedGenerationMethods: gen },
+    { name: "models/gemini-3.1-flash-lite-image", supportedGenerationMethods: gen },
+    { name: "models/gemini-3.1-flash-tts-preview", supportedGenerationMethods: gen },
+    { name: "models/gemini-2.5-flash-native-audio-latest", supportedGenerationMethods: gen },
+    { name: "models/gemini-2.5-flash-preview-tts", supportedGenerationMethods: ["countTokens", "generateContent"] },
+    { name: "models/lyria-3-pro-preview", supportedGenerationMethods: gen },
+    { name: "models/nano-banana-pro-preview", supportedGenerationMethods: gen },
+    { name: "models/deep-research-pro-preview-12-2025", supportedGenerationMethods: gen },
+    { name: "models/gemini-embedding-2", supportedGenerationMethods: ["embedContent"] },
+    { name: "models/veo-4-generate-preview", supportedGenerationMethods: ["predictLongRunning"] },
+  ] };
+  const ids = D.providerModelRows("gemini", payload).map(r => r.id);
+  assert.deepEqual(ids, ["gemini-3.8-flash", "gemini-3.7-flash", "gemini-3.1-pro-preview"]);
+  // …and the tiers resolve to text models, never to the image or TTS variants.
+  assert.deepEqual(D.pickTierModels("gemini", D.providerModelRows("gemini", payload)),
+    { best: "gemini-3.1-pro-preview", mid: "gemini-3.8-flash", cheap: null });
 });
 
 test("providerModelRows normalizes whatever recency the provider volunteers", () => {

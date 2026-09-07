@@ -29,6 +29,12 @@
         listAuth: "query-key",
         listPath: "models",
         listStrip: /^models\//,
+        // The list also carries models that answer generateContent with
+        // something other than text (image, TTS, native audio) plus product
+        // families that are not Gemini chat models at all. They are only
+        // distinguishable by ID, so this keeps them out of the tier picks —
+        // "gemini-3-pro-image" would otherwise out-version a text pro.
+        listExclude: /(^|-)(image|tts|audio|embedding)(-|$)|^(lyria|veo|imagen|nano-banana|deep-research|gemma|learnlm|aqa)(-|$)/,
         // One page at a time; the walk follows nextPageToken until the
         // response stops offering one.
         listPaging: { size: "pageSize", cursor: "pageToken", token: "nextPageToken" },
