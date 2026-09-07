@@ -320,9 +320,18 @@ function normalizeCatalogOverlay(raw) {
       const trimmed = id.trim();
       if (trimmed && !/\s/.test(trimmed)) tiers[tier] = trimmed;
     }
-    if (!Object.keys(tiers).length) continue;
+    /** @type {Record<string, string[]>} */
+    const shortlist = {};
+    for (const tier of TIER_IDS) {
+      const ids = entry.shortlist?.[tier];
+      if (!Array.isArray(ids)) continue;
+      const clean = [...new Set(ids.map(id => typeof id === "string" ? id.trim() : "")
+        .filter(id => id && !/\s/.test(id)))].slice(0, TIER_SHORTLIST);
+      if (clean.length) shortlist[tier] = clean;
+    }
+    if (!Object.keys(tiers).length && !Object.keys(shortlist).length) continue;
     const updatedAt = Number(entry.updatedAt);
-    out[providerId] = { tiers, updatedAt: Number.isFinite(updatedAt) && updatedAt > 0 ? updatedAt : 0 };
+    out[providerId] = { tiers, shortlist, updatedAt: Number.isFinite(updatedAt) && updatedAt > 0 ? updatedAt : 0 };
   }
   return out;
 }
@@ -338,6 +347,23 @@ function tierPicks(providerId, settings) {
   const picks = {};
   for (const tier of TIER_IDS) picks[tier] = stored[tier] ?? seeded[tier];
   return picks;
+}
+
+// What each tier group in the picker lists: the stored shortlist where an
+// update filled it, else the single stored pick (an overlay written before
+// shortlists existed) ahead of the curated model, capped at TIER_SHORTLIST.
+function tierShortlist(providerId, settings) {
+  const seeded = pickTierShortlist(providerId, PROVIDER_INFO[providerId]?.models ?? []);
+  const entry = settings?.catalog?.[providerId] ?? {};
+  /** @type {Record<string, string[]>} */
+  const out = {};
+  for (const tier of TIER_IDS) {
+    const stored = entry.shortlist?.[tier];
+    if (Array.isArray(stored) && stored.length) { out[tier] = stored.slice(0, TIER_SHORTLIST); continue; }
+    const pick = entry.tiers?.[tier];
+    out[tier] = [...new Set([...(pick ? [pick] : []), ...seeded[tier]])].slice(0, TIER_SHORTLIST);
+  }
+  return out;
 }
 
 // Every model ID the picker treats as known. Curated order still leads, so a
@@ -454,16 +480,17 @@ function modelListHeaders(info, key) {
   return headers;
 }
 
-// Walks every page of a provider's model list. Resolves to {rows, error}:
-// rows are whatever arrived before the walk stopped, error is a short code
-// when it stopped early (null on a clean walk). Partial rows are kept
+// Walks every page of a provider's model list. Resolves to {rows, error,
+// detail}: rows are whatever arrived before the walk stopped, error is a short
+// code when it stopped early (null on a clean walk), detail the provider's own
+// message for an HTTP failure ("" otherwise). Partial rows are kept
 // deliberately — a cursor that fails on page three still tells the caller
 // more than an empty list does.
 async function fetchProviderModelRows(providerId, key, options = {}) {
   const { signal, timeoutMs = 15000 } = /** @type {{ signal?: any, timeoutMs?: number }} */ (options);
   const info = PROVIDER_INFO[providerId];
-  if (!info?.listUrl) return { rows: [], error: "unsupported" };
-  if (!key) return { rows: [], error: "no-key" };
+  if (!info?.listUrl) return { rows: [], error: "unsupported", detail: "" };
+  if (!key) return { rows: [], error: "no-key", detail: "" };
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(new DOMException("Model list timed out", "TimeoutError")), timeoutMs);
   const forwardAbort = () => controller.abort(signal.reason);
@@ -473,6 +500,7 @@ async function fetchProviderModelRows(providerId, key, options = {}) {
   const rows = [];
   const seen = new Set();
   let error = null;
+  let detail = "";
   let cursor = "";
   try {
     for (let page = 0; page < MODEL_PAGE_LIMIT; page += 1) {
@@ -480,7 +508,15 @@ async function fetchProviderModelRows(providerId, key, options = {}) {
         headers: modelListHeaders(info, key),
         signal: controller.signal,
       });
-      if (!res.ok) { error = "http-" + res.status; break; }
+      if (!res.ok) {
+        error = "http-" + res.status;
+        // Every provider wraps failures as {error:{message}}; the message is
+        // what tells a 401 from a bad key apart from one from a revoked one.
+        const body = await res.json().catch(() => null);
+        const message = body?.error?.message;
+        if (typeof message === "string") detail = message.trim().slice(0, 200);
+        break;
+      }
       const payload = await res.json().catch(() => null);
       if (!payload) { error = "parse"; break; }
       // A repeated ID across pages means the cursor is not advancing; keep
@@ -500,7 +536,7 @@ async function fetchProviderModelRows(providerId, key, options = {}) {
     clearTimeout(timeoutId);
     signal?.removeEventListener("abort", forwardAbort);
   }
-  return { rows, error };
+  return { rows, error, detail };
 }
 
 async function discoverProviderModels(providerId, key, options = {}) {
@@ -563,10 +599,16 @@ function compareTierCandidates(a, b) {
   return a.id.length - b.id.length;
 }
 
-// Resolves {best, mid, cheap} from a list of rows (or bare ID strings).
-// A tier with no candidate stays null so the caller can keep the curated
-// value and say which slots it could not fill.
-function pickTierModels(providerId, rows) {
+// How many models each tier group in the picker lists. Two is enough to
+// offer the newest release and the one before it without turning the picker
+// back into the provider's whole catalogue.
+const TIER_SHORTLIST = 2;
+
+// Every candidate per tier, newest first, from a list of rows (or bare ID
+// strings). Stable IDs rank ahead of previews and dated snapshots regardless
+// of version, so a tier's head is the newest stable release and previews
+// only surface once the stable ones run out.
+function rankTierCandidates(providerId, rows) {
   /** @type {Record<string, {id: string, created: number}[]>} */
   const buckets = { best: [], mid: [], cheap: [] };
   for (const row of Array.isArray(rows) ? rows : []) {
@@ -577,15 +619,37 @@ function pickTierModels(providerId, rows) {
     const created = typeof row === "string" ? 0 : Number(row?.created) || 0;
     buckets[tier].push({ id, created });
   }
-  /** @type {Record<string, string|null>} */
-  const picks = {};
+  /** @type {Record<string, string[]>} */
+  const ranked = {};
   for (const tier of TIER_IDS) {
     const all = buckets[tier];
-    const stable = all.filter(row => !UNSTABLE_MODEL_ID.test(row.id) && !SNAPSHOT_MODEL_ID.test(row.id));
-    const pool = stable.length ? stable : all;
-    picks[tier] = pool.sort(compareTierCandidates)[0]?.id ?? null;
+    const isStable = row => !UNSTABLE_MODEL_ID.test(row.id) && !SNAPSHOT_MODEL_ID.test(row.id);
+    const stable = all.filter(isStable).sort(compareTierCandidates);
+    const rest = all.filter(row => !isStable(row)).sort(compareTierCandidates);
+    ranked[tier] = [...new Set([...stable, ...rest].map(row => row.id))];
   }
+  return ranked;
+}
+
+// Resolves {best, mid, cheap} to one ID each. A tier with no candidate stays
+// null so the caller can keep the curated value and say which slots it could
+// not fill.
+function pickTierModels(providerId, rows) {
+  const ranked = rankTierCandidates(providerId, rows);
+  /** @type {Record<string, string|null>} */
+  const picks = {};
+  for (const tier of TIER_IDS) picks[tier] = ranked[tier][0] ?? null;
   return picks;
+}
+
+// The top `size` per tier, for the picker's groups. Its head is always the
+// pickTierModels choice, so the stored pick and the shown list never disagree.
+function pickTierShortlist(providerId, rows, size = TIER_SHORTLIST) {
+  const ranked = rankTierCandidates(providerId, rows);
+  /** @type {Record<string, string[]>} */
+  const out = {};
+  for (const tier of TIER_IDS) out[tier] = ranked[tier].slice(0, size);
+  return out;
 }
 
 // What the "update list" button runs. Returns the resolved tiers, the full
@@ -593,11 +657,13 @@ function pickTierModels(providerId, rows) {
 // something went wrong — unlike ambient discovery, an explicit click has to
 // be able to say why nothing happened.
 async function updateProviderModels(providerId, key, options = {}) {
-  const { rows, error } = await fetchProviderModelRows(providerId, key, options);
+  const { rows, error, detail } = await fetchProviderModelRows(providerId, key, options);
   const tiers = pickTierModels(providerId, rows);
   const matched = TIER_IDS.filter(tier => tiers[tier]);
   return {
     tiers,
+    shortlist: pickTierShortlist(providerId, rows),
+    detail,
     ids: rows.map(row => row.id),
     total: rows.length,
     matched,
@@ -812,10 +878,10 @@ function parseSseFrames(input, { final = false } = {}) {
     GEMINI_BASE, SUPPORTED_PROVIDER_IDS,
     validateModelCatalog, MODEL_CATALOG, DEFAULT_PROVIDER, PROVIDER_INFO,
     OPENAI_IMAGE_MODELS, normalizeAiSettings,
-    TIER_IDS, normalizeCatalogOverlay, tierPicks, effectiveModels, defaultModelFor,
+    TIER_IDS, TIER_SHORTLIST, normalizeCatalogOverlay, tierPicks, tierShortlist, effectiveModels, defaultModelFor,
     providerModelIds, providerModelRows, discoverProviderModels,
     fetchProviderModelRows, updateProviderModels,
-    modelVersionKey, compareVersionKeys, classifyModel, pickTierModels,
+    modelVersionKey, compareVersionKeys, classifyModel, pickTierModels, pickTierShortlist,
     geminiGenerationConfig, buildGeminiRequest, buildOpenAIRequest,
     claudeThinking, buildClaudeRequest, buildSlideImagePrompt,
     buildOpenAIImageRequest, geminiChunk, openaiChunk, claudeChunk,

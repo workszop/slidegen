@@ -569,15 +569,15 @@ test("a cursor that never advances is capped instead of looping forever", async 
 });
 
 test("fetchProviderModelRows reports why a walk stopped and keeps partial rows", async () => {
-  assert.deepEqual(await D.fetchProviderModelRows("openai", ""), { rows: [], error: "no-key" });
+  assert.deepEqual(await D.fetchProviderModelRows("openai", ""), { rows: [], error: "no-key", detail: "" });
 
   const httpFail = await withFetch(() => ({ ok: false, status: 403, json: async () => ({}) }),
     () => D.fetchProviderModelRows("openai", "sk-x"));
-  assert.deepEqual(httpFail, { rows: [], error: "http-403" });
+  assert.deepEqual(httpFail, { rows: [], error: "http-403", detail: "" });
 
   const offline = await withFetch(() => { throw new Error("offline"); },
     () => D.fetchProviderModelRows("openai", "sk-x"));
-  assert.deepEqual(offline, { rows: [], error: "network" });
+  assert.deepEqual(offline, { rows: [], error: "network", detail: "" });
 
   // Page one succeeded, page two did not: the rows already in hand are kept.
   const partial = await withFetch(
@@ -736,6 +736,39 @@ test("pickTierModels ignores malformed rows", () => {
   assert.deepEqual(D.pickTierModels("openai", null), { best: null, mid: null, cheap: null });
 });
 
+test("pickTierShortlist keeps the two newest per tier, stable ids leading", () => {
+  const rows = ["gemini-3.8-flash", "gemini-3.7-flash", "gemini-3.6-flash", "gemini-3.9-flash-preview",
+    "gemini-2.5-pro", "gemini-3.1-pro-preview", "gemini-pro-latest",
+    "gemini-3.5-flash-lite"];
+  assert.deepEqual(D.pickTierShortlist("gemini", rows), {
+    mid: ["gemini-3.8-flash", "gemini-3.7-flash"],
+    // One stable pro, so the second slot falls back to the newest preview.
+    best: ["gemini-2.5-pro", "gemini-3.1-pro-preview"],
+    cheap: ["gemini-3.5-flash-lite"],
+  });
+  assert.deepEqual(D.pickTierShortlist("gemini", ["gemini-3.8-flash"], 1), { best: [], mid: ["gemini-3.8-flash"], cheap: [] });
+  assert.deepEqual(D.pickTierShortlist("openai", null), { best: [], mid: [], cheap: [] });
+  // The single pick is the head of the shortlist, so the two never disagree.
+  assert.equal(D.pickTierModels("gemini", rows).best, D.pickTierShortlist("gemini", rows).best[0]);
+});
+
+test("updateProviderModels reports the shortlist and the provider's error text", async () => {
+  const ok = await withFetch(
+    () => jsonOk({ data: [{ id: "gpt-9-sol" }, { id: "gpt-8-sol" }, { id: "gpt-7-sol" }, { id: "gpt-9-luna" }] }),
+    () => D.updateProviderModels("openai", "sk-x"),
+  );
+  assert.deepEqual(ok.shortlist, { best: ["gpt-9-sol", "gpt-8-sol"], mid: [], cheap: ["gpt-9-luna"] });
+  assert.equal(ok.detail, "");
+  // A rejected key: the code stays machine-readable, the message says why.
+  const denied = await withFetch(
+    () => new Response(JSON.stringify({ type: "error", error: { type: "authentication_error", message: "API key is invalid." } }),
+      { status: 401, headers: { "Content-Type": "application/json" } }),
+    () => D.updateProviderModels("claude", "sk-ant-x"),
+  );
+  assert.equal(denied.error, "http-401");
+  assert.equal(denied.detail, "API key is invalid.");
+});
+
 test("updateProviderModels separates a dead endpoint from stale tier patterns", async () => {
   const ok = await withFetch(
     () => jsonOk({ data: [{ id: "gpt-9-sol" }, { id: "gpt-9-luna" }] }),
@@ -768,6 +801,35 @@ test("the tier overlay survives a settings round-trip", () => {
   assert.equal(s.catalog.gemini.updatedAt, 1756512000000);
 });
 
+test("the overlay stores a per-tier shortlist alongside the single picks", () => {
+  const overlay = D.normalizeCatalogOverlay({
+    claude: {
+      tiers: { best: "claude-opus-9" },
+      shortlist: { best: ["claude-opus-9", " claude-opus-8 ", "claude-opus-7", "claude-opus-9"], mid: ["has space"], cheap: "nope" },
+    },
+  });
+  // Capped at the shortlist size, trimmed, deduplicated, malformed slots dropped.
+  assert.deepEqual(overlay.claude.shortlist, { best: ["claude-opus-9", "claude-opus-8"] });
+  // A pre-shortlist overlay (tiers only) still loads.
+  assert.deepEqual(D.normalizeCatalogOverlay({ claude: { tiers: { best: "claude-opus-9" } } }).claude.shortlist, {});
+});
+
+test("tierShortlist seeds from the curated list until an update overrides a tier", () => {
+  const seeded = D.tierShortlist("claude", {});
+  assert.deepEqual(seeded, { best: ["claude-opus-4-8"], mid: ["claude-sonnet-5"], cheap: ["claude-haiku-4-5"] });
+  const stored = { catalog: { claude: {
+    tiers: { best: "claude-opus-9", mid: "claude-sonnet-9" },
+    shortlist: { best: ["claude-opus-9", "claude-opus-8"] },
+  } } };
+  assert.deepEqual(D.tierShortlist("claude", stored), {
+    best: ["claude-opus-9", "claude-opus-8"],
+    // A tier pick without a stored shortlist (older overlay) leads its group,
+    // backed by the curated model; an untouched tier stays curated.
+    mid: ["claude-sonnet-9", "claude-sonnet-5"],
+    cheap: ["claude-haiku-4-5"],
+  });
+});
+
 test("a malformed overlay is dropped rather than trusted back out of storage", () => {
   const overlay = D.normalizeCatalogOverlay({
     gemini: { tiers: { best: "  ", mid: "has space", cheap: 7 } },  // no usable id
@@ -776,7 +838,7 @@ test("a malformed overlay is dropped rather than trusted back out of storage", (
     hijack: { tiers: { best: "evil-9" } },                          // unknown provider
   });
   assert.deepEqual(Object.keys(overlay), ["openai"]);
-  assert.deepEqual(overlay.openai, { tiers: { best: "gpt-9-sol" }, updatedAt: 0 });
+  assert.deepEqual(overlay.openai, { tiers: { best: "gpt-9-sol" }, shortlist: {}, updatedAt: 0 });
   assert.deepEqual(D.normalizeCatalogOverlay(null), {});
   assert.deepEqual(D.normalizeCatalogOverlay([1, 2]), {});
 });

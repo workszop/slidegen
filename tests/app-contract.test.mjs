@@ -106,6 +106,10 @@ test("the model dialog can refresh its tier list without shipping a release", as
   assert.match(shared, /class="ai-update"/, "the dialog renders an update button");
   assert.match(shared, /updateProviderModels\(forProvider, key\)/, "the button walks the provider's list endpoint");
   assert.match(shared, /settings\.catalog = \{/, "resolved tiers persist with the rest of the settings");
+  // The picker shows a short shortlist per tier, never the provider's whole
+  // catalogue: an "all models" group of a hundred IDs is what the tiers replace.
+  assert.doesNotMatch(shared, /allModels/, "no catch-all model group in the picker");
+  assert.match(shared, /tierShortlist\(/, "the picker is fed from the per-tier shortlist");
   // A static page has no build step, so the update must not be expected to
   // reach ai-models.js: that file stays the seed and the recovery path.
   const catalogue = await read("ai-models.js");
