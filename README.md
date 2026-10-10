@@ -214,7 +214,7 @@ update never changes the model the user has selected; it offers the newer one
 and lets them take it.
 
 A new visitor starts on the catalogue's `defaultProvider` (OpenAI) and that
-provider's `defaultModel` (`gpt-5.6-luna`, the cheapest tier of the current GPT
+provider's `defaultModel` (`gpt-6-luna`, the cheapest tier of the current GPT
 family). A provider without `defaultModel` lands on its balanced tier from a
 discovery update, else its first listed model - deliberately not the flagship,
 which would quietly raise the bill. A browser that only holds a legacy

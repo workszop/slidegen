@@ -96,7 +96,7 @@ test("normalizeAiSettings defaults on empty/garbage input", () => {
   for (const raw of [null, "", "not json", "42"]) {
     const s = H.normalizeAiSettings(raw, {});
     assert.equal(s.provider, "openai");
-    assert.equal(s.model, "gpt-5.6-luna");
+    assert.equal(s.model, "gpt-6-luna");
     assert.deepEqual(s.keys, { gemini: "", openai: "", claude: "" });
     assert.equal(s.imageModel, H.OPENAI_IMAGE_MODELS[0]);
   }
@@ -362,12 +362,12 @@ test("the first Gemini model is gemini-3.6-flash and is its default", () => {
 
 test("a fresh visitor gets OpenAI GPT Luna", () => {
   assert.equal(H.DEFAULT_PROVIDER, "openai");
-  assert.equal(H.PROVIDER_INFO.openai.defaultModel, "gpt-5.6-luna");
-  assert.equal(H.defaultModelFor("openai"), "gpt-5.6-luna");
+  assert.equal(H.PROVIDER_INFO.openai.defaultModel, "gpt-6-luna");
+  assert.equal(H.defaultModelFor("openai"), "gpt-6-luna");
   const s = H.normalizeAiSettings(null);
   assert.equal(s.provider, "openai");
-  assert.equal(s.model, "gpt-5.6-luna");
-  assert.equal(H.defaultModelFor("nope"), "gpt-5.6-luna"); // unknown provider -> catalogue default
+  assert.equal(s.model, "gpt-6-luna");
+  assert.equal(H.defaultModelFor("nope"), "gpt-6-luna"); // unknown provider -> catalogue default
 });
 
 test("validateModelCatalog rejects a defaultModel outside its models list", () => {
@@ -406,11 +406,11 @@ test("the Gemini model ID is URL-encoded into the endpoint", () => {
   assert.match(r.url, /alt=sse$/);
 });
 
-test("the OpenAI catalogue is the GPT-5.6 frontier family, most capable first", () => {
+test("the OpenAI catalogue lists sol, terra and luna, most capable first", () => {
   assert.deepEqual(H.PROVIDER_INFO.openai.models,
-    ["gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna"]);
+    ["gpt-5.6-sol", "gpt-5.6-terra", "gpt-6-luna"]);
   // order is capability, not default: a fresh OpenAI visitor gets Luna
-  assert.equal(H.normalizeAiSettings(JSON.stringify({ provider: "openai" })).model, "gpt-5.6-luna");
+  assert.equal(H.normalizeAiSettings(JSON.stringify({ provider: "openai" })).model, "gpt-6-luna");
 });
 
 test("OpenAI requests carry no sampling parameters to deprecate", () => {
