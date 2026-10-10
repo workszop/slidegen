@@ -406,9 +406,9 @@ test("the Gemini model ID is URL-encoded into the endpoint", () => {
   assert.match(r.url, /alt=sse$/);
 });
 
-test("the OpenAI catalogue lists sol, terra and luna, most capable first", () => {
+test("the OpenAI catalogue lists sol and luna, most capable first", () => {
   assert.deepEqual(H.PROVIDER_INFO.openai.models,
-    ["gpt-5.6-sol", "gpt-5.6-terra", "gpt-6-luna"]);
+    ["gpt-6.1-sol", "gpt-6-luna"]);
   // order is capability, not default: a fresh OpenAI visitor gets Luna
   assert.equal(H.normalizeAiSettings(JSON.stringify({ provider: "openai" })).model, "gpt-6-luna");
 });

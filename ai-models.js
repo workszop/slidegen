@@ -56,10 +56,10 @@
       },
       openai: {
         label: "OpenAI",
-        // The GPT-5.6 frontier family, most capable first: Sol for complex work,
-        // Terra for the intelligence/cost balance, Luna for high-volume runs.
+        // Most capable first: Sol for complex work, Luna for high-volume runs.
+        // There is no mid tier: GPT-6 has no Terra.
         // The default is Luna via defaultModel, not by reordering this list.
-        models: ["gpt-5.6-sol", "gpt-5.6-terra", "gpt-6-luna"],
+        models: ["gpt-6.1-sol", "gpt-6-luna"],
         defaultModel: "gpt-6-luna",
         keyPlaceholder: "sk-…",
         // the lookahead keeps Claude's sk-ant- keys out
