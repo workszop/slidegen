@@ -93,6 +93,7 @@ body { overflow: hidden; background: var(--slide-bg); color: var(--slide-fg); }
 .slide th { text-align: left; color: var(--slide-fg); }
 .slide td { color: var(--export-muted); }
 .slide--title { align-self: center; text-align: var(--export-title-align); }
+.slide.slide--title :is(ul, ol, table, pre, blockquote) { width: fit-content; max-width: 100%; margin-inline: auto; text-align: left; }
 .slide--title h1 { font-size: var(--export-title-size); }
 .slide--title p { color: var(--export-muted); font-size: 1.3em; }
 .export-brand--quantica .slide--title h1 { color: var(--slide-accent); }

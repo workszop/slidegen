@@ -271,6 +271,11 @@ main#app { flex: 1; display: flex; min-height: 0; }
   font-size: clamp(14px, 1.35vw + 0.8vh, 40px);
 }
 .deck .slide--title { align-self: center; text-align: center; }
+/* Only the heading and subtitle centre: lists, tables, quotes and code keep
+   left-aligned text in a block centred under them. */
+.slide.slide--title :is(ul, ol, table, pre, blockquote) {
+  width: fit-content; max-width: 100%; margin-inline: auto; text-align: left;
+}
 /* Editing: deck letterboxes a fixed 16:9 frame that scales to fit.
    .slide-frame is inert (display: contents) unless the editor is open. */
 .slide-frame { display: contents; }
