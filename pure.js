@@ -235,6 +235,7 @@ function validateModelCatalog(catalog) {
       throw new Error(`Invalid AI model catalogue: ${id}.defaultModel is not in its models list`);
     }
     if (typeof p.keyPlaceholder !== "string") throw new Error(`Invalid AI model catalogue: ${id}.keyPlaceholder`);
+    if (p.keyPattern !== undefined && !(p.keyPattern instanceof RegExp)) throw new Error(`Invalid AI model catalogue: ${id}.keyPattern`);
     if (typeof p.keyUrl !== "string" || !p.keyUrl.startsWith("https://")) throw new Error(`Invalid AI model catalogue: ${id}.keyUrl`);
     providers[id] = Object.freeze({
       ...p,
@@ -270,6 +271,19 @@ const DEFAULT_PROVIDER = MODEL_CATALOG.defaultProvider;
 const PROVIDER_INFO = MODEL_CATALOG.providers;
 const OPENAI_IMAGE_MODELS = MODEL_CATALOG.imageModels;
 
+// Empties a slot holding an exact copy of a key that sits in its own provider's
+// slot. A browser password manager filling the key field fires a real "input"
+// event, which saves the fill under whichever provider is selected. Clearing a
+// copy loses nothing; a different key in the wrong slot is left alone.
+function clearDuplicateKeys(keys) {
+  for (const [slot, key] of Object.entries(keys)) {
+    if (!key || PROVIDER_INFO[slot]?.keyPattern?.test(key)) continue;
+    const owner = Object.keys(keys)
+      .find(p => p !== slot && keys[p] === key && PROVIDER_INFO[p]?.keyPattern?.test(key));
+    if (owner) keys[slot] = "";
+  }
+}
+
 // Parse the eduapp_ai JSON (raw string or null) into valid settings,
 // folding in the legacy single-provider values ({key, model}) on first run.
 function normalizeAiSettings(raw, legacy = {}) {
@@ -285,6 +299,7 @@ function normalizeAiSettings(raw, legacy = {}) {
     for (const p of Object.keys(keys)) if (typeof s.keys[p] === "string") keys[p] = s.keys[p];
   }
   if (!keys.gemini && typeof legacy.key === "string") keys.gemini = legacy.key;
+  clearDuplicateKeys(keys);
   let model = typeof s.model === "string" && s.model.trim() ? s.model.trim() : "";
   if (!model) {
     model = (provider === "gemini" && typeof legacy.model === "string" && legacy.model)

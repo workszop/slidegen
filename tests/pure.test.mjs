@@ -897,3 +897,18 @@ test("uploadEncoding keeps PNG for transparent images, JPEG otherwise", () => {
   assert.deepEqual(H.uploadEncoding(true), { mime: "image/png", quality: undefined });
   assert.deepEqual(H.uploadEncoding(false), { mime: "image/jpeg", quality: 0.85 });
 });
+
+// ── password-manager autofill copies (a fill saved under the wrong provider) ──
+test("normalizeAiSettings clears an exact copy of a key that sits in its own slot", () => {
+  const raw = JSON.stringify({ provider: "claude", keys: { gemini: "AIzaFAKE1", openai: "", claude: "AIzaFAKE1" } });
+  const s = H.normalizeAiSettings(raw, {});
+  assert.deepEqual(s.keys, { gemini: "AIzaFAKE1", openai: "", claude: "" });
+  assert.equal(s.provider, "claude");
+});
+
+test("normalizeAiSettings keeps a different key in the wrong slot and leaves clean keys alone", () => {
+  const odd = H.normalizeAiSettings(JSON.stringify({ keys: { gemini: "AIzaFAKE1", claude: "AIzaFAKE2" } }), {});
+  assert.equal(odd.keys.claude, "AIzaFAKE2");
+  const clean = { gemini: "AIzaFAKE1", openai: "sk-FAKE", claude: "sk-ant-FAKE" };
+  assert.deepEqual(H.normalizeAiSettings(JSON.stringify({ keys: clean }), {}).keys, clean);
+});

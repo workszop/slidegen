@@ -22,6 +22,7 @@
         // listed here (including custom model IDs) is sent without them.
         samplingSupported: ["gemini-3.5-flash", "gemini-3.1-flash-lite-preview"],
         keyPlaceholder: "AIza…",
+        keyPattern: /^AIza/,
         keyUrl: "https://aistudio.google.com/apikey",
         // Model discovery: GET {listUrl}?key=<apiKey> returns {models:[{name}]}.
         // Names arrive as "models/gemini-…"; listStrip removes the prefix.
@@ -56,6 +57,8 @@
         models: ["gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna"],
         defaultModel: "gpt-5.6-luna",
         keyPlaceholder: "sk-…",
+        // the lookahead keeps Claude's sk-ant- keys out
+        keyPattern: /^sk-(?!ant-)/,
         keyUrl: "https://platform.openai.com/api-keys",
         // Model discovery: GET {listUrl} with a Bearer token returns {data:[{id}]}.
         listUrl: "https://api.openai.com/v1/models",
@@ -80,6 +83,7 @@
         // parameter shape differs on older models and would be rejected.
         thinkingOptional: ["claude-opus-4-8", "claude-sonnet-5"],
         keyPlaceholder: "sk-ant-…",
+        keyPattern: /^sk-ant-/,
         keyUrl: "https://console.anthropic.com/settings/keys",
         // Model discovery: GET {listUrl} with x-api-key + version returns {data:[{id}]}.
         listUrl: "https://api.anthropic.com/v1/models",
