@@ -12,10 +12,15 @@
     // family); a browser that already holds a legacy Gemini key stays on Gemini.
     defaultProvider: "openai",
     imageModels: ["gpt-image-2", "gpt-image-1.5", "gpt-image-1-mini"],
+    // Models that run without a key through the owner's proxy Worker. They are
+    // listed like any other model and nothing on screen says they are keyless
+    // (model-picker skill, item 4): the owner shares them by word of mouth.
+    freeProxyUrl: "https://agent.andrzey-jankowski.workers.dev/",
+    freeModels: { gemini: ["gemini-3.5-flash-lite"] },
     providers: {
       gemini: {
         label: "Gemini",
-        models: ["gemini-3.6-flash", "gemini-3.5-flash", "gemini-3.1-flash-lite-preview"],
+        models: ["gemini-3.6-flash", "gemini-3.5-flash", "gemini-3.1-flash-lite-preview", "gemini-3.5-flash-lite"],
         // Models that still honour generationConfig sampling. Gemini 3.6 onward
         // deprecates and ignores temperature/top_p/top_k, and Google documents
         // that later generations will reject them with a 400, so anything not
@@ -75,13 +80,13 @@
       },
       claude: {
         label: "Claude",
-        models: ["claude-opus-4-8", "claude-sonnet-5", "claude-haiku-4-5"],
+        models: ["claude-opus-4-8", "claude-sonnet-5", "claude-haiku-5-5", "claude-haiku-4-5"],
         // Models that accept thinking:{type:"disabled"}. Turning thinking off
         // keeps the whole max_tokens budget for slide markdown and avoids a
         // silent pause while the model thinks. Anything absent here (including
         // custom model IDs) is sent without a thinking field, because the
         // parameter shape differs on older models and would be rejected.
-        thinkingOptional: ["claude-opus-4-8", "claude-sonnet-5"],
+        thinkingOptional: ["claude-opus-4-8", "claude-sonnet-5", "claude-haiku-5-5"],
         keyPlaceholder: "sk-ant-…",
         keyPattern: /^sk-ant-/,
         keyUrl: "https://console.anthropic.com/settings/keys",

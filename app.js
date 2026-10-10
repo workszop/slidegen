@@ -202,6 +202,7 @@ Drop your own document in the panel on the left.`,
       errFileType: "Obsługiwane formaty: .txt, .md, .pdf",
       errTooBig: "Plik jest za duży (limit: PDF 19 MB, tekst 2 MB). Skróć dokument lub podziel go na części.",
       errNoKeyTitle: "Brak klucza API",
+      errModelUnavailable: "Model nie odpowiedział. Spróbuj ponownie.",
       errNoKeyBody: "Wklej klucz API dostawcy {provider} w ustawieniach modelu (kliknij wskaźnik modelu). Wygenerujesz go na {url}.",
       errApiTitle: "Błąd API",
       errEmpty: "Model zwrócił pustą odpowiedź. Spróbuj ponownie lub zmień model.",
@@ -264,6 +265,7 @@ Drop your own document in the panel on the left.`,
       errFileType: "Supported formats: .txt, .md, .pdf",
       errTooBig: "File too large (limits: PDF 19 MB, text 2 MB). Trim the document or split it.",
       errNoKeyTitle: "Missing API key",
+      errModelUnavailable: "The model did not answer. Try again.",
       errNoKeyBody: "Paste your {provider} API key in the model settings (click the model chip). Generate one at {url}.",
       errApiTitle: "API error",
       errEmpty: "The model returned an empty response. Try again or switch models.",
@@ -790,6 +792,7 @@ ${imageDialogHtml}`);
 
   function apiErrorDetail(err) {
     if (err?.code === "blocked") return t("errBlocked");
+    if (err?.code === "model_unavailable") return t("errModelUnavailable");
     return err?.code === "network_error"
       ? t("errNetwork").replace("{host}", err.host || "API")
       : String(err?.message ?? err);
@@ -996,7 +999,7 @@ ${imageDialogHtml}`);
     }
     const ai = loadAiSettings();
     const key = ai.keys[ai.provider]?.trim();
-    if (!key) {
+    if (!key && !isFreeModel(ai.provider, ai.model)) {
       const info = PROVIDER_INFO[ai.provider];
       return showError(t("errNoKeyTitle"),
         t("errNoKeyBody").replace("{provider}", info.label).replace("{url}", info.keyUrl.replace("https://", "")));

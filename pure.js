@@ -257,10 +257,24 @@ function validateModelCatalog(catalog) {
   if (new Set(imageModels).size !== imageModels.length) {
     throw new Error("Invalid AI model catalogue: duplicate image model IDs");
   }
+  /** @type {Record<string, readonly string[]>} */
+  const freeModels = {};
+  for (const [id, ids] of Object.entries(catalog.freeModels ?? {})) {
+    if (!providers[id] || !Array.isArray(ids) || ids.some(m => !providers[id].models.includes(m))) {
+      throw new Error(`Invalid AI model catalogue: freeModels.${id} must list models of that provider`);
+    }
+    freeModels[id] = Object.freeze([...ids]);
+  }
+  const freeProxyUrl = catalog.freeProxyUrl ?? "";
+  if (Object.keys(freeModels).length && !String(freeProxyUrl).startsWith("https://")) {
+    throw new Error("Invalid AI model catalogue: freeProxyUrl");
+  }
   return Object.freeze({
     defaultProvider,
     providers: Object.freeze(providers),
     imageModels: Object.freeze(imageModels),
+    freeModels: Object.freeze(freeModels),
+    freeProxyUrl,
   });
 }
 
@@ -270,6 +284,14 @@ const MODEL_CATALOG = validateModelCatalog(
 const DEFAULT_PROVIDER = MODEL_CATALOG.defaultProvider;
 const PROVIDER_INFO = MODEL_CATALOG.providers;
 const OPENAI_IMAGE_MODELS = MODEL_CATALOG.imageModels;
+const FREE_MODELS = MODEL_CATALOG.freeModels;
+const FREE_PROXY_URL = MODEL_CATALOG.freeProxyUrl;
+
+// A free model needs no key and goes to the owner's proxy instead of the
+// provider, even when the visitor has stored a key for that provider.
+function isFreeModel(providerId, model) {
+  return (FREE_MODELS[providerId] ?? []).includes(model);
+}
 
 // Empties a slot holding an exact copy of a key that sits in its own provider's
 // slot. A browser password manager filling the key field fires a real "input"
@@ -774,6 +796,25 @@ function buildClaudeRequest({ key, model, source, prompt }) {
   };
 }
 
+// The proxy speaks OpenAI chat-completions and adds the key itself. It answers
+// in one piece (the Worker buffers the upstream reply), so this is not a stream.
+// Gemini reads a PDF sent as an image_url data URL; the "file" part is rejected.
+function buildFreeRequest({ model, source, prompt }) {
+  const content = source.kind === "pdf"
+    ? [{ type: "text", text: prompt }, { type: "image_url", image_url: { url: "data:application/pdf;base64," + source.base64 } }]
+    : [{ type: "text", text: prompt + "\n\n--- DOCUMENT ---\n\n" + source.text }];
+  return {
+    url: FREE_PROXY_URL,
+    headers: { "Content-Type": "application/json" },
+    body: { model, messages: [{ role: "user", content }] },
+  };
+}
+
+function freeReplyText(data) {
+  const text = data?.choices?.[0]?.message?.content;
+  return typeof text === "string" ? text : "";
+}
+
 // Build the OpenAI image prompt for ONE slide. The full deck is passed as
 // read-only context so the illustration fits the presentation; only the
 // target slide is illustrated.
@@ -831,10 +872,12 @@ function claudeChunk(data) {
 function providerStopReason(data) {
   const raw = data?.type === "message_delta" ? data.delta?.stop_reason           // Claude
     : data?.type === "response.incomplete" ? data.response?.incomplete_details?.reason // OpenAI
-      : data?.candidates?.[0]?.finishReason;                                     // Gemini
+      : Array.isArray(data?.choices) ? data.choices[0]?.finish_reason              // free model via proxy
+        : data?.candidates?.[0]?.finishReason;                                   // Gemini
   switch (String(raw ?? "").toLowerCase()) {
     case "max_tokens":
     case "max_output_tokens":
+    case "length":
       return "truncated";
     case "refusal":
     case "safety":
@@ -901,5 +944,6 @@ function parseSseFrames(input, { final = false } = {}) {
     claudeThinking, buildClaudeRequest, buildSlideImagePrompt,
     buildOpenAIImageRequest, geminiChunk, openaiChunk, claudeChunk,
     providerStopReason, parseSseFrames,
+    FREE_MODELS, FREE_PROXY_URL, isFreeModel, buildFreeRequest, freeReplyText,
   };
 });

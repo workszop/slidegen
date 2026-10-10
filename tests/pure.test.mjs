@@ -342,6 +342,7 @@ test("buildClaudeRequest disables thinking only where the parameter is valid", (
     key: "k", model, source: { kind: "text", text: "doc" }, prompt: "p",
   }).body;
   assert.deepEqual(build("claude-sonnet-5").thinking, { type: "disabled" });
+  assert.deepEqual(build("claude-haiku-5-5").thinking, { type: "disabled" });
   assert.deepEqual(build("claude-opus-4-8").thinking, { type: "disabled" });
   assert.equal("thinking" in build("claude-haiku-4-5"), false, "older models take a different thinking shape");
   assert.equal("thinking" in build("some-custom-model"), false, "custom model IDs must not get an unvalidated parameter");
@@ -816,7 +817,7 @@ test("the overlay stores a per-tier shortlist alongside the single picks", () =>
 
 test("tierShortlist seeds from the curated list until an update overrides a tier", () => {
   const seeded = D.tierShortlist("claude", {});
-  assert.deepEqual(seeded, { best: ["claude-opus-4-8"], mid: ["claude-sonnet-5"], cheap: ["claude-haiku-4-5"] });
+  assert.deepEqual(seeded, { best: ["claude-opus-4-8"], mid: ["claude-sonnet-5"], cheap: ["claude-haiku-5-5", "claude-haiku-4-5"] });
   const stored = { catalog: { claude: {
     tiers: { best: "claude-opus-9", mid: "claude-sonnet-9" },
     shortlist: { best: ["claude-opus-9", "claude-opus-8"] },
@@ -826,7 +827,7 @@ test("tierShortlist seeds from the curated list until an update overrides a tier
     // A tier pick without a stored shortlist (older overlay) leads its group,
     // backed by the curated model; an untouched tier stays curated.
     mid: ["claude-sonnet-9", "claude-sonnet-5"],
-    cheap: ["claude-haiku-4-5"],
+    cheap: ["claude-haiku-5-5", "claude-haiku-4-5"],
   });
 });
 
@@ -857,12 +858,12 @@ test("tierPicks classifies the curated list until an update overrides it", () =>
   const seeded = D.tierPicks("claude", {});
   assert.equal(seeded.best, "claude-opus-4-8");
   assert.equal(seeded.mid, "claude-sonnet-5");
-  assert.equal(seeded.cheap, "claude-haiku-4-5");
+  assert.equal(seeded.cheap, "claude-haiku-5-5");
   // An update that could only resolve one tier overrides that tier and leaves
   // the other two on their curated values rather than blanking them.
   const stored = { catalog: { claude: { tiers: { best: "claude-opus-9" } } } };
   assert.deepEqual(D.tierPicks("claude", stored),
-    { best: "claude-opus-9", mid: "claude-sonnet-5", cheap: "claude-haiku-4-5" });
+    { best: "claude-opus-9", mid: "claude-sonnet-5", cheap: "claude-haiku-5-5" });
 });
 
 test("switching providers lands on the balanced tier, never the flagship", () => {
@@ -911,4 +912,35 @@ test("normalizeAiSettings keeps a different key in the wrong slot and leaves cle
   assert.equal(odd.keys.claude, "AIzaFAKE2");
   const clean = { gemini: "AIzaFAKE1", openai: "sk-FAKE", claude: "sk-ant-FAKE" };
   assert.deepEqual(H.normalizeAiSettings(JSON.stringify({ keys: clean }), {}).keys, clean);
+});
+
+// ── unadvertised free model through the owner's proxy (model-picker skill, item 4) ──
+test("isFreeModel recognises only the free Gemini model", () => {
+  assert.equal(H.isFreeModel("gemini", "gemini-3.5-flash-lite"), true);
+  assert.equal(H.isFreeModel("gemini", "gemini-3.5-flash"), false);
+  assert.equal(H.isFreeModel("openai", "gemini-3.5-flash-lite"), false);
+  assert.ok(H.PROVIDER_INFO.gemini.models.includes("gemini-3.5-flash-lite"), "listed like any other model");
+  assert.notEqual(H.defaultModelFor("gemini", {}), "gemini-3.5-flash-lite", "never the default");
+});
+
+test("buildFreeRequest sends chat-completions to the proxy with no key", () => {
+  const pdf = H.buildFreeRequest({ model: "gemini-3.5-flash-lite", source: { kind: "pdf", base64: "QUJD" }, prompt: "P" });
+  assert.equal(pdf.url, H.FREE_PROXY_URL);
+  assert.deepEqual(pdf.headers, { "Content-Type": "application/json" });
+  assert.equal(pdf.body.model, "gemini-3.5-flash-lite");
+  assert.equal("stream" in pdf.body, false);
+  assert.deepEqual(pdf.body.messages[0].content, [
+    { type: "text", text: "P" },
+    { type: "image_url", image_url: { url: "data:application/pdf;base64,QUJD" } },
+  ]);
+  const text = H.buildFreeRequest({ model: "gemini-3.5-flash-lite", source: { kind: "text", text: "DOC" }, prompt: "P" });
+  assert.deepEqual(text.body.messages[0].content, [{ type: "text", text: "P\n\n--- DOCUMENT ---\n\nDOC" }]);
+});
+
+test("freeReplyText and providerStopReason read the proxy reply", () => {
+  assert.equal(H.freeReplyText({ choices: [{ message: { content: "# Deck" }, finish_reason: "stop" }] }), "# Deck");
+  assert.equal(H.freeReplyText({}), "");
+  assert.equal(H.providerStopReason({ choices: [{ finish_reason: "stop" }] }), "");
+  assert.equal(H.providerStopReason({ choices: [{ finish_reason: "length" }] }), "truncated");
+  assert.equal(H.providerStopReason({ choices: [{ finish_reason: "content_filter" }] }), "blocked");
 });

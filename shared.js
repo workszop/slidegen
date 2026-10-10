@@ -235,8 +235,37 @@ const PROVIDER_STREAMS = {
   claude: [buildClaudeRequest, claudeChunk],
 };
 
+// The free model answers through the owner's proxy in one reply. Every failure
+// becomes the single code "model_unavailable" so nothing on screen names the
+// proxy or quotes its response (model-picker skill, item 4); a user cancel
+// still surfaces as an AbortError.
+async function requestFreeModel({ model, source, prompt, onChunk, onNotice, signal, timeoutMs }) {
+  const { url, headers, body } = buildFreeRequest({ model, source, prompt });
+  const request = createRequestSignal(signal, timeoutMs);
+  try {
+    let data;
+    try {
+      const res = await fetch(url, { method: "POST", headers, body: JSON.stringify(body), signal: request.signal });
+      data = await res.json();
+      if (!res.ok || data?.error) throw new Error("free model failed");
+    } catch (cause) {
+      if (signal?.aborted && isAbortError(cause)) throw cause;
+      throw makeProviderError("model unavailable", { code: "model_unavailable" });
+    }
+    const stopReason = providerStopReason(data);
+    if (stopReason === "blocked") throw makeProviderError("blocked", { code: "blocked" });
+    const text = freeReplyText(data);
+    if (stopReason === "truncated") onNotice?.({ code: "truncated" });
+    if (text) onChunk?.(text);
+    return text;
+  } finally {
+    request.cleanup();
+  }
+}
+
 // Streams slide markdown from whichever provider the settings select.
 function streamSlides({ provider, model, key, source, prompt, onChunk, onNotice, signal, timeoutMs }) {
+  if (isFreeModel(provider, model)) return requestFreeModel({ model, source, prompt, onChunk, onNotice, signal, timeoutMs });
   const [build, extract] = PROVIDER_STREAMS[provider] ?? PROVIDER_STREAMS[DEFAULT_PROVIDER];
   return streamSseRequest(build({ key, model, source, prompt }), extract, onChunk, { signal, timeoutMs, onNotice });
 }
